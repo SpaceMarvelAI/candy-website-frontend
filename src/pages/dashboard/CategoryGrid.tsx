@@ -40,9 +40,9 @@ export default function CategoryGrid() {
       addToast(`${cat.title} workspace — opening soon`, 'info');
       return;
     }
-    // Highlight the relevant sidebar item where applicable
-    if (cat.id === 'hr') setActiveNav('chat');
-    else                 setActiveNav('voice');
+    // Every industry tile now opens its full-screen AgentWorkspace —
+    // including HR, which used to drop into a chat-style screen.
+    setActiveNav('voice');
     showView(view);
   }
 

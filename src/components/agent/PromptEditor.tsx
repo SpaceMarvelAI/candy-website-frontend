@@ -17,6 +17,14 @@ const tintColor = {
   green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)',
 };
 
+const STYLE_OPTIONS = [
+  { value: 'professional', label: 'Professional' },
+  { value: 'warm',         label: 'Warm & Friendly' },
+  { value: 'empathetic',   label: 'Empathetic' },
+  { value: 'concise',      label: 'Concise' },
+  { value: 'formal',       label: 'Formal' },
+];
+
 interface Props {
   presets?: { label: string; body: string }[];
   tint?: keyof typeof tintColor;
@@ -25,7 +33,19 @@ interface Props {
   onChange: (s: string) => void;
   supportedLanguageCodes?: string[];
   multilingual?: boolean;
+  callDirection?: 'inbound' | 'outbound' | 'both';
+  onCallDirectionChange?: (d: 'inbound' | 'outbound' | 'both') => void;
   onSaved?: () => void;
+  hideCallDirection?: boolean;
+  /** Agent persona name shown to callers, e.g. "Priya" */
+  personaName?: string;
+  onPersonaNameChange?: (n: string) => void;
+  /** Conversational style, e.g. "warm" */
+  personaStyle?: string;
+  onPersonaStyleChange?: (s: string) => void;
+  /** Brand / client name override. Replaces the account company name in compiled prompts. */
+  brandName?: string;
+  onBrandNameChange?: (s: string) => void;
 }
 
 export default function PromptEditor({
@@ -36,7 +56,16 @@ export default function PromptEditor({
   onChange,
   supportedLanguageCodes = [],
   multilingual = false,
+  callDirection = 'inbound',
+  onCallDirectionChange,
   onSaved,
+  hideCallDirection = false,
+  personaName = '',
+  onPersonaNameChange,
+  personaStyle = 'professional',
+  onPersonaStyleChange,
+  brandName = '',
+  onBrandNameChange,
 }: Props) {
   const { addToast } = useApp();
   const [busy, setBusy] = useState(false);
@@ -53,6 +82,10 @@ export default function PromptEditor({
         requirements_text: value,
         multilingual,
         supported_language_codes: supportedLanguageCodes,
+        call_direction: callDirection,
+        ...(personaName.trim()  ? { persona_name:  personaName.trim()  } : {}),
+        ...(personaStyle.trim() ? { persona_style: personaStyle.trim() } : {}),
+        ...(brandName.trim()    ? { brand_name:    brandName.trim()    } : {}),
       });
       // Backend now compiles inline (up to ~12s) and tells us the
       // outcome via prompt_compile + agent_flow_status. Reflect that
@@ -92,6 +125,45 @@ export default function PromptEditor({
         </span>
       </header>
 
+      {/* Persona row — brand name + agent name + speaking style */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+        <div style={{ flex: 1.2 }}>
+          <label style={fieldLabel}>Company / Brand name</label>
+          <input
+            type="text"
+            value={brandName}
+            onChange={e => onBrandNameChange?.(e.target.value)}
+            placeholder="e.g. Trilife Hospital, Apollo…"
+            style={fieldInput}
+          />
+          <span style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 3, display: 'block' }}>
+            Overrides your account name in the compiled prompt
+          </span>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={fieldLabel}>Agent name</label>
+          <input
+            type="text"
+            value={personaName}
+            onChange={e => onPersonaNameChange?.(e.target.value)}
+            placeholder="e.g. Priya, Arjun, Alex…"
+            style={fieldInput}
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={fieldLabel}>Speaking style</label>
+          <select
+            value={personaStyle}
+            onChange={e => onPersonaStyleChange?.(e.target.value)}
+            style={{ ...fieldInput, cursor: 'pointer' }}
+          >
+            {STYLE_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <textarea
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -99,6 +171,34 @@ export default function PromptEditor({
         placeholder="Describe what this agent should do, tone, what it must never do…"
         style={textarea}
       />
+
+      {/* Call direction picker — hidden for chatbot agents */}
+      {!hideCallDirection && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>Call direction</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {(['inbound', 'outbound', 'both'] as const).map(d => (
+              <button
+                key={d}
+                onClick={() => onCallDirectionChange?.(d)}
+                style={{
+                  fontSize: 11.5,
+                  padding: '5px 10px',
+                  borderRadius: 7,
+                  border: `1px solid ${callDirection === d ? tintColor[tint] : 'var(--border)'}`,
+                  background: callDirection === d ? `${tintColor[tint]}22` : 'var(--tint-1)',
+                  color: callDirection === d ? tintColor[tint] : 'var(--text-2)',
+                  cursor: 'pointer',
+                  fontWeight: callDirection === d ? 600 : 400,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {d.charAt(0).toUpperCase() + d.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
         {presets.length > 0 ? (
@@ -155,6 +255,26 @@ const textarea = {
   outline: 'none',
   resize: 'vertical' as const,
   minHeight: 180,
+};
+const fieldLabel = {
+  display: 'block',
+  fontSize: 11,
+  fontWeight: 600,
+  color: 'var(--text-3)',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.04em',
+  marginBottom: 5,
+};
+const fieldInput = {
+  width: '100%',
+  background: 'var(--input-bg-strong)',
+  border: '1px solid var(--border-strong)',
+  borderRadius: 8,
+  padding: '8px 12px',
+  fontSize: 13,
+  color: 'var(--text-1)',
+  outline: 'none',
+  boxSizing: 'border-box' as const,
 };
 const presetBtn = {
   fontSize: 11.5, padding: '6px 10px',

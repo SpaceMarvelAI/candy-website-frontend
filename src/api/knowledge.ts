@@ -43,3 +43,27 @@ export async function uploadKnowledgeFile(agentId: string, file: File): Promise<
 export async function deleteKnowledge(agentId: string, kbId: string): Promise<void> {
   await api(`/v1/agents/${agentId}/knowledge/${kbId}`, { method: 'DELETE' });
 }
+
+export interface CrawlOut {
+  kb_document_id: string;
+  filename:       string;
+  status:         string;
+  pages_scraped:  number;
+  char_count:     number;
+}
+
+/**
+ * Scrape a public website URL via Firecrawl and add the content as a
+ * knowledge document for the agent. Backend pipeline:
+ *   Firecrawl → markdown → S3 → Docling parse → classify → chunk → embed.
+ */
+export async function crawlWebsite(
+  agentId: string,
+  url: string,
+  crawlDepth: number = 1,
+): Promise<CrawlOut> {
+  return api<CrawlOut>(
+    `/v1/agents/${agentId}/knowledge/crawl`,
+    { method: 'POST', body: { url, crawl_depth: crawlDepth } },
+  );
+}

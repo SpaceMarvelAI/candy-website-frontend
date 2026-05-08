@@ -10,7 +10,7 @@
  */
 import { useState, useRef } from 'react';
 import Icon from '../../assets/icons';
-import { uploadKnowledgeFile, deleteKnowledge, type KnowledgeDoc } from '../../api/knowledge';
+import { uploadKnowledgeFile, deleteKnowledge, crawlWebsite, type KnowledgeDoc } from '../../api/knowledge';
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 
@@ -46,6 +46,9 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
   const [uploading, setUploading] = useState<string[]>([]);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [crawlUrl, setCrawlUrl] = useState('');
+  const [crawling, setCrawling] = useState(false);
+  const [crawlEntireSite, setCrawlEntireSite] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function addFiles(list: FileList | null) {
@@ -105,6 +108,37 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
     }
   }
 
+  async function handleCrawl() {
+    if (!agentId) {
+      addToast('Pick or create an agent first.', 'info');
+      return;
+    }
+    let url = crawlUrl.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    if (crawling) return;
+    // depth=1 → single page; depth=3 → up to ~50 pages (Firecrawl limit: depth*10 internally)
+    const depth = crawlEntireSite ? 3 : 1;
+    setCrawling(true);
+    try {
+      const res = await crawlWebsite(agentId, url, depth);
+      addToast(
+        res.pages_scraped > 1
+          ? `Crawled ${res.pages_scraped} pages from ${url} — indexing now`
+          : `Scraped ${url} — ${Math.round(res.char_count / 100) / 10}k chars, indexing now`,
+        'success',
+      );
+      setCrawlUrl('');
+      await refreshDocs();
+    } catch (e) {
+      const msg = e instanceof ApiError ? `${e.status}: ${e.message}` : (e as Error).message;
+      console.error('[KB] crawl failed', e);
+      addToast(`Crawl failed: ${msg}`, 'error');
+    } finally {
+      setCrawling(false);
+    }
+  }
+
   async function deleteAll() {
     if (!agentId || bulkDeleting) return;
     if (docs.length === 0) return;
@@ -152,6 +186,88 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
           )}
         </div>
       </header>
+
+      {/* Website crawl — Firecrawl scrapes a public URL and indexes the
+          content the same way as an uploaded doc. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+        {/* URL row */}
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 12px',
+            background: 'var(--tint-1)',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+          }}
+        >
+          <Icon name="layers" size={14} style={{ color: tintColor[tint], flexShrink: 0 }} />
+          <input
+            value={crawlUrl}
+            onChange={e => setCrawlUrl(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCrawl(); } }}
+            placeholder="Paste a website URL (https://yourcompany.com)"
+            disabled={!agentId || crawling}
+            style={{
+              flex: 1, background: 'transparent', border: 'none',
+              outline: 'none', color: 'var(--text-1)', fontSize: 13,
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleCrawl}
+            disabled={!agentId || crawling || !crawlUrl.trim()}
+            style={{
+              padding: '6px 11px', borderRadius: 7,
+              background: crawling ? 'var(--tint-2)' : tintColor[tint] + '22',
+              border: `1px solid ${crawling ? 'var(--border)' : tintColor[tint]}`,
+              color: crawling ? 'var(--text-3)' : 'var(--text-1)',
+              fontSize: 11.5, fontWeight: 600,
+              cursor: (!agentId || !crawlUrl.trim() || crawling) ? 'not-allowed' : 'pointer',
+              opacity: (!agentId || !crawlUrl.trim()) ? 0.5 : 1,
+              transition: 'all 0.15s', whiteSpace: 'nowrap',
+            }}
+          >
+            {crawling ? 'Crawling…' : 'Add website'}
+          </button>
+        </div>
+
+        {/* Crawl scope toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 4 }}>
+          <button
+            type="button"
+            onClick={() => setCrawlEntireSite(false)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+              fontSize: 11.5, fontWeight: 500,
+              background: !crawlEntireSite ? tintColor[tint] + '18' : 'transparent',
+              border: `1px solid ${!crawlEntireSite ? tintColor[tint] : 'var(--border)'}`,
+              color: !crawlEntireSite ? 'var(--text-1)' : 'var(--text-3)',
+              transition: 'all 0.15s',
+            }}
+          >
+            This page only
+          </button>
+          <button
+            type="button"
+            onClick={() => setCrawlEntireSite(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+              fontSize: 11.5, fontWeight: 500,
+              background: crawlEntireSite ? tintColor[tint] + '18' : 'transparent',
+              border: `1px solid ${crawlEntireSite ? tintColor[tint] : 'var(--border)'}`,
+              color: crawlEntireSite ? 'var(--text-1)' : 'var(--text-3)',
+              transition: 'all 0.15s',
+            }}
+          >
+            Entire website
+          </button>
+          <span style={{ fontSize: 11, color: 'var(--text-4)' }}>
+            {crawlEntireSite ? '— crawls all pages (up to ~50), takes 30–120s' : '— scrapes just this URL, fast'}
+          </span>
+        </div>
+      </div>
 
       <div
         onClick={() => inputRef.current?.click()}

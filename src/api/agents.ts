@@ -26,7 +26,7 @@ export async function createAgent(body: {
   name: string;
   language_code?: string;
   voice_id?: number;
-  call_direction?: 'inbound' | 'outbound' | 'both';
+  call_direction?: 'inbound' | 'outbound' | 'both' | 'chat';
 }): Promise<Agent> {
   return api<Agent>('/v1/agents', {
     method: 'POST',

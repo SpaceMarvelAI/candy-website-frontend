@@ -31,10 +31,14 @@ export default function AgentWorkspace({ slug, category, icon, tint, defaultProm
     agents, agent, selectAgent, createNewAgent, removeAgent, reloadAgents,
     loading, error,
     promptText, setPromptText,
+    personaName, setPersonaName,
+    personaStyle, setPersonaStyle,
+    brandName, setBrandName,
     docs, refreshDocs,
     primaryLang, setPrimaryLang,
     supportedCodes, setSupportedCodes,
     multilingual, setMultilingual,
+    callDirection, setCallDirection,
   } = useAgent(slug, `${category} agent`);
 
   const [publishing, setPublishing] = useState(false);
@@ -143,6 +147,15 @@ export default function AgentWorkspace({ slug, category, icon, tint, defaultProm
             presets={presets}
             supportedLanguageCodes={supportedCodes}
             multilingual={multilingual}
+            callDirection={callDirection}
+            onCallDirectionChange={setCallDirection}
+            brandName={brandName}
+            onBrandNameChange={setBrandName}
+            personaName={personaName}
+            onPersonaNameChange={setPersonaName}
+            personaStyle={personaStyle}
+            onPersonaStyleChange={setPersonaStyle}
+            onSaved={reloadAgents}
           />
         </div>
         <TestPanel

@@ -31,6 +31,12 @@ export interface UseAgentResult {
   // Requirements / KB
   promptText: string;
   setPromptText: (s: string) => void;
+  personaName: string;
+  setPersonaName: (s: string) => void;
+  personaStyle: string;
+  setPersonaStyle: (s: string) => void;
+  brandName: string;
+  setBrandName: (s: string) => void;
   docs: KnowledgeDoc[];
   refreshDocs: () => Promise<void>;
   refreshRequirements: () => Promise<void>;
@@ -43,6 +49,8 @@ export interface UseAgentResult {
   setSupportedCodes: (s: string[]) => void;
   multilingual: boolean;
   setMultilingual: (b: boolean) => void;
+  callDirection: 'inbound' | 'outbound' | 'both';
+  setCallDirection: (d: 'inbound' | 'outbound' | 'both') => void;
 }
 
 export function useAgent(slug: string, defaultName: string): UseAgentResult {
@@ -51,13 +59,17 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
-  const [promptText, setPrompt] = useState('');
-  const [docs, setDocs]         = useState<KnowledgeDoc[]>([]);
+  const [promptText, setPrompt]         = useState('');
+  const [personaName, setPersonaName]   = useState('');
+  const [personaStyle, setPersonaStyle] = useState('professional');
+  const [brandName, setBrandName]       = useState('');
+  const [docs, setDocs]                 = useState<KnowledgeDoc[]>([]);
 
   const [languages, setLanguages]           = useState<Language[]>([]);
   const [primaryLang, setPrimaryLang]       = useState('en');
   const [supportedCodes, setSupportedCodes] = useState<string[]>([]);
   const [multilingual, setMultilingual]     = useState(false);
+  const [callDirection, setCallDirection]   = useState<'inbound' | 'outbound' | 'both'>('inbound');
 
   const initRef = useRef(false);
 
@@ -78,7 +90,11 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
     try {
       const r = await getRequirements(selectedId);
       setPrompt(r.requirements_text ?? '');
+      setPersonaName(r.persona_name ?? '');
+      setPersonaStyle(r.persona_style ?? 'professional');
+      setBrandName(r.brand_name ?? '');
       setMultilingual(!!r.multilingual);
+      setCallDirection((r.call_direction as 'inbound' | 'outbound' | 'both') ?? 'inbound');
       if (languages.length > 0 && r.supported_language_ids?.length) {
         const codes = r.supported_language_ids
           .map(id => languages.find(l => l.id === id)?.code)
@@ -153,7 +169,11 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
         if (reqRes.status === 'fulfilled') {
           const r = reqRes.value;
           setPrompt(r.requirements_text ?? '');
+          setPersonaName(r.persona_name ?? '');
+          setPersonaStyle(r.persona_style ?? 'professional');
+          setBrandName(r.brand_name ?? '');
           setMultilingual(!!r.multilingual);
+          setCallDirection((r.call_direction as 'inbound' | 'outbound' | 'both') ?? 'inbound');
           if (languages.length > 0 && r.supported_language_ids?.length) {
             const codes = r.supported_language_ids
               .map(id => languages.find(l => l.id === id)?.code)
@@ -165,7 +185,11 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
           }
         } else {
           setPrompt('');
+          setPersonaName('');
+          setPersonaStyle('professional');
+          setBrandName('');
           setSupportedCodes([]);
+          setCallDirection('inbound');
         }
 
         if (kbRes.status === 'fulfilled') {
@@ -227,10 +251,14 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
     agents, agent, selectAgent, createNewAgent, removeAgent, reloadAgents,
     loading, error,
     promptText, setPromptText: setPrompt,
+    personaName, setPersonaName,
+    personaStyle, setPersonaStyle,
+    brandName, setBrandName,
     docs, refreshDocs, refreshRequirements,
     languages,
     primaryLang, setPrimaryLang,
     supportedCodes, setSupportedCodes,
     multilingual, setMultilingual,
+    callDirection, setCallDirection,
   };
 }

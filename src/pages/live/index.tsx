@@ -14,9 +14,10 @@ import LiveStats from './LiveStats';
 import Icon from '../../assets/icons';
 import { listAgents, type Agent } from '../../api/agents';
 import { listAllRecordings, deleteRecording, type RecordingRow } from '../../api/recordings';
+import { listChatSessions, getChatSession, type ChatSessionRow, type ChatSessionDetail } from '../../api/chat-sessions';
 import { ApiError, getToken } from '../../api/client';
 
-type Tab = 'demo' | 'live' | 'agents';
+type Tab = 'demo' | 'live' | 'chat' | 'agents';
 
 const SLUG_LABEL: Record<string, string> = {
   ecom: 'E-commerce', fin: 'Financial', log: 'Logistics',
@@ -52,6 +53,7 @@ export default function LiveCallsPage() {
   const [tab, setTab]                = useState<Tab>('demo');
   const [demoRecs,  setDemoRecs]     = useState<RecordingRow[]>([]);
   const [liveRecs,  setLiveRecs]     = useState<RecordingRow[]>([]);
+  const [chatSess,  setChatSess]     = useState<ChatSessionRow[]>([]);
   const [agents,    setAgents]       = useState<Agent[]>([]);
   const [loading,   setLoading]      = useState(true);
   const [error,     setError]        = useState<string | null>(null);
@@ -64,13 +66,15 @@ export default function LiveCallsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [demo, live, ags] = await Promise.all([
+      const [demo, live, chat, ags] = await Promise.all([
         listAllRecordings({ recording_type: 'demo_session', limit: 200 }).catch(() => []),
         listAllRecordings({ recording_type: 'live_call',    limit: 200 }).catch(() => []),
+        listChatSessions({ limit: 200 }).catch(() => []),
         listAgents().catch(() => []),
       ]);
       setDemoRecs(demo);
       setLiveRecs(live);
+      setChatSess(chat);
       setAgents(ags);
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
@@ -141,6 +145,7 @@ export default function LiveCallsPage() {
   const counts = {
     demo:   demoRecs.length,
     live:   liveRecs.length,
+    chat:   chatSess.length,
     agents: agents.length,
   };
   const totalDuration = list.reduce((acc, r) => acc + (r.duration_ms || 0), 0);
@@ -179,8 +184,9 @@ export default function LiveCallsPage() {
       {/* Tab strip */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 24, flexWrap: 'wrap' }}>
         {[
-          { key: 'demo',   label: 'Demo recordings',  cnt: counts.demo,   hint: 'From in-app Test panel' },
+          { key: 'demo',   label: 'Demo recordings',  cnt: counts.demo,   hint: 'Voice test sessions' },
           { key: 'live',   label: 'Live calls',       cnt: counts.live,   hint: 'From real telephony' },
+          { key: 'chat',   label: 'Chat sessions',    cnt: counts.chat,   hint: 'Chatbot test conversations' },
           { key: 'agents', label: 'Agents',           cnt: counts.agents, hint: 'All agents on this account' },
         ].map(t => (
           <button
@@ -233,7 +239,9 @@ export default function LiveCallsPage() {
         pending:    list.filter(r => !r.signed_url).length,
       }} />
 
-      {tab !== 'agents' ? (
+      {tab === 'chat' ? (
+        <ChatSessionsTable sessions={chatSess} loading={loading} />
+      ) : tab !== 'agents' ? (
         <RecordingsTable
           rows={list}
           loading={loading}
@@ -411,6 +419,116 @@ function RecordingsTable({
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+// ── Chat sessions table ───────────────────────────────────────────────────────
+function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; loading: boolean }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detail, setDetail]         = useState<ChatSessionDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  async function toggle(s: ChatSessionRow) {
+    if (expandedId === s.session_id) { setExpandedId(null); setDetail(null); return; }
+    setExpandedId(s.session_id);
+    setDetail(null);
+    setLoadingDetail(true);
+    try {
+      const d = await getChatSession(s.session_id);
+      setDetail(d);
+    } catch { /* show preview only */ }
+    finally { setLoadingDetail(false); }
+  }
+
+  if (loading && sessions.length === 0)
+    return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Loading…</div>;
+  if (sessions.length === 0)
+    return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>No chat sessions yet — open a chatbot workspace, select an agent, and click "Start chat session".</div>;
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+      <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>
+          {sessions.length} chat session{sessions.length === 1 ? '' : 's'}
+        </h3>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr>
+            {['Agent', 'Use case', 'Started', 'Messages', 'First message', ''].map((h, i) => (
+              <th key={h || i} style={{
+                textAlign: 'left', padding: '12px 22px',
+                color: 'var(--text-3)', fontSize: 11, textTransform: 'uppercase',
+                letterSpacing: '0.12em', fontWeight: 500,
+                background: 'var(--surface-soft)', borderBottom: '1px solid var(--border)',
+              }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sessions.map(s => {
+            const isOpen = expandedId === s.session_id;
+            return (
+              <>
+                <tr key={s.session_id} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
+                    onClick={() => toggle(s)}>
+                  <td style={{ padding: '14px 22px' }}>
+                    <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{s.agent_name}</div>
+                  </td>
+                  <td style={{ padding: '14px 22px' }}>
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(117,91,227,0.12)', color: 'var(--purple-hi)', fontWeight: 600 }}>
+                      {s.use_case_label || s.use_case_slug || '—'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontSize: 12.5 }}>
+                    {formatTime(s.started_at)}
+                  </td>
+                  <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'JetBrains Mono', monospace" }}>
+                    {s.message_count}
+                  </td>
+                  <td style={{ padding: '14px 22px', color: 'var(--text-3)', fontSize: 12, maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {s.preview || <em>—</em>}
+                  </td>
+                  <td style={{ padding: '14px 22px', textAlign: 'right' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{isOpen ? '▲ Hide' : '▼ View'}</span>
+                  </td>
+                </tr>
+                {isOpen && (
+                  <tr key={`${s.session_id}-detail`} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td colSpan={6} style={{ padding: '0 22px 20px' }}>
+                      {loadingDetail ? (
+                        <div style={{ padding: '16px 0', color: 'var(--text-3)', fontSize: 13 }}>Loading conversation…</div>
+                      ) : detail ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16, maxHeight: 400, overflowY: 'auto' }}>
+                          {detail.turns.map((t, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: t.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                              <div style={{
+                                maxWidth: '70%', padding: '9px 14px', fontSize: 13, lineHeight: 1.55,
+                                borderRadius: t.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                                background: t.role === 'user' ? 'rgba(117,91,227,0.12)' : 'var(--surface-soft)',
+                                border: `1px solid ${t.role === 'user' ? 'rgba(117,91,227,0.25)' : 'var(--border)'}`,
+                                color: 'var(--text-1)',
+                              }}>
+                                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                                  {t.role === 'user' ? 'User' : detail.agent_name}
+                                </div>
+                                {t.text}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ padding: '12px 0', color: 'var(--text-3)', fontSize: 13 }}>Could not load conversation.</div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

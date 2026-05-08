@@ -15,10 +15,10 @@ const NAV_SECTIONS = [
   {
     label: 'Main',
     items: [
-      { id: 'dashboard', label: 'Dashboard',  icon: 'grid',  view: 'dashboard' },
-      { id: 'chat',      label: 'Chat AI',    icon: 'chat',  view: 'hr', badge: 'NEW' },
-      { id: 'voice',     label: 'Voice Bots', icon: 'mic',   view: 'live' },
-      { id: 'analytics', label: 'Analytics',  icon: 'chart', view: null },
+      { id: 'dashboard', label: 'Dashboard',  icon: 'grid',     view: 'dashboard' },
+      { id: 'chatbots',  label: 'Chatbots',   icon: 'chat',     view: 'chatbots', badge: 'NEW' },
+      { id: 'voice',     label: 'Voice Bots', icon: 'mic',      view: 'live' },
+      { id: 'analytics', label: 'Analytics',  icon: 'chart',    view: null },
     ],
   },
   {
@@ -34,7 +34,7 @@ const NAV_SECTIONS = [
 // Maps currentView → which nav item should appear active
 const ACTIVE_MAP = {
   dashboard: 'dashboard',
-  hr:        'chat',
+  chatbots:  'chatbots',
   live:      'voice',
 };
 

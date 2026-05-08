@@ -5,6 +5,7 @@ import Icon from '../assets/icons';
 
 const crumbMap = {
   dashboard:  [{ t: 'Home' }, { t: 'Dashboard',     current: true }],
+  chatbots:   [{ t: 'Home' }, { t: 'AI Platform' }, { t: 'Chatbot Use Cases', current: true }],
   hr:         [{ t: 'Home' }, { t: 'HR & Hiring' }, { t: 'Candidate Screening', current: true }],
   live:       [{ t: 'Home' }, { t: 'Voice Bots' },  { t: 'Live Campaign', current: true }],
   ecommerce:  [{ t: 'Home' }, { t: 'Voice Agents' }, { t: 'E-commerce',  current: true }],

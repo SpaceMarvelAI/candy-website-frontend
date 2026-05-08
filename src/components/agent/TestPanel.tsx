@@ -166,13 +166,24 @@ class TtsQueue {
         const onReady = () => {
           audio.removeEventListener('canplaythrough', onReady);
           audio.removeEventListener('canplay', onReady);
+          audio.removeEventListener('error', onError);
           resolve();
+        };
+        // If the audio element fires an error before canplaythrough (e.g. the
+        // ElevenLabs blob is malformed), the ready promise would hang forever
+        // unless we also resolve on error. The actual playback error is already
+        // handled by the audio.onerror = done handler above.
+        const onError = () => {
+          audio.removeEventListener('canplaythrough', onReady);
+          audio.removeEventListener('canplay', onReady);
+          resolve();   // unblock tick() so the queue drains
         };
         audio.addEventListener('canplaythrough', onReady);
         // Fallback to canplay after a short timeout in case the MP3 is
         // tiny enough that canplaythrough never fires distinctly from
         // canplay (rare, but happens on sub-1s clips).
         audio.addEventListener('canplay', onReady, { once: true });
+        audio.addEventListener('error', onError, { once: true });
       });
 
       // Set src + force a fresh load so the audio element doesn't keep
@@ -192,6 +203,14 @@ class TtsQueue {
       // currentTime non-zero between src changes.
       try { audio.currentTime = 0; } catch {}
 
+      // Ensure the Web Audio graph is running before calling play().
+      // Chrome suspends AudioContexts by default after creation; if the user
+      // typed a message before clicking Start Test (so the AC was created
+      // lazily), the context may still be suspended and audio.play() will
+      // produce complete silence even though the element reports playing=true.
+      if (_ttsAudioCtx?.state === 'suspended') {
+        try { await _ttsAudioCtx.resume(); } catch {}
+      }
       await audio.play();
       await ended;
     } catch (e) {
@@ -328,12 +347,21 @@ interface Props {
 const BCP47: Record<string, string> = {
   en: 'en-US', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN', kn: 'kn-IN', ml: 'ml-IN',
   bn: 'bn-IN', pa: 'pa-IN', gu: 'gu-IN', mr: 'mr-IN', es: 'es-ES', fr: 'fr-FR',
+  as: 'as-IN', or: 'or-IN', ur: 'ur-IN', mai: 'mai-IN', sa: 'sa-IN',
 };
 const LANG_LABEL: Record<string, string> = {
   en: 'English', hi: 'हिन्दी', ta: 'தமிழ்', te: 'తెలుగు', kn: 'ಕನ್ನಡ',
-  ml: 'മലയാളം', bn: 'বাংলা', pa: 'ਪੰਜਾਬੀ', gu: 'ગુજરાતી', mr: 'मराठी',
+  ml: 'മലയാളം', bn: 'বাংলা', pa: 'ਪੰਜਾਬੀ', gu: 'ગુજรાતી', mr: 'मराठी',
   es: 'Español', fr: 'Français',
+  as: 'অসমীয়া', or: 'ଓଡ଼ିଆ', ur: 'اردو', mai: 'मैथिली', sa: 'संस्कृत',
 };
+
+// Languages routed to IndicWhisper (offline, no API key needed).
+// Deepgram nova-3 multi fails on all of these — transcribes as garbage.
+const INDIC_STT_LANGS = new Set([
+  'ta', 'te', 'kn', 'ml', 'bn', 'gu', 'mr', 'pa',
+  'as', 'or', 'ur', 'mai', 'sa', 'ne', 'si',
+]);
 
 // Short, natural fillers — kept brief (~1s spoken) so they bridge ~500ms
 // of LLM latency without sounding like a separate sentence. Multiple per
@@ -497,6 +525,13 @@ export default function TestPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primaryLang]);
 
+  // NOTE: The backend now uses _run_with_auto_detect() on every utterance —
+  // it tries IndicConformer first, checks for Indian-script characters, and
+  // falls back to Whisper-base.en if the output is Latin/empty.  This means
+  // language switching is fully automatic and the STT WebSocket does NOT need
+  // to be reopened when convLang changes.  We keep reopenTestSttWs available
+  // as a manual escape-hatch but no longer call it on language change.
+
   // Pre-fetch a filler for the current conversation language so the very
   // first turn already has audio ready. Also warm fillers for any other
   // languages the agent supports so language switches stay snappy.
@@ -559,8 +594,9 @@ export default function TestPanel({
       // Session-level persistent STT pipeline.
       try { testSttRecRef.current?.stop(); } catch {}
       try { testSttWsRef.current?.close(); } catch {}
-      testSttRecRef.current = null;
-      testSttWsRef.current  = null;
+      testSttRecRef.current   = null;
+      testSttWsRef.current    = null;
+      bhashiniChunksRef.current = [];
       stopTts();
       if (prefetchTimerRef.current) {
         clearTimeout(prefetchTimerRef.current);
@@ -652,6 +688,8 @@ export default function TestPanel({
     const turnNumber     = (turnIndexRef.current ?? 0); // already incremented above
     const shortUtterance = t.split(/\s+/).filter(Boolean).length < 4;
     const skipFiller     = !voiceOut || turnNumber <= 1 || shortUtterance;
+    // Dedup: show at most one TTS error toast per turn so we don't spam.
+    let _ttsToastShown = false;
 
     if (!skipFiller) {
       const fillerLang = (convLangRef.current.split('-')[0] || 'en');
@@ -724,28 +762,25 @@ export default function TestPanel({
             return copy;
           });
 
-          // Detect the language of the running reply. If it switched (e.g.
-          // user said "Tamil please" → agent replied in Tamil), update the
-          // conversation language so the next mic recognition uses it.
-          const detected = detectLang(fullSoFar);
-          if (detected !== convLangRef.current && detected !== 'en-US') {
-            console.log('[TestPanel] mid-call language switch:', convLangRef.current, '→', detected);
-            convLangRef.current = detected;
-            setConvLang(detected);
-          }
-
           if (voiceOut && sentence.trim().length > 0) {
-            // Fire TTS for this sentence in parallel and reserve its
-            // playback slot in order. The queue plays slot N before slot
-            // N+1 even if N+1's network call finishes first.
-            const primary  = detected.split('-')[0];
+            // Language for TTS comes from the backend (active_language in onDone
+            // updates convLangRef). Client-side script detection is removed —
+            // the backend is the single source of truth for language switches.
+            const primary  = convLangRef.current.split('-')[0] || 'en';
             const promise  = synthesize({ text: sentence, language_code: primary })
               .catch(err => {
-                if (err?.status === 503) {
-                  addToast('Server TTS isn\'t configured — set ELEVENLABS_API_KEY in the backend .env and restart.', 'info');
-                } else {
-                  console.warn('[TestPanel] sentence TTS failed', err);
+                if (!_ttsToastShown) {
+                  _ttsToastShown = true;
+                  const _s = (err as any)?.status;
+                  if (_s === 429) {
+                    addToast('TTS quota exceeded — top up ElevenLabs or set DEEPGRAM_API_KEY as fallback.', 'error');
+                  } else if (_s === 503 || !_s) {
+                    addToast('Agent voice isn\'t available — set ELEVENLABS_API_KEY in the backend .env.', 'info');
+                  } else {
+                    addToast(`Voice synthesis failed (HTTP ${_s}) — check backend logs.`, 'error');
+                  }
                 }
+                console.warn('[TestPanel] sentence TTS failed', err);
                 throw err;
               });
             ttsQueue.enqueue(promise);
@@ -847,8 +882,20 @@ export default function TestPanel({
   // startTest() and closed in stopTest(). This eliminates the per-utterance
   // WS open/close cycling that caused Deepgram to reconnect on every turn
   // (and on every endpointing event while the user was silent between turns).
-  const testSttWsRef  = useRef<WebSocket | null>(null);
-  const testSttRecRef = useRef<MediaRecorder | null>(null);
+  const testSttWsRef   = useRef<WebSocket          | null>(null);
+  const testSttRecRef  = useRef<MediaRecorder      | null>(null);
+  /** ScriptProcessorNode that streams raw int16 PCM to the STT WebSocket. */
+  const sttPcmNodeRef  = useRef<ScriptProcessorNode | null>(null);
+  const sttPcmSrcRef   = useRef<MediaStreamAudioSourceNode | null>(null);
+  /** Stable ref to reopenTestSttWs so setupTestSttWs (defined before the
+   *  function) can trigger a WS reconnect without a forward-reference error. */
+  const reopenTestSttWsRef = useRef<((lang: string) => void) | null>(null);
+  /** Bhashini audio buffer — raw mic Blobs since the last speech_final.
+   *  On speech_final, if convLang is a Bhashini language, we POST this
+   *  buffer to /v1/stt/transcribe?provider=bhashini instead of using the
+   *  Deepgram transcript (which fails on Dravidian / Indian regional langs). */
+  const bhashiniChunksRef = useRef<Blob[]>([]);
+  const bhashiniMimeRef   = useRef<string>('audio/webm');
   const sessionRecorderRef     = useRef<MediaRecorder | null>(null);
   const sessionChunksRef       = useRef<Blob[]>([]);
   const sessionMimeRef         = useRef<string>('audio/webm');
@@ -867,6 +914,34 @@ export default function TestPanel({
   /** The session ID we last uploaded recordings against — used so we
    *  don't try to upload before a session exists. */
   const uploadSessionRef = useRef<string | null>(null);
+
+  /**
+   * Post buffered audio chunks to /v1/stt/transcribe (IndicWhisper, offline).
+   * Returns the transcript string, or null if the call fails.
+   * Clears the chunk buffer after consumption.
+   */
+  async function transcribeWithIndicWhisper(lang: string): Promise<string | null> {
+    const chunks = bhashiniChunksRef.current.splice(0);
+    if (chunks.length === 0) return null;
+    const mime = bhashiniMimeRef.current || 'audio/webm';
+    const blob = new Blob(chunks, { type: mime });
+    const form = new FormData();
+    form.append('audio', blob, 'audio.webm');
+    form.append('language_code', lang);
+    form.append('provider', 'indic_whisper');
+    try {
+      const res = await fetch('/v1/stt/transcribe', { method: 'POST', body: form });
+      if (!res.ok) {
+        console.warn('[TestPanel] IndicWhisper STT HTTP', res.status);
+        return null;
+      }
+      const data = await res.json();
+      return (data.transcript || '').trim() || null;
+    } catch (e) {
+      console.warn('[TestPanel] IndicWhisper STT fetch failed', e);
+      return null;
+    }
+  }
 
   /**
    * Wire up handlers for the session-level persistent STT WebSocket.
@@ -930,7 +1005,7 @@ export default function TestPanel({
           }
         }
       } else if (evt.type === 'speech_final') {
-        const text = currentFinal.trim();
+        const dgText = currentFinal.trim();
         currentFinal = '';
         setInput('');
         if (prefetchTimerRef.current) {
@@ -940,17 +1015,22 @@ export default function TestPanel({
         // Deepgram fires speech_final on silence due to endpointing — ignore it.
         // With a persistent WS we just keep the connection open and wait for
         // the user to speak. No restart, no cycling.
-        if (text.length === 0) return;
+        if (dgText.length === 0 && bhashiniChunksRef.current.length === 0) return;
 
         // Gate on TTS: if the agent is speaking, don't send a turn. Echo
         // cancellation removes most TTS bleed-through from the mic signal,
         // but this gate is the safety net for anything that slips through.
         if (ttsPlayingRef.current) {
           console.log('[TestPanel] speech_final during TTS playback — ignoring (barge-in not supported yet)');
+          bhashiniChunksRef.current = [];  // discard buffered audio
           return;
         }
 
-        send(text);
+        // faster-whisper via WebSocket handles ALL 99 languages including all
+        // Indic languages natively. No separate IndicWhisper REST call needed.
+        bhashiniChunksRef.current = [];
+        if (dgText.length === 0) return;
+        send(dgText);
       } else if (evt.type === 'error') {
         console.warn('[TestPanel] session STT WS error:', evt.message);
       }
@@ -963,12 +1043,102 @@ export default function TestPanel({
     ws.onclose = () => {
       testSttWsRef.current = null;
       if (testActiveRef.current) {
-        // Unexpected close while test is still running — update the indicator.
-        console.warn('[TestPanel] session STT WS closed unexpectedly while test is active');
+        // Unexpected close while test is still running — auto-reconnect.
+        console.warn('[TestPanel] session STT WS closed unexpectedly — reconnecting in 800ms...');
         setListening(false);
+        setTimeout(() => {
+          if (!testActiveRef.current) return;
+          const lang = (convLangRef.current || 'en').split('-')[0];
+          reopenTestSttWsRef.current?.(lang);
+        }, 800);
       }
     };
   }
+
+  /**
+   * Start the raw PCM ScriptProcessor streamer for a given STT WebSocket.
+   * Reads the mic stream from sessionMicStreamRef and the AudioContext from
+   * the shared TTS graph. Extracted so reopenTestSttWs can restart it after
+   * a language-switch reconnection without duplicating the setup code.
+   */
+  function startPcmStreamerForTest(ws: WebSocket) {
+    const micStream = sessionMicStreamRef.current;
+    if (!micStream) return;
+    try {
+      const { ctx: audioCtx } = ensureTtsAudioGraph();
+      const nativeSR  = audioCtx.sampleRate;   // e.g. 44100 or 48000
+      const targetSR  = 16000;
+      const frameSize = 4096;
+      const ratio     = nativeSR / targetSR;
+      const outLen    = Math.floor(frameSize / ratio);
+
+      const micSrc  = audioCtx.createMediaStreamSource(micStream);
+      const pcmNode = audioCtx.createScriptProcessor(frameSize, 1, 1);
+      pcmNode.onaudioprocess = (e) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        const float32 = e.inputBuffer.getChannelData(0);
+        const int16   = new Int16Array(outLen);
+        for (let i = 0; i < outLen; i++) {
+          const s = float32[Math.round(i * ratio)];
+          int16[i] = Math.max(-32768, Math.min(32767, Math.round(s * 32767)));
+        }
+        ws.send(int16.buffer);
+      };
+      micSrc.connect(pcmNode);
+      pcmNode.connect(audioCtx.destination);   // must be connected to fire onaudioprocess
+      sttPcmNodeRef.current = pcmNode;
+      sttPcmSrcRef.current  = micSrc;
+      console.log('[TestPanel] STT PCM streamer started (nativeSR=%d → 16kHz)', nativeSR);
+    } catch (err) {
+      console.error('[TestPanel] startPcmStreamerForTest failed', err);
+    }
+  }
+
+  /**
+   * Close the current session STT WebSocket and open a fresh one with a new
+   * language code, then restart the PCM streamer on the new socket.
+   * Called from the convLang useEffect whenever the active conversation
+   * language changes mid-test (e.g. user switches from English to Hindi).
+   * No-op if no test is currently active.
+   */
+  function reopenTestSttWs(newLang: string) {
+    if (!testActiveRef.current) return;
+    console.log('[TestPanel] reopening STT WS for language:', newLang);
+
+    // Disconnect old PCM streamer first so onaudioprocess stops sending to
+    // the old socket.
+    try { sttPcmNodeRef.current?.disconnect(); } catch {}
+    try { sttPcmSrcRef.current?.disconnect();  } catch {}
+    sttPcmNodeRef.current = null;
+    sttPcmSrcRef.current  = null;
+
+    // Null out handlers BEFORE closing so onclose doesn't misfire as a test
+    // failure and update the UI unnecessarily.
+    const oldWs = testSttWsRef.current;
+    if (oldWs) {
+      oldWs.onmessage = null;
+      oldWs.onerror   = null;
+      oldWs.onclose   = null;
+      try {
+        if (oldWs.readyState === WebSocket.OPEN)
+          oldWs.send(JSON.stringify({ type: 'close' }));
+        oldWs.close();
+      } catch {}
+    }
+
+    // Open the new socket with the updated language and wire it up.
+    const newWs = new WebSocket(sttStreamUrl(newLang));
+    newWs.binaryType = 'arraybuffer';
+    testSttWsRef.current = newWs;
+    setupTestSttWs(newWs);
+
+    const startNew = () => startPcmStreamerForTest(newWs);
+    if (newWs.readyState === WebSocket.OPEN) startNew();
+    else newWs.addEventListener('open', startNew, { once: true });
+  }
+  // Keep the ref in sync so the convLang useEffect (and any other caller)
+  // always invokes the latest closure without a forward-reference issue.
+  reopenTestSttWsRef.current = reopenTestSttWs;
 
   async function startListening() {
     if (!HAS_MEDIA_RECORDER) {
@@ -1062,13 +1232,10 @@ export default function TestPanel({
 
     let ws: WebSocket;
     try {
-      // Pin Deepgram to the conversation's current language (English by
-      // default, whatever primary the agent has). detect_language is
-      // still on inside the backend so mid-call switches to Hindi/Tamil
-      // are picked up, but the recogniser won't flip "hello" to French
-      // ("Allô") just because it sounds vaguely European.
-      const langHint = (convLangRef.current.split('-')[0] || 'en');
-      ws = new WebSocket(sttStreamUrl(langHint));
+      // Always use multi-language detection so Deepgram picks up Hindi,
+      // Tamil, English, etc. automatically. The backend owns language state;
+      // detected language propagates back via evt.language in onmessage.
+      ws = new WebSocket(sttStreamUrl('multi'));
       ws.binaryType = 'arraybuffer';
     } catch (e) {
       console.error('[TestPanel] STT WS init failed', e);
@@ -1503,10 +1670,13 @@ export default function TestPanel({
       addToast('Test started — talk to the agent. Stop when you are done.', 'success');
 
       // Open a single persistent STT WebSocket for the entire test session.
-      // Deepgram stays connected from Start Test → Stop Test; speech_final
-      // events trigger turns without any reconnection in between.
-      const langHint = convLangRef.current.split('-')[0] || 'en';
-      const sttWs    = new WebSocket(sttStreamUrl(langHint));
+      // Use the agent's current primary language (convLangRef) so IndicConformer
+      // transcribes in the right script from the very first utterance.
+      // If the conversation language changes later (backend switches to Hindi
+      // mid-session), the convLang useEffect will call reopenTestSttWs() to
+      // reconnect with the new language — no manual WS cycling needed.
+      const initSttLang = convLangRef.current.split('-')[0] || 'en';
+      const sttWs = new WebSocket(sttStreamUrl(initSttLang));
       sttWs.binaryType = 'arraybuffer';
       testSttWsRef.current = sttWs;
       setupTestSttWs(sttWs);
@@ -1522,20 +1692,25 @@ export default function TestPanel({
       }
       testSttRecRef.current = sttRec;
 
+      bhashiniMimeRef.current = mime || 'audio/webm';
       sttRec.ondataavailable = (ev) => {
+        // Buffer WebM blobs for batch transcription only (POST /v1/stt/transcribe).
+        // Do NOT send to the STT WebSocket — it expects raw int16 PCM, not WebM.
         if (!ev.data || ev.data.size === 0) return;
-        ev.data.arrayBuffer().then(buf => {
-          if (sttWs.readyState === WebSocket.OPEN) sttWs.send(buf);
-        }).catch(() => {});
+        bhashiniChunksRef.current.push(ev.data);
       };
 
-      const startSttRec = () => {
-        sttRec.start(150);   // 150ms chunks → low streaming latency to DG
+      // Raw PCM streamer: ScriptProcessorNode → downsample to 16 kHz → Int16 → WS.
+      // Delegates to startPcmStreamerForTest() so reopenTestSttWs() can restart
+      // it with a new socket after a language-switch reconnection.
+      const startPcmStreamer = () => {
+        startPcmStreamerForTest(sttWs);
+        sttRec.start(300);    // keep MediaRecorder running for batch-transcribe buffer
         setListening(true);
-        console.log('[TestPanel] session STT WS open — streaming mic to Deepgram');
       };
-      if (sttWs.readyState === WebSocket.OPEN) startSttRec();
-      else sttWs.addEventListener('open', startSttRec, { once: true });
+
+      if (sttWs.readyState === WebSocket.OPEN) startPcmStreamer();
+      else sttWs.addEventListener('open', startPcmStreamer, { once: true });
 
     } catch (e) {
       console.error('[TestPanel] session start failed', e);
@@ -1559,6 +1734,16 @@ export default function TestPanel({
 
     // Tear down the session-level STT pipeline cleanly.
     setListening(false);
+    bhashiniChunksRef.current = [];  // discard any pending audio
+
+    // Disconnect the raw PCM ScriptProcessor streamer.
+    try {
+      sttPcmNodeRef.current?.disconnect();
+      sttPcmSrcRef.current?.disconnect();
+    } catch {}
+    sttPcmNodeRef.current = null;
+    sttPcmSrcRef.current  = null;
+
     const sttRec = testSttRecRef.current;
     testSttRecRef.current = null;
     try { sttRec?.stop(); } catch {}

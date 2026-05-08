@@ -34,6 +34,8 @@ interface Props {
 const SLUG_LABEL: Record<string, string> = {
   ecom: 'E-commerce', fin: 'Financial', log: 'Logistics',
   health: 'Healthcare', hr: 'HR & Hiring', mkt: 'Marketing',
+  cs: 'Customer Support', tech: 'Technical Support',
+  bank: 'Banking Support', appt: 'Appointment Booking',
 };
 
 export default function AgentPicker({
@@ -141,7 +143,7 @@ export default function AgentPicker({
         <div style={{ display: 'flex', gap: 6 }}>
           {onReload && (
             <button
-              onClick={() => onReload()}
+              onClick={() => { onReload(); setAll(null); /* force allAgents to reload too */ }}
               title="Re-fetch the agent list"
               style={newBtn}
             >
