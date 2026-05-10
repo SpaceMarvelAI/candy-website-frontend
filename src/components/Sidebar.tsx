@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import Icon from '../assets/icons';
 
@@ -9,46 +10,52 @@ const COLLAPSED_W = 76;
 const EXPANDED_W  = 248;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Navigation config — single source of truth for all sidebar routes
+// Navigation config — single source of truth for all sidebar routes.
+// `path` is the React Router path; null items show a "coming soon" toast.
 // ─────────────────────────────────────────────────────────────────────────────
 const NAV_SECTIONS = [
   {
     label: 'Main',
     items: [
-      { id: 'dashboard', label: 'Dashboard',  icon: 'grid',     view: 'dashboard' },
-      { id: 'chatbots',  label: 'Chatbots',   icon: 'chat',     view: 'chatbots', badge: 'NEW' },
-      { id: 'voice',     label: 'Voice Bots', icon: 'mic',      view: 'live' },
-      { id: 'analytics', label: 'Analytics',  icon: 'chart',    view: null },
+      { id: 'dashboard', label: 'Dashboard',  icon: 'grid',     path: '/dashboard' },
+      { id: 'chatbots',  label: 'Chatbots',   icon: 'chat',     path: '/chatbots', badge: 'NEW' },
+      { id: 'voice',     label: 'Voice Bots', icon: 'mic',      path: '/live' },
+      { id: 'analytics', label: 'Analytics',  icon: 'chart',    path: null },
     ],
   },
   {
     label: 'Workspace',
     items: [
-      { id: 'team',         label: 'Team',         icon: 'team',     view: null },
-      { id: 'integrations', label: 'Integrations', icon: 'plug',     view: null },
-      { id: 'settings',     label: 'Settings',     icon: 'settings', view: null },
+      { id: 'team',         label: 'Team',         icon: 'team',     path: null },
+      { id: 'integrations', label: 'Integrations', icon: 'plug',     path: null },
+      { id: 'settings',     label: 'Settings',     icon: 'settings', path: null },
     ],
   },
 ];
 
-// Maps currentView → which nav item should appear active
-const ACTIVE_MAP = {
-  dashboard: 'dashboard',
-  chatbots:  'chatbots',
-  live:      'voice',
-};
+// Maps a URL pathname prefix → active nav item id.
+// /chatbots/cs, /chatbots/tech, etc. all keep "chatbots" highlighted.
+const PATH_TO_NAV: [string, string][] = [
+  ['/dashboard', 'dashboard'],
+  ['/chatbots',  'chatbots'],
+  ['/live',      'voice'],
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Sidebar() {
-  const { currentView, showView, setActiveNav, addToast } = useApp();
+  const { addToast } = useApp();
+  const navigate  = useNavigate();
+  const location  = useLocation();
   const [expanded, setExpanded] = useState(false);
 
-  const activeId = ACTIVE_MAP[currentView] ?? null;
+  // Derive the active nav item from the current URL pathname.
+  const activeId = PATH_TO_NAV.find(([prefix]) =>
+    location.pathname === prefix || location.pathname.startsWith(prefix + '/')
+  )?.[1] ?? null;
 
-  function navigate(item) {
-    if (item.view) {
-      setActiveNav(item.id);
-      showView(item.view);
+  function handleNav(item: { path: string | null; label: string }) {
+    if (item.path) {
+      navigate(item.path);
     } else {
       addToast(`"${item.label}" — coming soon`, 'info');
     }
@@ -123,7 +130,6 @@ export default function Sidebar() {
             {expanded ? (
               <p style={styles.sectionLabel}>{section.label}</p>
             ) : (
-              // Tiny divider while collapsed — keeps visual grouping
               <div style={styles.sectionDivider} />
             )}
 
@@ -132,14 +138,11 @@ export default function Sidebar() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => navigate(item)}
+                  onClick={() => handleNav(item)}
                   className={!expanded ? 'tooltip-wrap' : ''}
                   data-tip={!expanded ? item.label : undefined}
                   style={{
                     ...styles.navBtn,
-                    // Layout differs sharply between modes:
-                    //  · expanded — full-width pill, content aligned left
-                    //  · collapsed — fixed 44x44 square, centered horizontally
                     justifyContent: 'center',
                     padding: expanded ? '10px 12px' : 0,
                     width:  expanded ? '100%' : 44,
@@ -157,7 +160,6 @@ export default function Sidebar() {
                     color: isActive ? 'var(--text-1)' : 'var(--text-2)',
                   }}
                 >
-                  {/* Active accent bar — only shown in expanded mode where it has room */}
                   {isActive && expanded && <span style={styles.accentBar} />}
 
                   <Icon name={item.icon} size={20} />

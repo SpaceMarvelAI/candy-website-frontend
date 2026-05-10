@@ -1,29 +1,59 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { seedChatMessages } from '../utils/mockData';
 import { loadStoredUser, logout as apiLogout, type AuthUser } from '../api/auth';
 import { getToken } from '../api/client';
 
+// Bidirectional mapping between legacy view names and URL paths.
+// All existing showView('dashboard') calls keep working unchanged.
+const VIEW_TO_PATH: Record<string, string> = {
+  auth:           '/auth',
+  dashboard:      '/dashboard',
+  chatbots:       '/chatbots',
+  live:           '/live',
+  hrchat:         '/hrchat',
+  ecommerce:      '/agents/ecommerce',
+  financial:      '/agents/financial',
+  logistics:      '/agents/logistics',
+  healthcare:     '/agents/healthcare',
+  marketing:      '/agents/marketing',
+  hr:             '/agents/hr',
+  chatbot_cs:     '/chatbots/cs',
+  chatbot_tech:   '/chatbots/tech',
+  chatbot_health: '/chatbots/health',
+  chatbot_bank:   '/chatbots/bank',
+  chatbot_appt:   '/chatbots/appt',
+  chatbot_hr:     '/chatbots/hr',
+};
+
+const PATH_TO_VIEW: Record<string, string> = Object.fromEntries(
+  Object.entries(VIEW_TO_PATH).map(([k, v]) => [v, k])
+);
+
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
-  // ── Auth ────────────────────────────────────────────────────────────────────
-  // Hydrate from localStorage so a page reload doesn't kick the user back to login.
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const initialUser = (typeof window !== 'undefined') ? loadStoredUser() : null;
-  const initialView = initialUser && getToken() ? 'dashboard' : 'auth';
 
   const [user, setUser]                = useState<AuthUser | null>(initialUser);
-  const [currentView, setCurrentView]  = useState<string>(initialView);
   const [activeNav,   setActiveNav]    = useState('dashboard');
   const [chatMessages,setChatMessages] = useState(seedChatMessages);
   const [calls,       setCalls]        = useState([]);
   const [toasts,      setToasts]       = useState([]);
 
-  const showView = useCallback((name) => {
-    setCurrentView(name);
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  }, []);
+  // currentView is now derived from the URL — no separate state needed.
+  const currentView = PATH_TO_VIEW[location.pathname] ?? 'dashboard';
 
-  const addToast = useCallback((msg, kind = 'success') => {
+  const showView = useCallback((name: string) => {
+    const path = VIEW_TO_PATH[name] ?? '/dashboard';
+    navigate(path);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [navigate]);
+
+  const addToast = useCallback((msg: string, kind = 'success') => {
     const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { id, msg, kind }]);
     setTimeout(() => {
@@ -33,34 +63,32 @@ export function AppProvider({ children }) {
 
   const signedIn = useCallback((u: AuthUser) => {
     setUser(u);
-    showView('dashboard');
-  }, [showView]);
+    navigate('/dashboard');
+  }, [navigate]);
 
   const signOut = useCallback(() => {
     apiLogout();
     setUser(null);
-    showView('auth');
-  }, [showView]);
+    navigate('/auth');
+  }, [navigate]);
 
-  // If the JWT was wiped (e.g. via devtools), drop back to the auth page.
+  // Redirect to login when there's no authenticated user.
   useEffect(() => {
-    if (!user && currentView !== 'auth') {
-      setCurrentView('auth');
+    if (!user && location.pathname !== '/auth') {
+      navigate('/auth', { replace: true });
     }
-  }, [user, currentView]);
+  }, [user, location.pathname, navigate]);
 
-  // The api client dispatches this when any request returns 401. Clear the
-  // user, drop the toast so the human knows what happened, and let the
-  // useEffect above redirect to the auth page.
+  // The API client fires this event on any 401 response.
   useEffect(() => {
     function onAuthExpired() {
       setUser(null);
       addToast('Your session expired — please sign in again.', 'error');
-      setCurrentView('auth');
+      navigate('/auth', { replace: true });
     }
     window.addEventListener('candy:auth-expired', onAuthExpired);
     return () => window.removeEventListener('candy:auth-expired', onAuthExpired);
-  }, [addToast]);
+  }, [addToast, navigate]);
 
   return (
     <AppContext.Provider value={{

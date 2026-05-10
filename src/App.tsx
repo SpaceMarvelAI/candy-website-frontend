@@ -1,4 +1,4 @@
-import { useApp } from './context/AppContext';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import AmbientBg from './components/AmbientBg';
 import ToastHost from './components/Toast';
 import AppLayout from './layouts/AppLayout';
@@ -16,7 +16,6 @@ import HealthcareAgent from './pages/healthcare';
 import MarketingAgent  from './pages/marketing';
 import HRAgent         from './pages/hr';
 
-// Chatbot use-case workspaces — full-screen (same pattern as voice agents)
 import ChatbotCS     from './pages/chatbot-cs';
 import ChatbotTech   from './pages/chatbot-tech';
 import ChatbotHealth from './pages/chatbot-health';
@@ -24,64 +23,53 @@ import ChatbotBank   from './pages/chatbot-bank';
 import ChatbotAppt   from './pages/chatbot-appt';
 import ChatbotHR     from './pages/chatbot-hr';
 
-// Voice-agent pages render full-screen with their own AgentShell — they
-// supply their own header/back-button instead of the AppLayout chrome.
-// Chatbot workspace pages follow the same pattern.
-const AGENT_VIEWS = {
-  // ── Voice agents ──────────────────────────────────────────────────────────
-  ecommerce:  <EcommerceAgent />,
-  financial:  <FinancialAgent />,
-  logistics:  <LogisticsAgent />,
-  healthcare: <HealthcareAgent />,
-  marketing:  <MarketingAgent />,
-  hr:         <HRAgent />,
-
-  // ── Chatbot workspaces ────────────────────────────────────────────────────
-  chatbot_cs:     <ChatbotCS />,
-  chatbot_tech:   <ChatbotTech />,
-  chatbot_health: <ChatbotHealth />,
-  chatbot_bank:   <ChatbotBank />,
-  chatbot_appt:   <ChatbotAppt />,
-  chatbot_hr:     <ChatbotHR />,
-};
-
-const APP_VIEWS = {
-  dashboard:  <DashboardPage />,
-  chatbots:   <ChatbotsPage />,
-  // 'hrchat' kept around for the old chat-style HR screen if someone
-  // links into it directly; the dashboard tile now opens the standard
-  // AgentWorkspace via AGENT_VIEWS.hr above.
-  hrchat:     <HRFlowPage />,
-  live:       <LiveCallsPage />,
-};
+function WithLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ position: 'relative', zIndex: 1 }}>
+      <AppLayout>{children}</AppLayout>
+    </div>
+  );
+}
 
 export default function App() {
-  const { currentView } = useApp();
-
-  let body;
-  if (currentView === 'auth') {
-    body = (
-      <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
-        <AuthPage />
-      </div>
-    );
-  } else if (AGENT_VIEWS[currentView]) {
-    // Agent screens take over the full viewport — no sidebar, no topbar.
-    body = AGENT_VIEWS[currentView];
-  } else {
-    body = (
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <AppLayout>
-          {APP_VIEWS[currentView] ?? <DashboardPage />}
-        </AppLayout>
-      </div>
-    );
-  }
-
   return (
     <>
       <AmbientBg />
-      {body}
+      <Routes>
+        <Route path="/auth" element={
+          <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
+            <AuthPage />
+          </div>
+        } />
+
+        {/* App views — rendered inside AppLayout (sidebar + topbar) */}
+        <Route path="/dashboard" element={<WithLayout><DashboardPage /></WithLayout>} />
+        <Route path="/live"      element={<WithLayout><LiveCallsPage /></WithLayout>} />
+        <Route path="/hrchat"    element={<WithLayout><HRFlowPage /></WithLayout>} />
+
+        {/* Chatbots landing page — must be listed before /chatbots/* sub-routes */}
+        <Route path="/chatbots" element={<WithLayout><ChatbotsPage /></WithLayout>} />
+
+        {/* Chatbot workspaces — full-screen, no sidebar */}
+        <Route path="/chatbots/cs"     element={<ChatbotCS />} />
+        <Route path="/chatbots/tech"   element={<ChatbotTech />} />
+        <Route path="/chatbots/health" element={<ChatbotHealth />} />
+        <Route path="/chatbots/bank"   element={<ChatbotBank />} />
+        <Route path="/chatbots/appt"   element={<ChatbotAppt />} />
+        <Route path="/chatbots/hr"     element={<ChatbotHR />} />
+
+        {/* Voice agent workspaces — full-screen, no sidebar */}
+        <Route path="/agents/ecommerce"  element={<EcommerceAgent />} />
+        <Route path="/agents/financial"  element={<FinancialAgent />} />
+        <Route path="/agents/logistics"  element={<LogisticsAgent />} />
+        <Route path="/agents/healthcare" element={<HealthcareAgent />} />
+        <Route path="/agents/marketing"  element={<MarketingAgent />} />
+        <Route path="/agents/hr"         element={<HRAgent />} />
+
+        {/* Fallback */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
       <ToastHost />
     </>
   );
