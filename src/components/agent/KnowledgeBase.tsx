@@ -10,7 +10,7 @@
  */
 import { useState, useRef } from 'react';
 import Icon from '../../assets/icons';
-import { uploadKnowledgeFile, deleteKnowledge, crawlWebsite, type KnowledgeDoc } from '../../api/knowledge';
+import { uploadKnowledgeFile, deleteKnowledge, crawlWebsite, getKnowledgeDoc, type KnowledgeDoc } from '../../api/knowledge';
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 
@@ -50,6 +50,23 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
   const [crawling, setCrawling] = useState(false);
   const [crawlEntireSite, setCrawlEntireSite] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [viewingDoc, setViewingDoc] = useState<(KnowledgeDoc & { content_text?: string }) | null>(null);
+  const [loadingDoc, setLoadingDoc] = useState(false);
+
+  async function openDoc(d: KnowledgeDoc, ev: React.MouseEvent) {
+    ev.stopPropagation();
+    if (loadingDoc) return;
+    setViewingDoc(d as any);
+    setLoadingDoc(true);
+    try {
+      const full = await getKnowledgeDoc(agentId!, d.id);
+      setViewingDoc(full);
+    } catch {
+      // keep showing basic info from list
+    } finally {
+      setLoadingDoc(false);
+    }
+  }
 
   async function addFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
@@ -330,7 +347,11 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
           {docs.map(d => {
             const deleting = deletingIds.has(d.id);
             return (
-              <li key={d.id} style={fileRow}>
+              <li
+                key={d.id}
+                style={{ ...fileRow, cursor: 'pointer' }}
+                onClick={agentId ? (ev) => openDoc(d, ev) : undefined}
+              >
                 <div
                   style={{
                     width: 30, height: 30, borderRadius: 7,
@@ -391,9 +412,149 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
           })}
         </ul>
       )}
+      {viewingDoc && (
+        <DocViewerModal
+          doc={viewingDoc}
+          loading={loadingDoc}
+          tint={tintColor[tint]}
+          onClose={() => setViewingDoc(null)}
+        />
+      )}
     </section>
   );
 }
+
+// ── Doc viewer modal ──────────────────────────────────────────────────────────
+function DocViewerModal({
+  doc, loading, tint, onClose,
+}: {
+  doc: KnowledgeDoc & { content_text?: string };
+  loading: boolean;
+  tint: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'rgba(0,0,0,0.82)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: 680,
+          maxHeight: '80vh',
+          background: '#18181f',
+          border: '1px solid var(--border-strong)',
+          borderRadius: 14,
+          display: 'flex', flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '16px 20px',
+          borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+        }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 8,
+            background: `${tint}18`,
+            display: 'grid', placeItems: 'center',
+            flexShrink: 0,
+          }}>
+            <Icon name="file" size={16} style={{ color: tint }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {doc.filename}
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>
+              {formatSize(doc.size_bytes)}
+              {doc.purpose_category ? ` · ${doc.purpose_category}` : ''}
+              {doc.audience ? ` · ${doc.audience}` : ''}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: 30, height: 30, borderRadius: 8,
+              background: 'transparent', border: '1px solid var(--border)',
+              color: 'var(--text-2)', display: 'grid', placeItems: 'center',
+              cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            <Icon name="x" size={13} />
+          </button>
+        </div>
+
+        {/* Metadata pills */}
+        {(doc.document_tags?.length > 0 || doc.version_label || doc.effective_date) && (
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', gap: 6,
+            padding: '10px 20px',
+            borderBottom: '1px solid var(--border)',
+            flexShrink: 0,
+          }}>
+            {doc.version_label && (
+              <span style={metaPill}>v{doc.version_label}</span>
+            )}
+            {doc.effective_date && (
+              <span style={metaPill}>Effective: {doc.effective_date}</span>
+            )}
+            {doc.document_tags?.map(tag => (
+              <span key={tag} style={{ ...metaPill, background: `${tint}14`, borderColor: `${tint}30`, color: tint }}>
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px' }}>
+          {loading ? (
+            <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
+              Loading content…
+            </div>
+          ) : doc.content_text ? (
+            <pre style={{
+              margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              fontSize: 12.5, lineHeight: 1.7, color: 'var(--text-1)',
+              fontFamily: 'inherit',
+            }}>
+              {doc.content_text}
+            </pre>
+          ) : doc.summary ? (
+            <>
+              <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-4)', margin: '0 0 10px' }}>
+                Summary
+              </p>
+              <p style={{ fontSize: 13.5, lineHeight: 1.75, color: 'var(--text-1)', margin: 0, whiteSpace: 'pre-wrap' }}>
+                {doc.summary}
+              </p>
+            </>
+          ) : (
+            <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
+              No preview available for this file type.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const metaPill: React.CSSProperties = {
+  fontSize: 11, padding: '3px 8px', borderRadius: 99,
+  background: 'var(--tint-1)', border: '1px solid var(--border)',
+  color: 'var(--text-3)',
+};
 
 const section = {
   background: 'var(--surface)',

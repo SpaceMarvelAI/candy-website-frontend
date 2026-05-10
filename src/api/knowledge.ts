@@ -40,6 +40,10 @@ export async function uploadKnowledgeFile(agentId: string, file: File): Promise<
   });
 }
 
+export async function getKnowledgeDoc(agentId: string, kbId: string): Promise<KnowledgeDoc & { content_text?: string }> {
+  return api(`/v1/agents/${agentId}/knowledge/${kbId}`);
+}
+
 export async function deleteKnowledge(agentId: string, kbId: string): Promise<void> {
   await api(`/v1/agents/${agentId}/knowledge/${kbId}`, { method: 'DELETE' });
 }

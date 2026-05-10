@@ -125,32 +125,19 @@ export default function PromptEditor({
         </span>
       </header>
 
-      {/* Persona row — brand name + agent name + speaking style */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-        <div style={{ flex: 1.2 }}>
-          <label style={fieldLabel}>Company / Brand name</label>
-          <input
-            type="text"
-            value={brandName}
-            onChange={e => onBrandNameChange?.(e.target.value)}
-            placeholder="e.g. Trilife Hospital, Apollo…"
-            style={fieldInput}
-          />
-          <span style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 3, display: 'block' }}>
-            Overrides your account name in the compiled prompt
-          </span>
-        </div>
-        <div style={{ flex: 1 }}>
+      {/* Row 1: Agent name + Speaking style */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+        <div>
           <label style={fieldLabel}>Agent name</label>
           <input
             type="text"
             value={personaName}
             onChange={e => onPersonaNameChange?.(e.target.value)}
-            placeholder="e.g. Priya, Arjun, Alex…"
+            placeholder="e.g. Aria, Priya, Alex…"
             style={fieldInput}
           />
         </div>
-        <div style={{ flex: 1 }}>
+        <div>
           <label style={fieldLabel}>Speaking style</label>
           <select
             value={personaStyle}
@@ -162,6 +149,18 @@ export default function PromptEditor({
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Row 2: Brand name — full width */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={fieldLabel}>Company / Brand name</label>
+        <input
+          type="text"
+          value={brandName}
+          onChange={e => onBrandNameChange?.(e.target.value)}
+          placeholder="e.g. SpaceMarvel, Trilife Hospital… (overrides account name in prompt)"
+          style={fieldInput}
+        />
       </div>
 
       <textarea

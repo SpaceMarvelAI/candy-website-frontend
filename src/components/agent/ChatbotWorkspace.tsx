@@ -1,20 +1,4 @@
-/**
- * ChatbotWorkspace — configurable workspace for a single chatbot use-case.
- *
- * Accepts the same kind of props as AgentWorkspace so every use-case page
- * (customer_support, technical_support, healthcare_coaching, banking_support,
- * appointment_booking, hr_operations) can render its own isolated view.
- *
- * Layout (matches voice-agent workspaces):
- *   AgentShell (header + back + publish)
- *     AgentPicker — list / create / delete agents for this slug
- *     Embed URL banner (after publish)
- *     ┌──────────────────────────────┬────────────────┐
- *     │ KnowledgeBase                │ ChatTestPanel  │
- *     │ PromptEditor                 │ (Try Now)      │
- *     └──────────────────────────────┴────────────────┘
- */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AgentShell from './AgentShell';
 import AgentPicker from './AgentPicker';
 import KnowledgeBase from './KnowledgeBase';
@@ -28,48 +12,61 @@ import { ApiError, getToken } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 
 interface Props {
-  slug: string;       // DB use_case_slug: 'cs' | 'tech' | 'health' | 'bank' | 'appt' | 'hr'
-  category: string;   // Display name e.g. 'Customer Support'
-  icon: string;       // Icon name for AgentShell
+  slug: string;
+  category: string;
+  icon: string;
   tint?: 'purple' | 'blue' | 'teal' | 'green' | 'amber' | 'pink';
   defaultPrompt: string;
   presets: { label: string; body: string }[];
 }
+
+const tintColor: Record<string, string> = {
+  purple: 'var(--purple-hi)',
+  blue:   'var(--blue)',
+  teal:   'var(--teal)',
+  green:  'var(--green)',
+  amber:  'var(--amber)',
+  pink:   'var(--pink)',
+};
+
 
 export default function ChatbotWorkspace({
   slug, category, icon, tint = 'purple', defaultPrompt, presets,
 }: Props) {
   const { addToast } = useApp();
 
-  const [agents, setAgents]           = useState<Agent[]>([]);
-  const [selectedId, setSelectedId]   = useState<string | null>(null);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState<string | null>(null);
+  // ── Agent state ────────────────────────────────────────────────────────────
+  const [agents, setAgents]         = useState<Agent[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
 
-  const [promptText, setPromptText]   = useState('');
-  const [docs, setDocs]               = useState<KnowledgeDoc[]>([]);
-
-  // Persona + brand — same fields as voice AgentWorkspace
+  // ── Config state ───────────────────────────────────────────────────────────
+  const [promptText,   setPromptText]   = useState('');
+  const [docs,         setDocs]         = useState<KnowledgeDoc[]>([]);
   const [personaName,  setPersonaName]  = useState('');
   const [personaStyle, setPersonaStyle] = useState('professional');
   const [brandName,    setBrandName]    = useState('');
 
-  const [publishing, setPublishing]   = useState(false);
+  // ── Publish state ──────────────────────────────────────────────────────────
+  const [publishing,     setPublishing]     = useState(false);
   const [statusOverride, setStatusOverride] = useState<string | null>(null);
 
-  const initRef = useRef(false);
+  // ── Tab panel state — each section opens independently ─────────────────────
+  const [kbOpen,  setKbOpen]  = useState(false);
+  const [reqOpen, setReqOpen] = useState(false);
 
-  const agent  = agents.find(a => a.id === selectedId) ?? null;
-  const status = statusOverride || agent?.agent_flow_status || null;
+  const agent   = agents.find(a => a.id === selectedId) ?? null;
+  const status  = statusOverride || agent?.agent_flow_status || null;
   const canPublish = !!agent && (status === 'ready_to_test' || status === 'published');
 
-  // Hosted widget URL shown after publish
   const widgetUrl = (agent?.agent_flow_status === 'published' || statusOverride === 'published')
     ? `${window.location.protocol}//${window.location.host}/chat/${agent?.id}`
     : null;
 
-  // ── Data loaders ──────────────────────────────────────────────────────────
+  const color = tintColor[tint] ?? tintColor.purple;
 
+  // ── Data loaders ───────────────────────────────────────────────────────────
   const refreshDocs = useCallback(async () => {
     if (!selectedId) return;
     try { setDocs(await listKnowledge(selectedId)); }
@@ -79,19 +76,14 @@ export default function ChatbotWorkspace({
   const reloadAgents = useCallback(async () => {
     if (!getToken()) return;
     try {
-      // Chatbot workspace is already scoped to its use_case slug — no need to
-      // further filter by call_direction ('chat' may not be set on older agents).
       const bots = await listAgents({ use_case: slug });
       setAgents(bots);
-      // Keep selection if still valid; otherwise pick first
       setSelectedId(prev => bots.find(a => a.id === prev) ? prev : (bots[0]?.id ?? null));
     } catch (e) { console.warn('reloadAgents failed', e); }
   }, [slug]);
 
   // Bootstrap — load agents on mount
   useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
     if (!getToken()) { setError('Not signed in'); setLoading(false); return; }
 
     let cancelled = false;
@@ -133,7 +125,7 @@ export default function ChatbotWorkspace({
           setPersonaStyle(r.persona_style ?? 'professional');
           setBrandName(r.brand_name ?? '');
         }
-        if (kbRes.status === 'fulfilled')  setDocs(kbRes.value);
+        if (kbRes.status === 'fulfilled') setDocs(kbRes.value);
       } catch (e) {
         console.warn('load agent data failed', e);
       } finally {
@@ -143,14 +135,9 @@ export default function ChatbotWorkspace({
     return () => { cancelled = true; };
   }, [selectedId]);
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
-
+  // ── Handlers ───────────────────────────────────────────────────────────────
   async function createNewAgent(name: string) {
-    const created = await createAgent({
-      use_case_slug:  slug,
-      name,
-      call_direction: 'chat',
-    } as any);
+    const created = await createAgent({ use_case_slug: slug, name, call_direction: 'chat' } as any);
     setAgents(prev => [...prev, created]);
     setSelectedId(created.id);
   }
@@ -182,8 +169,8 @@ export default function ChatbotWorkspace({
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <AgentShell
       category={category}
@@ -193,125 +180,249 @@ export default function ChatbotWorkspace({
       onPublish={onPublish}
       publishing={publishing}
       publishDisabled={!canPublish}
-      publishHint={canPublish ? undefined : 'Save the requirements first — wait for them to compile, then publish.'}
+      publishHint={canPublish ? undefined : 'Save requirements first — wait for them to compile, then publish.'}
     >
-      {/* Error banner */}
+      {/* ── Agent picker — full width at top ── */}
+      <div style={{ marginBottom: 16 }}>
+        <AgentPicker
+          tint={tint}
+          category={category}
+          slug={slug}
+          agents={agents}
+          selectedId={agent?.id ?? null}
+          onSelect={id => { setSelectedId(id); setStatusOverride(null); }}
+          onCreate={createNewAgent}
+          onDelete={removeAgent}
+          onReload={reloadAgents}
+        />
+      </div>
+
+      {/* Full-width banners */}
       {error && (
-        <div style={{
-          background: 'rgba(255,90,120,0.10)', border: '1px solid rgba(255,90,120,0.40)',
-          color: '#ff8194', padding: '12px 14px', borderRadius: 10,
-          fontSize: 13, marginBottom: 16,
-        }}>
-          <strong>Couldn\'t load agents:</strong> {error}
+        <div style={errorBannerStyle}>
+          <strong>Couldn't load agents:</strong> {error}
         </div>
       )}
-
-      {/* Empty state */}
       {!error && !loading && agents.length === 0 && (
-        <div style={{
-          background: 'rgba(117,91,227,0.08)', border: '1px solid rgba(117,91,227,0.30)',
-          color: 'var(--text-1)', padding: '12px 14px', borderRadius: 10,
-          fontSize: 13, marginBottom: 16,
-        }}>
-          No {category} agents yet. Click <strong>+ New agent</strong> below to create one.
+        <div style={emptyBannerStyle}>
+          No {category} agents yet. Click <strong>+ New agent</strong> above to create one.
         </div>
       )}
-
-      {/* Agent picker */}
-      <AgentPicker
-        tint={tint}
-        category={category}
-        slug={slug}
-        agents={agents}
-        selectedId={agent?.id ?? null}
-        onSelect={id => { setSelectedId(id); setStatusOverride(null); }}
-        onCreate={createNewAgent}
-        onDelete={removeAgent}
-        onReload={reloadAgents}
-      />
-
-      {/* Embed URL after publish */}
       {widgetUrl && (
-        <div style={{
-          background: 'rgba(74,222,128,0.08)',
-          border: '1px solid rgba(74,222,128,0.35)',
-          borderRadius: 10, padding: '12px 16px',
-          marginBottom: 4,
-          display: 'flex', flexDirection: 'column', gap: 8,
-        }}>
+        <div style={{ ...widgetBannerStyle, marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#4ade80' }}>
-            ✓ {category} chatbot published — here\'s your hosted link
+            ✓ {category} chatbot published — hosted link ready
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <code style={{
-              flex: 1, background: 'rgba(0,0,0,0.3)', borderRadius: 6,
-              padding: '6px 10px', fontSize: 12, color: 'var(--text-1)',
-              overflowX: 'auto', whiteSpace: 'nowrap',
-            }}>
-              {widgetUrl}
-            </code>
+            <code style={widgetCode}>{widgetUrl}</code>
             <button
               onClick={() => { navigator.clipboard.writeText(widgetUrl); addToast('URL copied!', 'success'); }}
-              style={{
-                flexShrink: 0, background: 'rgba(74,222,128,0.15)',
-                border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7,
-                color: '#4ade80', fontSize: 11, padding: '5px 12px', cursor: 'pointer',
-              }}
-            >
-              Copy
-            </button>
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-2)' }}>
-            Embed as an <code style={{ fontSize: 11 }}>&lt;iframe&gt;</code> or link directly from your website or the Candy frontend.
+              style={widgetCopyBtn}
+            >Copy</button>
           </div>
         </div>
       )}
 
       {/* Main 2-column layout */}
-      <div style={layoutStyle}>
-        {/* Left column: KB + Prompt */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <KnowledgeBase
+      <div style={mainGrid}>
+
+        {/* ── Left column: Chat — stretches with grid row, min = viewport height ── */}
+        <div style={{ height: '100%', minHeight: 300 }}>
+          <ChatTestPanel
             tint={tint}
             agentId={agent?.id ?? null}
-            docs={docs}
-            refreshDocs={refreshDocs}
-          />
-          <PromptEditor
-            tint={tint}
-            agentId={agent?.id ?? null}
-            value={promptText || defaultPrompt}
-            onChange={setPromptText}
-            presets={presets}
-            supportedLanguageCodes={[]}
-            multilingual={false}
-            callDirection="outbound"
-            onCallDirectionChange={() => {}}
-            onSaved={reloadAgents}
-            hideCallDirection
-            personaName={personaName}
-            onPersonaNameChange={setPersonaName}
-            personaStyle={personaStyle}
-            onPersonaStyleChange={setPersonaStyle}
-            brandName={brandName}
-            onBrandNameChange={setBrandName}
+            disabled={!agent}
+            disabledHint={`Pick or create a ${category} agent above to start testing`}
           />
         </div>
 
-        {/* Right column: Chat test panel */}
-        <ChatTestPanel
-          tint={tint}
-          agentId={agent?.id ?? null}
-          disabled={!agent}
-          disabledHint={!agent ? `Pick or create a ${category} agent above to start testing` : undefined}
-        />
+        {/* ── Right column: accordion list — top-pinned, drives row height ── */}
+        <div style={{ ...rightCol, alignSelf: 'start' }}>
+
+          {/* Knowledge Base accordion item */}
+          <AccordionItem
+            open={kbOpen}
+            onToggle={() => setKbOpen(o => !o)}
+            label="Knowledge Base"
+            icon="📚"
+            color={color}
+          >
+            <KnowledgeBase
+              tint={tint}
+              agentId={agent?.id ?? null}
+              docs={docs}
+              refreshDocs={refreshDocs}
+            />
+          </AccordionItem>
+
+          {/* Requirements accordion item */}
+          <AccordionItem
+            open={reqOpen}
+            onToggle={() => setReqOpen(o => !o)}
+            label="Requirements"
+            icon="⚡"
+            color={color}
+          >
+            <PromptEditor
+              tint={tint}
+              agentId={agent?.id ?? null}
+              value={promptText || defaultPrompt}
+              onChange={setPromptText}
+              presets={presets}
+              supportedLanguageCodes={[]}
+              multilingual={false}
+              callDirection="outbound"
+              onCallDirectionChange={() => {}}
+              onSaved={reloadAgents}
+              hideCallDirection
+              personaName={personaName}
+              onPersonaNameChange={setPersonaName}
+              personaStyle={personaStyle}
+              onPersonaStyleChange={setPersonaStyle}
+              brandName={brandName}
+              onBrandNameChange={setBrandName}
+            />
+          </AccordionItem>
+        </div>
       </div>
     </AgentShell>
   );
 }
 
-const layoutStyle: React.CSSProperties = {
+// ── Accordion item component ────────────────────────────────────────────────
+function AccordionItem({
+  open, onToggle, label, icon, color, children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  label: string;
+  icon: string;
+  color: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '11px 14px',
+          borderRadius: open ? '10px 10px 0 0' : 10,
+          border: `1px solid ${open ? color : 'var(--border)'}`,
+          borderBottom: open ? 'none' : `1px solid ${open ? color : 'var(--border)'}`,
+          background: open ? `${color}12` : 'var(--surface)',
+          color: open ? color : 'var(--text-2)',
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: 'pointer',
+          transition: 'all 0.15s ease',
+          letterSpacing: '0.01em',
+        }}
+      >
+        <span style={{ fontSize: 15 }}>{icon}</span>
+        <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
+        <svg
+          width="12" height="12" viewBox="0 0 12 12" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+          style={{
+            opacity: 0.6,
+            transform: open ? 'rotate(180deg)' : 'none',
+            transition: 'transform 0.25s ease',
+            flexShrink: 0,
+          }}
+        >
+          <polyline points="2 4 6 8 10 4" />
+        </svg>
+      </button>
+
+      {/* Animated body */}
+      <div style={{
+        display: 'grid',
+        gridTemplateRows: open ? '1fr' : '0fr',
+        transition: 'grid-template-rows 0.32s cubic-bezier(0.4, 0, 0.2, 1)',
+      }}>
+        <div style={{ overflow: 'hidden' }}>
+          <div style={{
+            border: `1px solid ${color}`,
+            borderTop: 'none',
+            borderRadius: '0 0 10px 10px',
+            padding: 0,
+          }}>
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Styles ──────────────────────────────────────────────────────────────────
+const mainGrid: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) 360px',
+  gridTemplateColumns: '1fr 420px',
   gap: 20,
+  minHeight: 'calc(100vh - 234px)',
+  alignItems: 'stretch',
+};
+
+const rightCol: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 14,
+};
+
+
+const errorBannerStyle: React.CSSProperties = {
+  background: 'rgba(255,90,120,0.10)',
+  border: '1px solid rgba(255,90,120,0.40)',
+  color: '#ff8194',
+  padding: '12px 14px',
+  borderRadius: 10,
+  fontSize: 13,
+  marginBottom: 16,
+};
+
+const emptyBannerStyle: React.CSSProperties = {
+  background: 'rgba(117,91,227,0.08)',
+  border: '1px solid rgba(117,91,227,0.30)',
+  color: 'var(--text-1)',
+  padding: '12px 14px',
+  borderRadius: 10,
+  fontSize: 13,
+  marginBottom: 16,
+};
+
+const widgetBannerStyle: React.CSSProperties = {
+  background: 'rgba(74,222,128,0.08)',
+  border: '1px solid rgba(74,222,128,0.35)',
+  borderRadius: 10,
+  padding: '12px 16px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+};
+
+const widgetCode: React.CSSProperties = {
+  flex: 1,
+  background: 'rgba(0,0,0,0.3)',
+  borderRadius: 6,
+  padding: '6px 10px',
+  fontSize: 11,
+  color: 'var(--text-1)',
+  overflowX: 'auto',
+  whiteSpace: 'nowrap',
+};
+
+const widgetCopyBtn: React.CSSProperties = {
+  flexShrink: 0,
+  background: 'rgba(74,222,128,0.15)',
+  border: '1px solid rgba(74,222,128,0.35)',
+  borderRadius: 7,
+  color: '#4ade80',
+  fontSize: 11,
+  padding: '5px 12px',
+  cursor: 'pointer',
 };
