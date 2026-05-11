@@ -1,8 +1,7 @@
 /**
- * AgentWorkspace — the body that every industry page (Ecommerce, Financial,
- * Logistics, Healthcare, Marketing) renders inside an AgentShell. Encapsulates
- * the find-or-create-agent flow plus the wiring of KnowledgeBase / PromptEditor
- * / LanguagePicker / TestPanel to the real backend.
+ * AgentWorkspace — voice-agent workspace.
+ * Layout: TestPanel (left, full height) + accordion config panel (right).
+ * Accordion items: Knowledge Base | Languages | Requirements
  */
 import { useState } from 'react';
 import AgentShell from './AgentShell';
@@ -17,15 +16,24 @@ import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 
 interface Props {
-  slug: string;            // 'ecom' / 'fin' / 'log' / 'health' / 'mkt' / 'hr'
-  category: string;        // Display name e.g. 'E-commerce'
+  slug: string;
+  category: string;
   icon: string;
   tint?: 'purple' | 'blue' | 'teal' | 'green' | 'amber' | 'pink';
   defaultPrompt: string;
   presets: { label: string; body: string }[];
 }
 
-export default function AgentWorkspace({ slug, category, icon, tint, defaultPrompt, presets }: Props) {
+const tintColor: Record<string, string> = {
+  purple: 'var(--purple-hi)',
+  blue:   'var(--blue)',
+  teal:   'var(--teal)',
+  green:  'var(--green)',
+  amber:  'var(--amber)',
+  pink:   'var(--pink)',
+};
+
+export default function AgentWorkspace({ slug, category, icon, tint = 'purple', defaultPrompt, presets }: Props) {
   const { addToast } = useApp();
   const {
     agents, agent, selectAgent, createNewAgent, removeAgent, reloadAgents,
@@ -41,13 +49,16 @@ export default function AgentWorkspace({ slug, category, icon, tint, defaultProm
     callDirection, setCallDirection,
   } = useAgent(slug, `${category} agent`);
 
-  const [publishing, setPublishing] = useState(false);
+  const [publishing, setPublishing]       = useState(false);
   const [statusOverride, setStatusOverride] = useState<string | null>(null);
+  const [kbOpen,   setKbOpen]   = useState(false);
+  const [langOpen, setLangOpen] = useState(false);
+  const [reqOpen,  setReqOpen]  = useState(false);
 
   const effectivePrompt = promptText || defaultPrompt;
-
-  const status = statusOverride || agent?.agent_flow_status || null;
+  const status     = statusOverride || agent?.agent_flow_status || null;
   const canPublish = !!agent && (status === 'ready_to_test' || status === 'published');
+  const color      = tintColor[tint] ?? tintColor.purple;
 
   async function onPublish() {
     if (!agent || publishing) return;
@@ -77,99 +88,203 @@ export default function AgentWorkspace({ slug, category, icon, tint, defaultProm
       publishDisabled={!canPublish}
       publishHint={canPublish ? undefined : 'Save the requirements — wait for them to compile, then publish.'}
     >
+      {/* ── Banners ── */}
       {error && (
-        <div
-          role="alert"
-          style={{
-            background: 'rgba(255,90,120,0.1)',
-            border: '1px solid rgba(255,90,120,0.4)',
-            color: '#ff8194',
-            padding: '12px 14px', borderRadius: 10,
-            fontSize: 13, marginBottom: 16,
-            display: 'flex', flexDirection: 'column', gap: 6,
-          }}
-        >
-          <div><strong>Couldn't load agents:</strong> {error}</div>
-          <div style={{ fontSize: 11.5, opacity: 0.85 }}>
-            Check that the Candy-Agents backend is running on port 8001 and that you're signed in. Open the browser devtools → Network tab to see the failing request.
+        <div style={errorBanner}>
+          <strong>Couldn't load agents:</strong> {error}
+          <div style={{ fontSize: 11.5, opacity: 0.85, marginTop: 4 }}>
+            Check that the backend is running on port 8001 and that you're signed in.
           </div>
         </div>
       )}
-
       {!error && !loading && agents.length === 0 && (
-        <div
-          style={{
-            background: 'rgba(24,218,252,0.08)',
-            border: '1px solid rgba(24,218,252,0.3)',
-            color: 'var(--text-1)',
-            padding: '12px 14px', borderRadius: 10,
-            fontSize: 13, marginBottom: 16,
-          }}
-        >
+        <div style={emptyBanner}>
           No {category} agents yet. Click <strong>+ New agent</strong> below to create your first one.
         </div>
       )}
 
-      <AgentPicker
-        tint={tint}
-        category={category}
-        slug={slug}
-        agents={agents}
-        selectedId={agent?.id ?? null}
-        onSelect={selectAgent}
-        onCreate={createNewAgent}
-        onDelete={removeAgent}
-        onReload={reloadAgents}
-      />
-
-      <div style={layout}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <KnowledgeBase
-            tint={tint}
-            agentId={agent?.id ?? null}
-            docs={docs}
-            refreshDocs={refreshDocs}
-          />
-          <LanguagePicker
-            tint={tint}
-            primary={primaryLang}
-            onPrimaryChange={setPrimaryLang}
-            supported={supportedCodes}
-            onSupportedChange={setSupportedCodes}
-            multilingual={multilingual}
-            onMultilingualChange={setMultilingual}
-          />
-          <PromptEditor
-            tint={tint}
-            agentId={agent?.id ?? null}
-            value={effectivePrompt}
-            onChange={setPromptText}
-            presets={presets}
-            supportedLanguageCodes={supportedCodes}
-            multilingual={multilingual}
-            callDirection={callDirection}
-            onCallDirectionChange={setCallDirection}
-            brandName={brandName}
-            onBrandNameChange={setBrandName}
-            personaName={personaName}
-            onPersonaNameChange={setPersonaName}
-            personaStyle={personaStyle}
-            onPersonaStyleChange={setPersonaStyle}
-            onSaved={reloadAgents}
-          />
-        </div>
-        <TestPanel
+      {/* ── Agent picker — full width ── */}
+      <div style={{ marginBottom: 16 }}>
+        <AgentPicker
           tint={tint}
           category={category}
-          agentId={agent?.id ?? null}
-          disabled={!agent}
-          disabledHint={!agent ? 'Pick or create an agent above to start testing' : undefined}
-          primaryLang={primaryLang}
-          supportedLangs={supportedCodes}
+          slug={slug}
+          agents={agents}
+          selectedId={agent?.id ?? null}
+          onSelect={id => { selectAgent(id); setStatusOverride(null); }}
+          onCreate={createNewAgent}
+          onDelete={removeAgent}
+          onReload={reloadAgents}
         />
+      </div>
+
+      {/* ── Main 2-column grid ── */}
+      <div style={mainGrid}>
+
+        {/* Left: Test panel */}
+        <div style={{ height: '100%', minHeight: 300 }}>
+          <TestPanel
+            tint={tint}
+            category={category}
+            agentId={agent?.id ?? null}
+            disabled={!agent}
+            disabledHint={!agent ? `Pick or create a ${category} agent above to start testing` : undefined}
+            primaryLang={primaryLang}
+            supportedLangs={supportedCodes}
+          />
+        </div>
+
+        {/* Right: accordion list */}
+        <div style={{ ...rightCol, alignSelf: 'start' }}>
+          <AccordionItem open={kbOpen}   onToggle={() => setKbOpen(o => !o)}   label="Knowledge Base" icon="📚" color={color}>
+            <KnowledgeBase
+              tint={tint}
+              agentId={agent?.id ?? null}
+              docs={docs}
+              refreshDocs={refreshDocs}
+            />
+          </AccordionItem>
+
+          <AccordionItem open={langOpen} onToggle={() => setLangOpen(o => !o)} label="Languages"      icon="🌐" color={color}>
+            <div style={{ padding: 16 }}>
+              <LanguagePicker
+                tint={tint}
+                primary={primaryLang}
+                onPrimaryChange={setPrimaryLang}
+                supported={supportedCodes}
+                onSupportedChange={setSupportedCodes}
+                multilingual={multilingual}
+                onMultilingualChange={setMultilingual}
+              />
+            </div>
+          </AccordionItem>
+
+          <AccordionItem open={reqOpen}  onToggle={() => setReqOpen(o => !o)}  label="Requirements"   icon="⚡" color={color}>
+            <PromptEditor
+              tint={tint}
+              agentId={agent?.id ?? null}
+              value={effectivePrompt}
+              onChange={setPromptText}
+              presets={presets}
+              supportedLanguageCodes={supportedCodes}
+              multilingual={multilingual}
+              callDirection={callDirection}
+              onCallDirectionChange={setCallDirection}
+              brandName={brandName}
+              onBrandNameChange={setBrandName}
+              personaName={personaName}
+              onPersonaNameChange={setPersonaName}
+              personaStyle={personaStyle}
+              onPersonaStyleChange={setPersonaStyle}
+              onSaved={reloadAgents}
+            />
+          </AccordionItem>
+        </div>
       </div>
     </AgentShell>
   );
 }
 
-const layout = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 20 };
+// ── Accordion item ────────────────────────────────────────────────────────────
+function AccordionItem({
+  open, onToggle, label, icon, color, children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  label: string;
+  icon: string;
+  color: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '11px 14px',
+          borderRadius: open ? '10px 10px 0 0' : 10,
+          border: `1px solid ${open ? color : 'var(--border)'}`,
+          borderBottom: open ? 'none' : `1px solid ${open ? color : 'var(--border)'}`,
+          background: open ? `${color}12` : 'var(--surface)',
+          color: open ? color : 'var(--text-2)',
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: 'pointer',
+          transition: 'all 0.15s ease',
+          letterSpacing: '0.01em',
+        }}
+      >
+        <span style={{ fontSize: 15 }}>{icon}</span>
+        <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
+        <svg
+          width="12" height="12" viewBox="0 0 12 12" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+          style={{
+            opacity: 0.6,
+            transform: open ? 'rotate(180deg)' : 'none',
+            transition: 'transform 0.25s ease',
+            flexShrink: 0,
+          }}
+        >
+          <polyline points="2 4 6 8 10 4" />
+        </svg>
+      </button>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateRows: open ? '1fr' : '0fr',
+        transition: 'grid-template-rows 0.32s cubic-bezier(0.4, 0, 0.2, 1)',
+      }}>
+        <div style={{ overflow: 'hidden' }}>
+          <div style={{
+            border: `1px solid ${color}`,
+            borderTop: 'none',
+            borderRadius: '0 0 10px 10px',
+          }}>
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const mainGrid: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 420px',
+  gap: 20,
+  minHeight: 'calc(100vh - 274px)',
+  alignItems: 'stretch',
+};
+
+const rightCol: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 14,
+};
+
+const errorBanner: React.CSSProperties = {
+  background: 'rgba(255,90,120,0.1)',
+  border: '1px solid rgba(255,90,120,0.4)',
+  color: '#ff8194',
+  padding: '12px 14px',
+  borderRadius: 10,
+  fontSize: 13,
+  marginBottom: 16,
+};
+
+const emptyBanner: React.CSSProperties = {
+  background: 'rgba(24,218,252,0.08)',
+  border: '1px solid rgba(24,218,252,0.3)',
+  color: 'var(--text-1)',
+  padding: '12px 14px',
+  borderRadius: 10,
+  fontSize: 13,
+  marginBottom: 16,
+};

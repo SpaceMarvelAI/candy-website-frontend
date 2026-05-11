@@ -2122,23 +2122,22 @@ const panel = {
   borderRadius: 'var(--radius)',
   padding: 22,
   display: 'flex', flexDirection: 'column' as const,
-  height: 'fit-content',
-  position: 'sticky' as const,
-  top: 92,
+  height: '100%',
+  boxSizing: 'border-box' as const,
 };
 const panelHeader = {
   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
   marginBottom: 14,
+  flexShrink: 0,
 };
 const transcriptArea = {
   flex: 1,
+  minHeight: 180,
   display: 'flex', flexDirection: 'column' as const, gap: 10,
   padding: 12,
   background: 'var(--tint-1)',
   border: '1px solid var(--border)',
   borderRadius: 10,
-  minHeight: 220,
-  maxHeight: 320,
   overflowY: 'auto' as const,
 };
 const composer = {

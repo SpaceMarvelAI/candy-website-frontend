@@ -10,7 +10,7 @@
  *     agent changes.
  *   • Loads the language catalog so the LanguagePicker can render.
  */
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { listAgents, createAgent, deleteAgent, type Agent } from '../api/agents';
 import { getRequirements } from '../api/requirements';
 import { listKnowledge, type KnowledgeDoc } from '../api/knowledge';
@@ -71,8 +71,6 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
   const [multilingual, setMultilingual]     = useState(false);
   const [callDirection, setCallDirection]   = useState<'inbound' | 'outbound' | 'both'>('inbound');
 
-  const initRef = useRef(false);
-
   const agent = agents.find(a => a.id === selectedId) ?? null;
 
   const refreshDocs = useCallback(async () => {
@@ -112,9 +110,6 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
   // this slug, auto-create a starter agent so the user has something to
   // edit on first visit.
   useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
-
     if (!getToken()) {
       setError('Not signed in');
       setLoading(false);
