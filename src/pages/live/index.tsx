@@ -59,6 +59,7 @@ export default function LiveCallsPage() {
   const [error,     setError]        = useState<string | null>(null);
   const [playingId, setPlayingId]    = useState<string | null>(null);
   const [deletingId, setDeletingId]  = useState<string | null>(null);
+  const [selectedRec, setSelectedRec] = useState<RecordingRow | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const initRef  = useRef(false);
 
@@ -254,9 +255,14 @@ export default function LiveCallsPage() {
           deletingId={deletingId}
           onPlay={play}
           onDelete={remove}
+          onView={setSelectedRec}
         />
       ) : (
         <AgentsTable agents={agents} loading={loading} />
+      )}
+
+      {selectedRec && (
+        <RecordingDetailModal rec={selectedRec} onClose={() => setSelectedRec(null)} />
       )}
     </div>
   );
@@ -264,7 +270,7 @@ export default function LiveCallsPage() {
 
 // ── Recordings table ──────────────────────────────────────────────────────────
 function RecordingsTable({
-  rows, loading, emptyHint, playingId, deletingId, onPlay, onDelete,
+  rows, loading, emptyHint, playingId, deletingId, onPlay, onDelete, onView,
 }: {
   rows: RecordingRow[];
   loading: boolean;
@@ -273,6 +279,7 @@ function RecordingsTable({
   deletingId: string | null;
   onPlay: (r: RecordingRow) => void;
   onDelete: (r: RecordingRow) => void;
+  onView: (r: RecordingRow) => void;
 }) {
   return (
     <div
@@ -353,14 +360,18 @@ function RecordingsTable({
                     </span>
                   </td>
                   <td
+                    onClick={() => onView(r)}
                     style={{
                       padding: '14px 22px', color: 'var(--text-3)',
                       fontSize: 12, maxWidth: 320,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      cursor: 'pointer',
                     }}
-                    title={r.transcript || ''}
+                    title="Click to view full transcript"
+                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--purple-hi)'; e.currentTarget.style.textDecoration = 'underline'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-3)'; e.currentTarget.style.textDecoration = 'none'; }}
                   >
-                    {r.transcript || <em>(no transcript)</em>}
+                    {r.transcript || <em style={{ color: 'var(--text-4)' }}>(no transcript)</em>}
                   </td>
                   <td style={{ padding: '14px 22px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: 6 }}>
@@ -420,6 +431,151 @@ function RecordingsTable({
         </table>
       )}
     </div>
+  );
+}
+
+// ── Recording detail modal ────────────────────────────────────────────────────
+function parseTranscript(raw: string): { role: 'user' | 'agent'; text: string }[] {
+  const turns: { role: 'user' | 'agent'; text: string }[] = [];
+  // Split on "User:" or "Agent:" markers (case-insensitive)
+  const parts = raw.split(/(?=(?:User|Agent):\s)/i);
+  for (const part of parts) {
+    const m = part.match(/^(User|Agent):\s*([\s\S]*)/i);
+    if (!m) continue;
+    const role = m[1].toLowerCase() === 'user' ? 'user' : 'agent';
+    const text = m[2].trim();
+    if (text) turns.push({ role, text });
+  }
+  return turns.length ? turns : [{ role: 'agent', text: raw }];
+}
+
+function RecordingDetailModal({ rec, onClose }: { rec: RecordingRow; onClose: () => void }) {
+  const turns = rec.transcript ? parseTranscript(rec.transcript) : [];
+
+  return (
+    <>
+      {/* Dim overlay — clicking closes the drawer */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.50)',
+        }}
+      />
+
+      {/* Right-side drawer — full viewport height */}
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: 'fixed', top: 0, right: 0, bottom: 0,
+          width: 'min(540px, 46vw)',
+          zIndex: 1001,
+          background: '#18181f',
+          borderLeft: '1px solid var(--border-strong)',
+          display: 'flex', flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: '-16px 0 56px rgba(0,0,0,0.6)',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '16px 20px', borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 9,
+            background: 'rgba(117,91,227,0.15)',
+            display: 'grid', placeItems: 'center', flexShrink: 0,
+          }}>
+            <Icon name="mic" size={16} style={{ color: 'var(--purple-hi)' }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
+              {rec.agent_name || 'Recording'}
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 1 }}>
+              {formatTime(rec.created_at)}
+              {rec.duration_ms ? ` · ${formatDuration(rec.duration_ms)}` : ''}
+              {rec.language_code ? ` · ${rec.language_code.toUpperCase()}` : ''}
+              {rec.size_bytes ? ` · ${formatSize(rec.size_bytes)}` : ''}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: 30, height: 30, borderRadius: 8,
+              background: 'transparent', border: '1px solid var(--border)',
+              color: 'var(--text-2)', display: 'grid', placeItems: 'center',
+              cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            <Icon name="x" size={13} />
+          </button>
+        </div>
+
+        {/* Audio player */}
+        {rec.signed_url ? (
+          <div style={{
+            padding: '14px 20px', borderBottom: '1px solid var(--border)',
+            flexShrink: 0, background: 'rgba(117,91,227,0.06)',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-4)', marginBottom: 8 }}>
+              Recording
+            </div>
+            <audio
+              controls
+              src={rec.signed_url}
+              style={{ width: '100%', height: 36, accentColor: 'var(--purple-hi)' }}
+            />
+          </div>
+        ) : (
+          <div style={{
+            padding: '10px 20px', borderBottom: '1px solid var(--border)',
+            flexShrink: 0, background: 'rgba(0,0,0,0.2)',
+          }}>
+            <span style={{ fontSize: 12, color: 'var(--text-4)' }}>
+              No playback URL — audio stored locally on the backend.
+            </span>
+          </div>
+        )}
+
+        {/* Transcript */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {turns.length === 0 ? (
+            <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
+              No transcript available for this recording.
+            </div>
+          ) : (
+            turns.map((turn, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: turn.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                <div style={{
+                  maxWidth: '72%',
+                  padding: '10px 14px',
+                  borderRadius: turn.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                  background: turn.role === 'user'
+                    ? 'rgba(117,91,227,0.14)'
+                    : 'rgba(255,255,255,0.05)',
+                  border: `1px solid ${turn.role === 'user' ? 'rgba(117,91,227,0.28)' : 'var(--border)'}`,
+                  fontSize: 13.5,
+                  lineHeight: 1.6,
+                  color: 'var(--text-1)',
+                }}>
+                  <div style={{
+                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                    letterSpacing: '0.1em', marginBottom: 5,
+                    color: turn.role === 'user' ? 'var(--purple-hi)' : 'var(--text-4)',
+                  }}>
+                    {turn.role === 'user' ? 'User' : (rec.agent_name || 'Agent')}
+                  </div>
+                  {turn.text}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
