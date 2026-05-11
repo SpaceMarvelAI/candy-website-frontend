@@ -57,9 +57,40 @@ export default function LiveCallsPage() {
   const [agents,    setAgents]       = useState<Agent[]>([]);
   const [loading,   setLoading]      = useState(true);
   const [error,     setError]        = useState<string | null>(null);
-  const [playingId, setPlayingId]    = useState<string | null>(null);
-  const [deletingId, setDeletingId]  = useState<string | null>(null);
-  const [selectedRec, setSelectedRec] = useState<RecordingRow | null>(null);
+  const [playingId, setPlayingId]       = useState<string | null>(null);
+  const [deletingId, setDeletingId]     = useState<string | null>(null);
+  const [selectedRec, setSelectedRec]   = useState<RecordingRow | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  async function downloadRec(rec: RecordingRow) {
+    if (!rec.signed_url) {
+      addToast('No download URL — recording stored locally on backend.', 'info');
+      return;
+    }
+    if (downloadingId === rec.recording_id) return;
+    setDownloadingId(rec.recording_id);
+    const filename = `${(rec.agent_name || 'recording').replace(/\s+/g, '_')}_${rec.created_at.slice(0, 19).replace(/[:/\s]/g, '-')}.wav`;
+    try {
+      // Fetch as blob so we force a download regardless of Content-Type header
+      const res = await fetch(rec.signed_url);
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      addToast(`Downloading ${filename}`, 'success');
+    } catch {
+      // CORS fallback: open in new tab so browser can handle it
+      window.open(rec.signed_url, '_blank');
+      addToast('Opened in new tab — save with Ctrl/Cmd+S', 'info');
+    } finally {
+      setDownloadingId(null);
+    }
+  }
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const initRef  = useRef(false);
 
@@ -256,13 +287,15 @@ export default function LiveCallsPage() {
           onPlay={play}
           onDelete={remove}
           onView={setSelectedRec}
+          onDownload={downloadRec}
+          downloadingId={downloadingId}
         />
       ) : (
         <AgentsTable agents={agents} loading={loading} />
       )}
 
       {selectedRec && (
-        <RecordingDetailModal rec={selectedRec} onClose={() => setSelectedRec(null)} />
+        <RecordingDetailModal rec={selectedRec} onClose={() => setSelectedRec(null)} onDownload={downloadRec} />
       )}
     </div>
   );
@@ -270,16 +303,19 @@ export default function LiveCallsPage() {
 
 // ── Recordings table ──────────────────────────────────────────────────────────
 function RecordingsTable({
-  rows, loading, emptyHint, playingId, deletingId, onPlay, onDelete, onView,
+  rows, loading, emptyHint, playingId, deletingId, downloadingId,
+  onPlay, onDelete, onView, onDownload,
 }: {
   rows: RecordingRow[];
   loading: boolean;
   emptyHint: string;
   playingId: string | null;
   deletingId: string | null;
+  downloadingId: string | null;
   onPlay: (r: RecordingRow) => void;
   onDelete: (r: RecordingRow) => void;
   onView: (r: RecordingRow) => void;
+  onDownload: (r: RecordingRow) => void;
 }) {
   return (
     <div
@@ -392,6 +428,25 @@ function RecordingsTable({
                         <Icon name={isPlaying ? 'pause' : 'play'} size={12} />
                       </button>
                       <button
+                        onClick={() => onDownload(r)}
+                        disabled={!r.signed_url || downloadingId === r.recording_id}
+                        title={r.signed_url ? 'Download recording' : 'No download URL available'}
+                        style={{
+                          width: 30, height: 30, borderRadius: 8,
+                          background: downloadingId === r.recording_id ? 'rgba(24,218,252,0.12)' : 'transparent',
+                          border: `1px solid ${downloadingId === r.recording_id ? 'var(--blue)' : 'var(--border)'}`,
+                          color: downloadingId === r.recording_id ? 'var(--blue)' : 'var(--text-2)',
+                          cursor: r.signed_url ? 'pointer' : 'not-allowed',
+                          opacity: r.signed_url ? 1 : 0.4,
+                          display: 'inline-grid', placeItems: 'center',
+                          transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={e => { if (r.signed_url && downloadingId !== r.recording_id) { e.currentTarget.style.background = 'rgba(24,218,252,0.1)'; e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)'; } }}
+                        onMouseLeave={e => { if (downloadingId !== r.recording_id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-2)'; } }}
+                      >
+                        <Icon name={downloadingId === r.recording_id ? 'refresh' : 'export'} size={12} />
+                      </button>
+                      <button
                         onClick={() => onDelete(r)}
                         disabled={deletingId === r.recording_id}
                         title="Delete recording"
@@ -449,7 +504,7 @@ function parseTranscript(raw: string): { role: 'user' | 'agent'; text: string }[
   return turns.length ? turns : [{ role: 'agent', text: raw }];
 }
 
-function RecordingDetailModal({ rec, onClose }: { rec: RecordingRow; onClose: () => void }) {
+function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow; onClose: () => void; onDownload: (r: RecordingRow) => void }) {
   const turns = rec.transcript ? parseTranscript(rec.transcript) : [];
 
   return (
@@ -501,17 +556,35 @@ function RecordingDetailModal({ rec, onClose }: { rec: RecordingRow; onClose: ()
               {rec.size_bytes ? ` · ${formatSize(rec.size_bytes)}` : ''}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              width: 30, height: 30, borderRadius: 8,
-              background: 'transparent', border: '1px solid var(--border)',
-              color: 'var(--text-2)', display: 'grid', placeItems: 'center',
-              cursor: 'pointer', flexShrink: 0,
-            }}
-          >
-            <Icon name="x" size={13} />
-          </button>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            {rec.signed_url && (
+              <button
+                onClick={() => onDownload(rec)}
+                title="Download recording"
+                style={{
+                  width: 30, height: 30, borderRadius: 8,
+                  background: 'transparent', border: '1px solid var(--border)',
+                  color: 'var(--text-2)', display: 'grid', placeItems: 'center',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(24,218,252,0.1)'; e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-2)'; }}
+              >
+                <Icon name="export" size={13} />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              style={{
+                width: 30, height: 30, borderRadius: 8,
+                background: 'transparent', border: '1px solid var(--border)',
+                color: 'var(--text-2)', display: 'grid', placeItems: 'center',
+                cursor: 'pointer', flexShrink: 0,
+              }}
+            >
+              <Icon name="x" size={13} />
+            </button>
+          </div>
         </div>
 
         {/* Audio player */}
