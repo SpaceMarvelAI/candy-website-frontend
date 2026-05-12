@@ -9,6 +9,7 @@
  *     • Agents — quick overview of every agent on the company.
  */
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import LiveStats from './LiveStats';
 import Icon from '../../assets/icons';
@@ -507,7 +508,15 @@ function parseTranscript(raw: string): { role: 'user' | 'agent'; text: string }[
 function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow; onClose: () => void; onDownload: (r: RecordingRow) => void }) {
   const turns = rec.transcript ? parseTranscript(rec.transcript) : [];
 
-  return (
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  return createPortal(
     <>
       {/* Dim overlay — clicking closes the drawer */}
       <div
@@ -515,6 +524,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
         style={{
           position: 'fixed', inset: 0, zIndex: 1000,
           background: 'rgba(0,0,0,0.50)',
+          overscrollBehavior: 'contain',
         }}
       />
 
@@ -529,6 +539,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
           borderLeft: '1px solid var(--border-strong)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
+          overscrollBehavior: 'contain',
           boxShadow: '-16px 0 56px rgba(0,0,0,0.6)',
         }}
       >
@@ -614,7 +625,16 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
         )}
 
         {/* Transcript */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          padding: '18px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}>
           {turns.length === 0 ? (
             <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
               No transcript available for this recording.
@@ -648,7 +668,8 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
