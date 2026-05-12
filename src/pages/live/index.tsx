@@ -19,6 +19,7 @@ import { listChatSessions, getChatSession, type ChatSessionRow, type ChatSession
 import { ApiError, getToken } from '../../api/client';
 
 type Tab = 'demo' | 'live' | 'chat' | 'agents';
+const APP_TOPBAR_HEIGHT = 64;
 
 const SLUG_LABEL: Record<string, string> = {
   ecom: 'E-commerce', fin: 'Financial', log: 'Logistics',
@@ -522,7 +523,12 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
       <div
         onClick={onClose}
         style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
+          position: 'fixed',
+          top: APP_TOPBAR_HEIGHT,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          zIndex: 1000,
           background: 'rgba(0,0,0,0.50)',
           overscrollBehavior: 'contain',
         }}
@@ -532,15 +538,18 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          position: 'fixed', top: 0, right: 0, bottom: 0,
+          position: 'fixed',
+          top: APP_TOPBAR_HEIGHT,
+          right: 0,
+          bottom: 0,
           width: 'min(540px, 46vw)',
           zIndex: 1001,
-          background: '#18181f',
+          background: 'var(--surface-solid)',
           borderLeft: '1px solid var(--border-strong)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
           overscrollBehavior: 'contain',
-          boxShadow: '-16px 0 56px rgba(0,0,0,0.6)',
+          boxShadow: 'var(--shadow-deep)',
         }}
       >
         {/* Header */}
@@ -548,6 +557,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
           display: 'flex', alignItems: 'center', gap: 12,
           padding: '16px 20px', borderBottom: '1px solid var(--border)',
           flexShrink: 0,
+          background: 'var(--surface-elev)',
         }}>
           <div style={{
             width: 36, height: 36, borderRadius: 9,
@@ -602,7 +612,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
         {rec.signed_url ? (
           <div style={{
             padding: '14px 20px', borderBottom: '1px solid var(--border)',
-            flexShrink: 0, background: 'rgba(117,91,227,0.06)',
+            flexShrink: 0, background: 'var(--tint-2)',
           }}>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-4)', marginBottom: 8 }}>
               Recording
@@ -616,7 +626,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
         ) : (
           <div style={{
             padding: '10px 20px', borderBottom: '1px solid var(--border)',
-            flexShrink: 0, background: 'rgba(0,0,0,0.2)',
+            flexShrink: 0, background: 'var(--surface-soft)',
           }}>
             <span style={{ fontSize: 12, color: 'var(--text-4)' }}>
               No playback URL — audio stored locally on the backend.
@@ -631,6 +641,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
           overflowY: 'auto',
           overscrollBehavior: 'contain',
           padding: '18px 20px',
+          background: 'var(--surface-solid)',
           display: 'flex',
           flexDirection: 'column',
           gap: 12,
@@ -648,7 +659,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
                   borderRadius: turn.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
                   background: turn.role === 'user'
                     ? 'rgba(117,91,227,0.14)'
-                    : 'rgba(255,255,255,0.05)',
+                    : 'var(--tint-2)',
                   border: `1px solid ${turn.role === 'user' ? 'rgba(117,91,227,0.28)' : 'var(--border)'}`,
                   fontSize: 13.5,
                   lineHeight: 1.6,
