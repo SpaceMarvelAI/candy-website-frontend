@@ -109,6 +109,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
           tint={tint}
           category={category}
           slug={slug}
+          modality="voice"
           agents={agents}
           selectedId={agent?.id ?? null}
           onSelect={id => { selectAgent(id); setStatusOverride(null); }}

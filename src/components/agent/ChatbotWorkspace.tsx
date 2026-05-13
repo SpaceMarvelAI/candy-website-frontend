@@ -76,7 +76,7 @@ export default function ChatbotWorkspace({
   const reloadAgents = useCallback(async () => {
     if (!getToken()) return;
     try {
-      const bots = await listAgents({ use_case: slug });
+      const bots = await listAgents({ use_case: slug, modality: 'chat' });
       setAgents(bots);
       setSelectedId(prev => bots.find(a => a.id === prev) ? prev : (bots[0]?.id ?? null));
     } catch (e) { console.warn('reloadAgents failed', e); }
@@ -89,7 +89,7 @@ export default function ChatbotWorkspace({
     let cancelled = false;
     (async () => {
       try {
-        const bots = await listAgents({ use_case: slug });
+        const bots = await listAgents({ use_case: slug, modality: 'chat' });
         if (cancelled) return;
         setAgents(bots);
         if (bots.length > 0) setSelectedId(bots[0].id);
@@ -176,6 +176,7 @@ export default function ChatbotWorkspace({
       category={category}
       icon={icon}
       tint={tint}
+      kind="chat"
       status={status}
       onPublish={onPublish}
       publishing={publishing}
@@ -188,6 +189,7 @@ export default function ChatbotWorkspace({
           tint={tint}
           category={category}
           slug={slug}
+          modality="chat"
           agents={agents}
           selectedId={agent?.id ?? null}
           onSelect={id => { setSelectedId(id); setStatusOverride(null); }}

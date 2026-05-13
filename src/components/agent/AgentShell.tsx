@@ -38,6 +38,7 @@ interface Props {
   category: string;
   icon: string;
   tint?: keyof typeof tintColor;
+  kind?: 'voice' | 'chat';
   status?: string | null;
   onPublish?: () => void;
   publishing?: boolean;
@@ -47,10 +48,11 @@ interface Props {
 }
 
 export default function AgentShell({
-  category, icon, tint = 'purple',
+  category, icon, tint = 'purple', kind = 'voice',
   status, onPublish, publishing, publishDisabled, publishHint,
   children,
 }: Props) {
+  const kindLabel = kind === 'chat' ? 'Chat Agent' : 'Voice Agent';
   const { showView, setActiveNav } = useApp();
   const { theme, toggleTheme } = useTheme();
 
@@ -110,7 +112,7 @@ export default function AgentShell({
                   color: tintColor[tint],
                 }}
               >
-                Voice Agent
+                {kindLabel}
               </div>
               <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)' }}>
                 {category}

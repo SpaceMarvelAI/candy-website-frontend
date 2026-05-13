@@ -119,12 +119,13 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
     let cancelled = false;
     (async () => {
       try {
-        // Fetch all agents and filter client-side. The backend's
-        // ?use_case=<slug> filter currently misses some matches in this
-        // build, so doing the filter in JS is more robust.
+        // Fetch voice agents (call_direction != 'chat') and filter
+        // client-side by slug. Backend's ?use_case=<slug> filter has
+        // historically missed some matches in this build, so the JS
+        // slug filter is kept as a safety net.
         const [langsRes, all] = await Promise.all([
           listLanguages().catch(() => [] as Language[]),
-          listAgents(),
+          listAgents({ modality: 'voice' }),
         ]);
         if (cancelled) return;
         setLanguages(langsRes);
@@ -226,7 +227,7 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
     setError(null);
     setLoading(true);
     try {
-      const all = await listAgents();
+      const all = await listAgents({ modality: 'voice' });
       const matched = all.filter(a => a.use_case_slug === slug);
       setAgents(matched);
       if (matched.length > 0 && !selectedId) {

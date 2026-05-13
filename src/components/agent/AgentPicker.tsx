@@ -23,6 +23,7 @@ interface Props {
   tint?: keyof typeof tintColor;
   category: string;
   slug: string;
+  modality: 'voice' | 'chat';
   agents: Agent[];
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -39,7 +40,7 @@ const SLUG_LABEL: Record<string, string> = {
 };
 
 export default function AgentPicker({
-  tint = 'purple', category, slug,
+  tint = 'purple', category, slug, modality,
   agents, selectedId, onSelect, onCreate, onDelete, onReload,
 }: Props) {
   const { user, addToast } = useApp();
@@ -72,11 +73,13 @@ export default function AgentPicker({
   }
 
   // Lazy-load the full unfiltered list when the user toggles "Show all".
+  // Still scoped to the workspace's modality — a voice workspace's
+  // "Show all" should never reveal chat agents and vice versa.
   useEffect(() => {
     if (!showAll || allAgents !== null) return;
     let cancelled = false;
     setLoadingAll(true);
-    listAgents()
+    listAgents({ modality })
       .then(list => { if (!cancelled) setAll(list); })
       .catch(e => {
         const msg = e instanceof ApiError ? e.message : (e as Error).message;
@@ -84,7 +87,7 @@ export default function AgentPicker({
       })
       .finally(() => { if (!cancelled) setLoadingAll(false); });
     return () => { cancelled = true; };
-  }, [showAll, allAgents, addToast]);
+  }, [showAll, allAgents, addToast, modality]);
 
   async function newAgent() {
     if (creating) return;

@@ -13,10 +13,13 @@ export interface Agent {
   created_at: string;
 }
 
-export async function listAgents(params: { use_case?: string; status?: string } = {}): Promise<Agent[]> {
+export async function listAgents(
+  params: { use_case?: string; status?: string; modality?: 'voice' | 'chat' } = {},
+): Promise<Agent[]> {
   const q = new URLSearchParams();
   if (params.use_case) q.set('use_case', params.use_case);
   if (params.status) q.set('status', params.status);
+  if (params.modality) q.set('modality', params.modality);
   const qs = q.toString();
   return api<Agent[]>(`/v1/agents${qs ? `?${qs}` : ''}`);
 }
