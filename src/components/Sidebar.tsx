@@ -20,13 +20,14 @@ const NAV_SECTIONS = [
       { id: 'dashboard', label: 'Dashboard',  icon: 'grid',     path: '/dashboard' },
       { id: 'chatbots',  label: 'Chatbots',   icon: 'chat',     path: '/chatbots', badge: 'NEW' },
       { id: 'voice',     label: 'Voice Bots', icon: 'mic',      path: '/live' },
-      { id: 'analytics', label: 'Analytics',  icon: 'chart',    path: null },
+      { id: 'analytics', label: 'Analytics',  icon: 'chart',    path: '/analytics' },
     ],
   },
   {
     label: 'Workspace',
     items: [
       { id: 'team',         label: 'Team',         icon: 'team',     path: null },
+      { id: 'webhooks',     label: 'Webhooks',     icon: 'zap',      path: '/webhooks' },
       { id: 'integrations', label: 'Integrations', icon: 'plug',     path: null },
       { id: 'settings',     label: 'Settings',     icon: 'settings', path: null },
     ],
@@ -39,6 +40,8 @@ const PATH_TO_NAV: [string, string][] = [
   ['/dashboard', 'dashboard'],
   ['/chatbots',  'chatbots'],
   ['/live',      'voice'],
+  ['/analytics', 'analytics'],
+  ['/webhooks',  'webhooks'],
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

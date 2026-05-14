@@ -23,6 +23,9 @@ import ChatbotBank   from './pages/chatbot-bank';
 import ChatbotAppt   from './pages/chatbot-appt';
 import ChatbotHR     from './pages/chatbot-hr';
 
+import AnalyticsPage from './pages/analytics';
+import WebhooksPage  from './pages/webhooks';
+
 function WithLayout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ position: 'relative', zIndex: 1 }}>
@@ -46,6 +49,8 @@ export default function App() {
         <Route path="/dashboard" element={<WithLayout><DashboardPage /></WithLayout>} />
         <Route path="/live"      element={<WithLayout><LiveCallsPage /></WithLayout>} />
         <Route path="/hrchat"    element={<WithLayout><HRFlowPage /></WithLayout>} />
+        <Route path="/analytics" element={<WithLayout><AnalyticsPage /></WithLayout>} />
+        <Route path="/webhooks"  element={<WithLayout><WebhooksPage /></WithLayout>} />
 
         {/* Chatbots landing page — must be listed before /chatbots/* sub-routes */}
         <Route path="/chatbots" element={<WithLayout><ChatbotsPage /></WithLayout>} />
