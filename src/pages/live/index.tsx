@@ -13,7 +13,7 @@ import { useApp } from '../../context/AppContext';
 import LiveStats from './LiveStats';
 import Icon from '../../assets/icons';
 import { listAgents, type Agent } from '../../api/agents';
-import { listAllRecordings, deleteRecording, type RecordingRow } from '../../api/recordings';
+import { listAllRecordings, deleteRecording, downloadRecordingBlob, type RecordingRow } from '../../api/recordings';
 import { listChatSessions, getChatSession, type ChatSessionRow, type ChatSessionDetail } from '../../api/chat-sessions';
 import { ApiError, getToken } from '../../api/client';
 
@@ -70,23 +70,39 @@ export default function LiveCallsPage() {
     if (downloadingId === rec.recording_id) return;
     setDownloadingId(rec.recording_id);
     const filename = `${(rec.agent_name || 'recording').replace(/\s+/g, '_')}_${rec.created_at.slice(0, 19).replace(/[:/\s]/g, '-')}.wav`;
-    try {
-      // Fetch as blob so we force a download regardless of Content-Type header
-      const res = await fetch(rec.signed_url);
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
+
+    function triggerBlobDownload(blob: Blob) {
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
       a.href     = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    }
+
+    try {
+      // Strategy 1: fetch directly from S3 as a blob.
+      // This works when the S3 bucket has CORS configured for this origin.
+      const res = await fetch(rec.signed_url);
+      if (!res.ok) throw new Error(`S3 fetch failed: ${res.status}`);
+      triggerBlobDownload(await res.blob());
       addToast(`Downloading ${filename}`, 'success');
     } catch {
-      // CORS fallback: open in new tab so browser can handle it
-      window.open(rec.signed_url, '_blank');
-      addToast('Opened in new tab — save with Ctrl/Cmd+S', 'info');
+      // Strategy 2: route through the backend proxy which fetches S3
+      // server-side and returns the file with Content-Disposition: attachment,
+      // bypassing any S3 CORS restrictions entirely.
+      try {
+        const blob = await downloadRecordingBlob(rec.recording_id);
+        triggerBlobDownload(blob);
+        addToast(`Downloading ${filename}`, 'success');
+      } catch {
+        // Strategy 3: last resort — open the signed URL in a new tab.
+        // The user will need to right-click → Save As to save the file.
+        window.open(rec.signed_url, '_blank');
+        addToast('Opening in new tab — right-click the audio and choose "Save As" to download.', 'info');
+      }
     } finally {
       setDownloadingId(null);
     }
