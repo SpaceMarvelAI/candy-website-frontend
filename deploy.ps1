@@ -6,6 +6,15 @@ $REGION = "ap-south-1"
 $CF_DISTRIBUTION_ID = "E2Q1JGL4YRTTQE"
 $DIST_FOLDER = "dist"
 
+# Check AWS credentials
+$awsConfigured = aws sts get-caller-identity 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error: AWS credentials not configured." -ForegroundColor Red
+    Write-Host "Configure with: aws configure" -ForegroundColor Yellow
+    exit 1
+}
+Write-Host "AWS credentials verified." -ForegroundColor Green
+
 # Verify dist folder exists
 if (-not (Test-Path $DIST_FOLDER)) {
     Write-Host "Error: '$DIST_FOLDER' folder not found. Run 'npm run build' first." -ForegroundColor Red

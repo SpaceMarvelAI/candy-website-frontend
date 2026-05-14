@@ -8,6 +8,14 @@ REGION="ap-south-1"
 CF_DISTRIBUTION_ID="E2Q1JGL4YRTTQE"
 DIST_FOLDER="dist"
 
+# Check AWS credentials
+if ! aws sts get-caller-identity > /dev/null 2>&1; then
+    echo "Error: AWS credentials not configured."
+    echo "Configure with: aws configure"
+    exit 1
+fi
+echo "AWS credentials verified."
+
 # Verify dist folder exists
 if [ ! -d "$DIST_FOLDER" ]; then
     echo "Error: '$DIST_FOLDER' folder not found. Run 'npm run build' first."
