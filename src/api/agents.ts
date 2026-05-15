@@ -38,8 +38,12 @@ export async function getAgent(id: string): Promise<Agent> {
   return api<Agent>(`/v1/agents/${id}`);
 }
 
-export async function publishAgent(id: string): Promise<{ status: string; agent_id: string }> {
-  return api(`/v1/agents/${id}/publish`, { method: 'POST' });
+export async function publishAgent(
+  id: string,
+  opts: { force?: boolean } = {},
+): Promise<{ status: string; agent_id: string }> {
+  const qs = opts.force ? '?force=true' : '';
+  return api(`/v1/agents/${id}/publish${qs}`, { method: 'POST' });
 }
 
 /**
@@ -59,4 +63,33 @@ export async function deleteAgent(id: string): Promise<void> {
 export async function findAgentForSlug(slug: string): Promise<Agent | null> {
   const list = await listAgents({ use_case: slug });
   return list[0] ?? null;
+}
+
+// ── Embed installations ────────────────────────────────────────────────────────
+
+export interface EmbedInstall {
+  id:              string;
+  agent_id:        string;
+  public_token:    string;
+  snippet:         string;
+  allowed_origins: string[];
+}
+
+export async function createEmbedInstall(
+  agentId: string,
+  opts: { origin: string; greeting?: string; theme?: string; color?: string },
+): Promise<EmbedInstall> {
+  return api<EmbedInstall>(`/v1/agents/${agentId}/embed-installations`, {
+    method: 'POST',
+    body: {
+      allowed_origins:   [opts.origin],
+      greeting:          opts.greeting || 'Hi! How can I help you today?',
+      theme:             { mode: opts.theme ?? 'dark', primary_color: opts.color ?? '#7B5BE6' },
+      rate_limit_per_ip: 60,
+    },
+  });
+}
+
+export async function listEmbedInstalls(agentId: string): Promise<EmbedInstall[]> {
+  return api<EmbedInstall[]>(`/v1/agents/${agentId}/embed-installations`);
 }

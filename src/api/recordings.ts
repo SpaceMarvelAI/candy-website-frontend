@@ -136,3 +136,28 @@ export async function listAllRecordings(opts: {
   }
   return res.json();
 }
+
+/**
+ * Download a recording blob via the backend proxy.
+ * The backend fetches the S3 object server-side and streams it back with
+ * `Content-Disposition: attachment`, bypassing any S3 CORS restrictions.
+ *
+ * Backend must expose:
+ *   GET /v1/recordings/{recording_id}/download
+ *   → 200 with audio/* body + Content-Disposition: attachment; filename="..."
+ */
+export async function downloadRecordingBlob(recordingId: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  const tok = getToken();
+  if (tok) headers['Authorization'] = `Bearer ${tok}`;
+  const res = await fetch(
+    `${API_BASE}/v1/recordings/${encodeURIComponent(recordingId)}/download`,
+    { headers },
+  );
+  if (!res.ok) {
+    let detail: any;
+    try { detail = await res.json(); } catch { detail = await res.text(); }
+    throw new Error(typeof detail === 'string' ? detail : (detail?.detail ?? `HTTP ${res.status}`));
+  }
+  return res.blob();
+}
