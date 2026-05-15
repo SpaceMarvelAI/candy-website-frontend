@@ -21,6 +21,7 @@ const NAV_SECTIONS = [
       { id: 'chatbots',  label: 'Chatbots',   icon: 'chat',     path: '/chatbots', badge: 'NEW' },
       { id: 'voice',     label: 'Voice Bots', icon: 'mic',      path: '/live' },
       { id: 'analytics', label: 'Analytics',  icon: 'chart',    path: '/analytics' },
+      { id: 'flows',     label: 'Flows',      icon: 'zap',      path: '/flows',     badge: 'NEW' },
     ],
   },
   {
@@ -42,6 +43,7 @@ const PATH_TO_NAV: [string, string][] = [
   ['/live',      'voice'],
   ['/analytics', 'analytics'],
   ['/webhooks',  'webhooks'],
+  ['/flows',     'flows'],
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

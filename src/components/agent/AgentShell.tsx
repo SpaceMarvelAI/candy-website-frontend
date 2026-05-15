@@ -39,7 +39,9 @@ interface Props {
   icon: string;
   tint?: keyof typeof tintColor;
   status?: string | null;
+  agentId?: string | null;
   onPublish?: () => void;
+  onEmbed?: () => void;
   publishing?: boolean;
   publishDisabled?: boolean;
   publishHint?: string;
@@ -48,7 +50,7 @@ interface Props {
 
 export default function AgentShell({
   category, icon, tint = 'purple',
-  status, onPublish, publishing, publishDisabled, publishHint,
+  status, agentId, onPublish, onEmbed, publishing, publishDisabled, publishHint,
   children,
 }: Props) {
   const { showView, setActiveNav } = useApp();
@@ -139,6 +141,24 @@ export default function AgentShell({
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {agentId && onEmbed && (
+            <button
+              onClick={onEmbed}
+              title="Copy integration snippets"
+              style={{
+                padding: '8px 14px', borderRadius: 9,
+                border: '1px solid var(--border)',
+                background: 'transparent',
+                color: 'var(--text-2)', fontSize: 13, fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                transition: 'all 0.15s',
+              }}
+            >
+              <Icon name="code" size={13} />
+              Embed
+            </button>
+          )}
           {onPublish && (
             <button
               onClick={onPublish}
