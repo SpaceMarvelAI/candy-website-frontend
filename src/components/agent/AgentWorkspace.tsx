@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import AgentShell from './AgentShell';
 import AgentPicker from './AgentPicker';
+import AvatarPanel from './AvatarPanel';
 import KnowledgeBase from './KnowledgeBase';
 import PromptEditor from './PromptEditor';
 import LanguagePicker from './LanguagePicker';
@@ -22,6 +23,13 @@ interface Props {
   tint?: 'purple' | 'blue' | 'teal' | 'green' | 'amber' | 'pink';
   defaultPrompt: string;
   presets: { label: string; body: string }[];
+  /**
+   * If true, render a Simli photoreal avatar above the test panel.
+   * Currently opt-in (HR-Hiring only) — the avatar speaks the same TTS
+   * the test panel plays, lipsynced in real time via WebRTC. Falls back
+   * silently to the plain test panel if Simli isn't configured.
+   */
+  avatar?: boolean;
 }
 
 const tintColor: Record<string, string> = {
@@ -33,7 +41,7 @@ const tintColor: Record<string, string> = {
   pink:   'var(--pink)',
 };
 
-export default function AgentWorkspace({ slug, category, icon, tint = 'purple', defaultPrompt, presets }: Props) {
+export default function AgentWorkspace({ slug, category, icon, tint = 'purple', defaultPrompt, presets, avatar = false }: Props) {
   const { addToast } = useApp();
   const {
     agents, agent, selectAgent, createNewAgent, removeAgent, reloadAgents,
@@ -122,17 +130,24 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
       {/* ── Main 2-column grid ── */}
       <div style={mainGrid}>
 
-        {/* Left: Test panel */}
-        <div style={{ height: '100%', minHeight: 300 }}>
-          <TestPanel
-            tint={tint}
-            category={category}
-            agentId={agent?.id ?? null}
-            disabled={!agent}
-            disabledHint={!agent ? `Pick or create a ${category} agent above to start testing` : undefined}
-            primaryLang={primaryLang}
-            supportedLangs={supportedCodes}
-          />
+        {/* Left: Avatar (opt-in) + Test panel */}
+        <div style={{ height: '100%', minHeight: 300, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {avatar && (
+            <div style={{ flex: '0 0 auto' }}>
+              <AvatarPanel agentId={agent?.id ?? null} />
+            </div>
+          )}
+          <div style={{ flex: 1, minHeight: 240 }}>
+            <TestPanel
+              tint={tint}
+              category={category}
+              agentId={agent?.id ?? null}
+              disabled={!agent}
+              disabledHint={!agent ? `Pick or create a ${category} agent above to start testing` : undefined}
+              primaryLang={primaryLang}
+              supportedLangs={supportedCodes}
+            />
+          </div>
         </div>
 
         {/* Right: accordion list */}

@@ -42,6 +42,7 @@ export default function HRAgent() {
       tint={TINT}
       defaultPrompt={DEFAULT_PROMPT}
       presets={PRESETS}
+      avatar
     />
   );
 }

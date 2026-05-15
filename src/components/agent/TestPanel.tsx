@@ -29,9 +29,24 @@ const HAS_MEDIA_RECORDER =
 let _ttsAudio: HTMLAudioElement | null = null;
 let _ttsAudioCtx: AudioContext | null = null;
 let _ttsAudioSrc: MediaElementAudioSourceNode | null = null;
+// Session-recording destination — TTS + mic mixed. The session
+// recorder pulls from this stream so the saved WebM has both
+// sides of the conversation. The mic is added later in
+// startSessionRecording() (line ~1613).
 let _ttsRecordingDest: MediaStreamAudioDestinationNode | null = null;
+// Avatar destination — TTS ONLY. AvatarPanel sends this stream to
+// Simli for lipsync. Keeping it separate from _ttsRecordingDest is
+// critical: if Simli received the mic, it would echo the user's
+// voice back as part of the avatar's audio stream.
+let _ttsAvatarDest: MediaStreamAudioDestinationNode | null = null;
+// When false, the local <audio> element's output is NOT routed to
+// speakers — only to the MediaStreamDestinations. AvatarPanel flips
+// this to false while the Simli avatar is mounted so we don't get
+// two copies of the TTS playing at once (one from <audio>, one from
+// Simli's WebRTC echo).
+let _ttsSpeakerOutput = true;
 
-function getTtsAudio(): HTMLAudioElement {
+export function getTtsAudio(): HTMLAudioElement {
   if (!_ttsAudio) {
     _ttsAudio = new Audio();
     _ttsAudio.preload = 'auto';
@@ -49,7 +64,7 @@ function getTtsAudio(): HTMLAudioElement {
  *
  * Idempotent — safe to call on every test start.
  */
-function ensureTtsAudioGraph(): {
+export function ensureTtsAudioGraph(): {
   ctx: AudioContext;
   recordingDest: MediaStreamAudioDestinationNode;
 } {
@@ -58,10 +73,47 @@ function ensureTtsAudioGraph(): {
     _ttsAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     _ttsAudioSrc = _ttsAudioCtx.createMediaElementSource(audio);
     _ttsRecordingDest = _ttsAudioCtx.createMediaStreamDestination();
-    _ttsAudioSrc.connect(_ttsAudioCtx.destination);   // speakers
-    _ttsAudioSrc.connect(_ttsRecordingDest);          // capture
+    _ttsAvatarDest    = _ttsAudioCtx.createMediaStreamDestination();
+    if (_ttsSpeakerOutput) {
+      _ttsAudioSrc.connect(_ttsAudioCtx.destination);   // speakers
+    }
+    _ttsAudioSrc.connect(_ttsRecordingDest);   // session recording (TTS leg — mic added later)
+    _ttsAudioSrc.connect(_ttsAvatarDest);      // avatar lipsync (TTS only, NEVER mic)
   }
   return { ctx: _ttsAudioCtx, recordingDest: _ttsRecordingDest! };
+}
+
+/**
+ * Read-only stream of the agent's TTS audio, with NO mic mixed in.
+ * Used by AvatarPanel to feed Simli's lipsync engine — sending the mic
+ * here would make the avatar echo back the user's own voice.
+ */
+export function getTtsAvatarStream(): MediaStream | null {
+  ensureTtsAudioGraph();
+  return _ttsAvatarDest?.stream ?? null;
+}
+
+/**
+ * Toggle whether the local TTS <audio> element plays through speakers.
+ *
+ * When the Simli avatar is mounted, we set this to false — Simli echoes
+ * the TTS audio back via WebRTC and plays it through its own <audio>
+ * element in sync with the lipsync. Without this toggle the user would
+ * hear two copies (local + WebRTC echo) with the WebRTC one lagging.
+ */
+export function setLocalTtsOutput(enabled: boolean): void {
+  if (enabled === _ttsSpeakerOutput) return;
+  _ttsSpeakerOutput = enabled;
+  if (!_ttsAudioCtx || !_ttsAudioSrc) return; // graph not built yet — flag will be honored when it is
+  try {
+    if (enabled) {
+      _ttsAudioSrc.connect(_ttsAudioCtx.destination);
+    } else {
+      _ttsAudioSrc.disconnect(_ttsAudioCtx.destination);
+    }
+  } catch (e) {
+    console.warn('setLocalTtsOutput failed', e);
+  }
 }
 
 function stopTts() {
