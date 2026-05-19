@@ -1,4 +1,5 @@
 import { Component, useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
 import { ApiError } from '../../api/client';
@@ -870,7 +871,10 @@ function toArray(v: unknown): unknown[] {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const { addToast } = useApp();
-  const [tab, setTab] = useState<Tab>('summary');
+  const { tab: rawTab } = useParams<{ tab: string }>();
+  const navigate = useNavigate();
+  const tab: Tab = (TABS.some(t => t.key === rawTab) ? rawTab : 'summary') as Tab;
+  function setTab(t: Tab) { navigate(`/analytics/${t}`, { replace: true }); }
 
   const [summary,    setSummary]    = useState<AnalyticsSummary | null>(null);
   const [sessions,   setSessions]   = useState<AnalyticsSession[]>([]);

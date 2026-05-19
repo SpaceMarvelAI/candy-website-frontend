@@ -9,6 +9,7 @@
  *     • Agents — quick overview of every agent on the company.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import LiveStats from './LiveStats';
 import Icon from '../../assets/icons';
@@ -48,9 +49,14 @@ function formatTime(iso: string): string {
   }
 }
 
+const VALID_TABS: Tab[] = ['demo', 'live', 'chat', 'agents'];
+
 export default function LiveCallsPage() {
   const { addToast } = useApp();
-  const [tab, setTab]                = useState<Tab>('demo');
+  const { tab: rawTab } = useParams<{ tab: string }>();
+  const navigate = useNavigate();
+  const tab: Tab = (VALID_TABS.includes(rawTab as Tab) ? rawTab : 'demo') as Tab;
+  function setTab(t: Tab) { navigate(`/live/${t}`, { replace: true }); }
   const [demoRecs,  setDemoRecs]     = useState<RecordingRow[]>([]);
   const [liveRecs,  setLiveRecs]     = useState<RecordingRow[]>([]);
   const [chatSess,  setChatSess]     = useState<ChatSessionRow[]>([]);

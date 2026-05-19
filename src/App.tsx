@@ -48,9 +48,11 @@ export default function App() {
 
         {/* App views — rendered inside AppLayout (sidebar + topbar) */}
         <Route path="/dashboard" element={<WithLayout><DashboardPage /></WithLayout>} />
-        <Route path="/live"      element={<WithLayout><LiveCallsPage /></WithLayout>} />
-        <Route path="/hrchat"    element={<WithLayout><HRFlowPage /></WithLayout>} />
-        <Route path="/analytics" element={<WithLayout><AnalyticsPage /></WithLayout>} />
+        <Route path="/live"          element={<Navigate to="/live/demo" replace />} />
+        <Route path="/live/:tab"     element={<WithLayout><LiveCallsPage /></WithLayout>} />
+        <Route path="/hrchat"        element={<WithLayout><HRFlowPage /></WithLayout>} />
+        <Route path="/analytics"     element={<Navigate to="/analytics/summary" replace />} />
+        <Route path="/analytics/:tab" element={<WithLayout><AnalyticsPage /></WithLayout>} />
         <Route path="/webhooks"  element={<WithLayout><WebhooksPage /></WithLayout>} />
         <Route path="/flows"     element={<WithLayout><FlowsPage /></WithLayout>} />
 
