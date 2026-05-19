@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
 import Icon from '../assets/icons';
+import SignupPopup from './SignupPopup';
+
 
 const crumbMap = {
   dashboard:  [{ t: 'Home' }, { t: 'Dashboard',     current: true }],
@@ -16,17 +18,10 @@ const crumbMap = {
 };
 
 export default function Topbar() {
-  const { currentView, addToast, user, signOut } = useApp();
+  const { currentView, addToast } = useApp();
   const { theme, toggleTheme } = useTheme();
   const crumbs = crumbMap[currentView] ?? crumbMap.dashboard;
-
-  const displayName = user?.full_name || user?.email?.split('@')[0] || 'Guest';
-  const initials = displayName
-    .split(/[\s.@_-]+/)
-    .map(s => s[0]?.toUpperCase())
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('') || 'GS';
+  const [showSignup, setShowSignup] = useState(false);
 
   // Shared style for every action button on the right side of the header.
   const iconBtnStyle = {
@@ -170,26 +165,36 @@ export default function Topbar() {
           <Icon name="help" size={16} />
         </button>
 
+        {/* Sign In */}
         <button
-          className="tooltip-wrap"
-          data-tip={user ? `${displayName} · click to sign out` : 'Sign in'}
-          onClick={() => {
-            if (user) {
-              if (window.confirm(`Sign out ${user.email}?`)) signOut();
-            }
-          }}
+          onClick={() => setShowSignup(true)}
+          className="btn-primary-shimmer"
           style={{
-            width: 38, height: 38, borderRadius: 10,
-            background: 'var(--grad-pink)',
-            display: 'grid', placeItems: 'center',
-            fontWeight: 700, fontSize: 13, color: '#fff',
+            height: 38,
+            padding: '0 16px',
+            background: 'var(--grad-brand)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 10,
+            fontSize: 13,
+            fontWeight: 600,
             cursor: 'pointer',
-            border: '1px solid var(--border-strong)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            boxShadow: '0 4px 20px -6px rgba(117,91,227,0.55)',
+            position: 'relative',
+            overflow: 'hidden',
+            letterSpacing: '0.01em',
+            whiteSpace: 'nowrap',
           }}
         >
-          {initials}
+          <Icon name="arrowRight" size={13} />
+          Sign In
         </button>
       </div>
+
+      {showSignup && <SignupPopup onClose={() => setShowSignup(false)} />}
     </header>
   );
 }

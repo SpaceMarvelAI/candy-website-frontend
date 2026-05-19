@@ -4,8 +4,6 @@ import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
 import AppLayout   from './layouts/AppLayout';
 
-// Infrastructure components stay eagerly loaded (tiny, always needed)
-const AuthPage = lazy(() => import('./pages/auth/AuthPage'));
 
 // App-layout pages
 const DashboardPage  = lazy(() => import('./pages/dashboard'));
@@ -59,12 +57,6 @@ export default function App() {
       <AmbientBg />
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/auth" element={
-            <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
-              <AuthPage />
-            </div>
-          } />
-
           {/* App views — rendered inside AppLayout (sidebar + topbar) */}
           <Route path="/dashboard"      element={<WithLayout><DashboardPage /></WithLayout>} />
           <Route path="/live"           element={<Navigate to="/live/demo" replace />} />

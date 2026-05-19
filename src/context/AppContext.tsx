@@ -1,8 +1,7 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { seedChatMessages } from '../utils/mockData';
 import { loadStoredUser, logout as apiLogout, type AuthUser } from '../api/auth';
-import { getToken } from '../api/client';
 
 // Bidirectional mapping between legacy view names and URL paths.
 // All existing showView('dashboard') calls keep working unchanged.
@@ -69,26 +68,7 @@ export function AppProvider({ children }) {
   const signOut = useCallback(() => {
     apiLogout();
     setUser(null);
-    navigate('/auth');
-  }, [navigate]);
-
-  // Redirect to login when there's no authenticated user.
-  useEffect(() => {
-    if (!user && location.pathname !== '/auth') {
-      navigate('/auth', { replace: true });
-    }
-  }, [user, location.pathname, navigate]);
-
-  // The API client fires this event on any 401 response.
-  useEffect(() => {
-    function onAuthExpired() {
-      setUser(null);
-      addToast('Your session expired — please sign in again.', 'error');
-      navigate('/auth', { replace: true });
-    }
-    window.addEventListener('candy:auth-expired', onAuthExpired);
-    return () => window.removeEventListener('candy:auth-expired', onAuthExpired);
-  }, [addToast, navigate]);
+  }, []);
 
   return (
     <AppContext.Provider value={{
