@@ -12,7 +12,7 @@ interface Props {
   onClose: () => void;
 }
 
-const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8001';
+const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8002';
 
 // ── Snippet generators ────────────────────────────────────────────────────────
 //
