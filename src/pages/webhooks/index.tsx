@@ -16,14 +16,13 @@ import {
 
 // ── Shared event types offered when creating / editing a webhook ──────────────
 const ALL_EVENTS = [
-  'message.created',
   'session.started',
   'session.ended',
-  'agent.error',
-  'agent.created',
-  'agent.updated',
-  'agent.deleted',
-  'knowledge.gap',
+  'session.escalated',
+  'turn.completed',
+  'agent.published',
+  'adaptive_prompt.promoted',
+  'autotest.run_completed',
 ];
 
 function fmtTime(iso: string | null | undefined): string {
@@ -120,16 +119,16 @@ function DeliveriesPanel({ webhookId }: { webhookId: string }) {
         </thead>
         <tbody>
           {deliveries.map(d => {
-            const isOpen = expanded === d.delivery_id;
+            const isOpen = expanded === d.id;
             return (
               <>
                 <tr
-                  key={d.delivery_id}
+                  key={d.id}
                   style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
-                  onClick={() => setExpanded(isOpen ? null : d.delivery_id)}
+                  onClick={() => setExpanded(isOpen ? null : d.id)}
                 >
                   <td style={{ padding: '10px 22px', color: 'var(--text-3)', fontSize: 12 }}>
-                    {fmtTime(d.created_at)}
+                    {fmtTime(d.delivered_at ?? d.created_at)}
                   </td>
                   <td style={{ padding: '10px 22px', fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: 'var(--text-2)' }}>
                     {d.event_type}
@@ -146,26 +145,10 @@ function DeliveriesPanel({ webhookId }: { webhookId: string }) {
                 </tr>
 
                 {isOpen && (
-                  <tr key={`${d.delivery_id}-detail`} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <tr key={`${d.id}-detail`} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td colSpan={5} style={{ padding: '0 22px 16px' }}>
                       <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
-                        {d.payload && (
-                          <div style={{ flex: 1, minWidth: 260 }}>
-                            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-4)', marginBottom: 6 }}>Payload</div>
-                            <pre
-                              style={{
-                                background: 'var(--bg-3)', border: '1px solid var(--border)',
-                                borderRadius: 8, padding: '10px 14px', fontSize: 11.5,
-                                color: 'var(--text-2)', overflowX: 'auto', margin: 0,
-                                fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6,
-                                maxHeight: 200, overflowY: 'auto',
-                              }}
-                            >
-                              {(() => { try { return JSON.stringify(JSON.parse(d.payload!), null, 2); } catch { return d.payload; } })()}
-                            </pre>
-                          </div>
-                        )}
-                        {d.response_body && (
+                        {d.response_body ? (
                           <div style={{ flex: 1, minWidth: 260 }}>
                             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-4)', marginBottom: 6 }}>Response</div>
                             <pre
@@ -180,6 +163,8 @@ function DeliveriesPanel({ webhookId }: { webhookId: string }) {
                               {(() => { try { return JSON.stringify(JSON.parse(d.response_body!), null, 2); } catch { return d.response_body; } })()}
                             </pre>
                           </div>
+                        ) : (
+                          <div style={{ padding: '12px 0', color: 'var(--text-4)', fontSize: 12 }}>No response body recorded.</div>
                         )}
                       </div>
                     </td>
@@ -204,26 +189,24 @@ interface DrawerProps {
 function WebhookDrawer({ existing, onSave, onClose }: DrawerProps) {
   const { addToast } = useApp();
 
-  const [url,      setUrl]      = useState(existing?.url ?? '');
-  const [events,   setEvents]   = useState<string[]>(existing?.events ?? []);
-  const [isActive, setIsActive] = useState(existing?.is_active ?? true);
-  const [secret,   setSecret]   = useState(existing?.secret ?? '');
-  const [saving,   setSaving]   = useState(false);
+  const [url,         setUrl]         = useState(existing?.url ?? '');
+  const [eventTypes,  setEventTypes]  = useState<string[]>(existing?.event_types ?? []);
+  const [isActive,    setIsActive]    = useState(existing?.is_active ?? true);
+  const [description, setDescription] = useState(existing?.description ?? '');
+  const [saving,      setSaving]      = useState(false);
 
   function toggleEvent(ev: string) {
-    setEvents(prev => prev.includes(ev) ? prev.filter(e => e !== ev) : [...prev, ev]);
+    setEventTypes(prev => prev.includes(ev) ? prev.filter(e => e !== ev) : [...prev, ev]);
   }
 
   async function handleSave() {
     if (!url.trim()) { addToast('URL is required', 'error'); return; }
-    if (events.length === 0) { addToast('Select at least one event', 'error'); return; }
+    if (eventTypes.length === 0) { addToast('Select at least one event', 'error'); return; }
     setSaving(true);
     try {
-      const payload: WebhookCreate = { url: url.trim(), events, is_active: isActive };
-      if (secret.trim()) payload.secret = secret.trim();
       const saved = existing
-        ? await updateWebhook(existing.webhook_id, payload)
-        : await createWebhook(payload);
+        ? await updateWebhook(existing.id, { url: url.trim(), event_types: eventTypes, is_active: isActive, description: description.trim() || undefined })
+        : await createWebhook({ url: url.trim(), event_types: eventTypes, description: description.trim() || undefined });
       addToast(existing ? 'Webhook updated' : 'Webhook created', 'success');
       onSave(saved);
     } catch (e) {
@@ -330,22 +313,22 @@ function WebhookDrawer({ existing, onSave, onClose }: DrawerProps) {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     padding: '9px 12px', borderRadius: 8, cursor: 'pointer',
-                    background: events.includes(ev) ? 'rgba(117,91,227,0.1)' : 'var(--bg-3)',
-                    border: `1px solid ${events.includes(ev) ? 'var(--border-accent)' : 'var(--border)'}`,
+                    background: eventTypes.includes(ev) ? 'rgba(117,91,227,0.1)' : 'var(--bg-3)',
+                    border: `1px solid ${eventTypes.includes(ev) ? 'var(--border-accent)' : 'var(--border)'}`,
                     transition: 'all 0.15s',
                   }}
                 >
                   <div
                     style={{
                       width: 16, height: 16, borderRadius: 4,
-                      background: events.includes(ev) ? 'var(--purple)' : 'var(--tint-2)',
-                      border: `1px solid ${events.includes(ev) ? 'var(--purple)' : 'var(--border-strong)'}`,
+                      background: eventTypes.includes(ev) ? 'var(--purple)' : 'var(--tint-2)',
+                      border: `1px solid ${eventTypes.includes(ev) ? 'var(--purple)' : 'var(--border-strong)'}`,
                       display: 'grid', placeItems: 'center', flexShrink: 0,
                       transition: 'all 0.15s',
                     }}
                     onClick={() => toggleEvent(ev)}
                   >
-                    {events.includes(ev) && <Icon name="check" size={10} style={{ color: '#fff' }} />}
+                    {eventTypes.includes(ev) && <Icon name="check" size={10} style={{ color: '#fff' }} />}
                   </div>
                   <span
                     style={{ fontSize: 12.5, color: 'var(--text-2)', fontFamily: "'JetBrains Mono', monospace" }}
@@ -358,17 +341,17 @@ function WebhookDrawer({ existing, onSave, onClose }: DrawerProps) {
             </div>
           </div>
 
-          {/* Secret */}
+          {/* Description */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 7 }}>
-              Secret <span style={{ color: 'var(--text-4)', fontWeight: 400 }}>(optional — sent as X-Webhook-Secret)</span>
+              Description <span style={{ color: 'var(--text-4)', fontWeight: 400 }}>(optional)</span>
             </label>
             <input
               type="text"
-              value={secret}
-              onChange={e => setSecret(e.target.value)}
-              placeholder="your-hmac-secret"
-              style={{ ...inputStyle, fontFamily: "'JetBrains Mono', monospace" }}
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="e.g. Slack notifications for session events"
+              style={inputStyle}
             />
           </div>
 
@@ -483,7 +466,7 @@ export default function WebhooksPage() {
 
   function handleSaved(w: Webhook) {
     setWebhooks(prev => {
-      const idx = prev.findIndex(x => x.webhook_id === w.webhook_id);
+      const idx = prev.findIndex(x => x.id === w.id);
       return idx >= 0
         ? prev.map((x, i) => (i === idx ? w : x))
         : [w, ...prev];
@@ -493,9 +476,9 @@ export default function WebhooksPage() {
 
   async function handlePing(w: Webhook) {
     if (pingingId) return;
-    setPingingId(w.webhook_id);
+    setPingingId(w.id);
     try {
-      await pingWebhook(w.webhook_id);
+      await pingWebhook(w.id);
       addToast(`Ping sent to ${w.url}`, 'success');
     } catch (e) {
       addToast(e instanceof ApiError ? e.message : (e as Error).message, 'error');
@@ -506,12 +489,12 @@ export default function WebhooksPage() {
 
   async function handleDelete(w: Webhook) {
     if (deletingId) return;
-    if (!window.confirm(`Delete this webhook permanently?\n\nURL: ${w.url}\nEvents: ${w.events.join(', ')}`)) return;
-    setDeletingId(w.webhook_id);
+    if (!window.confirm(`Delete this webhook permanently?\n\nURL: ${w.url}\nEvents: ${w.event_types.join(', ')}`)) return;
+    setDeletingId(w.id);
     try {
-      await deleteWebhook(w.webhook_id);
-      setWebhooks(prev => prev.filter(x => x.webhook_id !== w.webhook_id));
-      if (expandedId === w.webhook_id) setExpandedId(null);
+      await deleteWebhook(w.id);
+      setWebhooks(prev => prev.filter(x => x.id !== w.id));
+      if (expandedId === w.id) setExpandedId(null);
       addToast('Webhook deleted', 'success');
     } catch (e) {
       addToast(e instanceof ApiError ? e.message : (e as Error).message, 'error');
@@ -645,13 +628,13 @@ export default function WebhooksPage() {
             </thead>
             <tbody>
               {webhooks.map(w => {
-                const isExpanded = expandedId === w.webhook_id;
-                const isPinging  = pingingId  === w.webhook_id;
-                const isDeleting = deletingId === w.webhook_id;
+                const isExpanded = expandedId === w.id;
+                const isPinging  = pingingId  === w.id;
+                const isDeleting = deletingId === w.id;
 
                 return (
                   <>
-                    <tr key={w.webhook_id} style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border)' }}>
+                    <tr key={w.id} style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border)' }}>
                       {/* URL */}
                       <td style={{ padding: '14px 22px', maxWidth: 280 }}>
                         <div
@@ -664,15 +647,15 @@ export default function WebhooksPage() {
                         >
                           {w.url}
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, fontFamily: "'JetBrains Mono', monospace' " }}>
-                          {w.webhook_id.slice(0, 8)}…
+                        <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, fontFamily: "'JetBrains Mono', monospace" }}>
+                          {w.id.slice(0, 8)}…
                         </div>
                       </td>
 
                       {/* Events */}
                       <td style={{ padding: '14px 22px', maxWidth: 260 }}>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                          {(w.events || []).slice(0, 3).map(ev => (
+                          {(w.event_types || []).slice(0, 3).map(ev => (
                             <span
                               key={ev}
                               style={{
@@ -684,9 +667,9 @@ export default function WebhooksPage() {
                               {ev}
                             </span>
                           ))}
-                          {w.events && w.events.length > 3 && (
+                          {w.event_types && w.event_types.length > 3 && (
                             <span style={{ fontSize: 10.5, color: 'var(--text-4)', padding: '1px 4px' }}>
-                              +{w.events.length - 3} more
+                              +{w.event_types.length - 3} more
                             </span>
                           )}
                         </div>
@@ -707,7 +690,7 @@ export default function WebhooksPage() {
                         <div style={{ display: 'inline-flex', gap: 6 }}>
                           {/* Deliveries toggle */}
                           <button
-                            onClick={() => setExpandedId(isExpanded ? null : w.webhook_id)}
+                            onClick={() => setExpandedId(isExpanded ? null : w.id)}
                             title="View deliveries"
                             style={{
                               ...iconBtnBase,
@@ -781,9 +764,9 @@ export default function WebhooksPage() {
 
                     {/* Deliveries inline panel */}
                     {isExpanded && (
-                      <tr key={`${w.webhook_id}-deliveries`} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <tr key={`${w.id}-deliveries`} style={{ borderBottom: '1px solid var(--border)' }}>
                         <td colSpan={5} style={{ padding: 0 }}>
-                          <DeliveriesPanel webhookId={w.webhook_id} />
+                          <DeliveriesPanel webhookId={w.id} />
                         </td>
                       </tr>
                     )}
