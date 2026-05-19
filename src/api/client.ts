@@ -12,13 +12,23 @@ export const API_BASE = RAW_BASE.replace(/\/$/, '');
 
 const TOKEN_KEY = 'candy.token';
 
+// SSO tokens land in sessionStorage (tab-scoped, cleared on close).
+// Regular login tokens stay in localStorage.
 export function getToken(): string | null {
-  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  try {
+    return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  } catch { return null; }
 }
 export function setToken(t: string | null) {
   try {
     if (t) localStorage.setItem(TOKEN_KEY, t);
     else   localStorage.removeItem(TOKEN_KEY);
+  } catch {}
+}
+export function setSessionToken(t: string | null) {
+  try {
+    if (t) sessionStorage.setItem(TOKEN_KEY, t);
+    else   sessionStorage.removeItem(TOKEN_KEY);
   } catch {}
 }
 

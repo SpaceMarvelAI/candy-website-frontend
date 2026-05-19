@@ -1,7 +1,7 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { seedChatMessages } from '../utils/mockData';
-import { loadStoredUser, logout as apiLogout, type AuthUser } from '../api/auth';
+import { loadStoredUser, logout as apiLogout, ssoCallback, type AuthUser } from '../api/auth';
 
 // Bidirectional mapping between legacy view names and URL paths.
 // All existing showView('dashboard') calls keep working unchanged.
@@ -37,11 +37,18 @@ export function AppProvider({ children }) {
 
   const initialUser = (typeof window !== 'undefined') ? loadStoredUser() : null;
 
+  // True while we are processing an incoming ?sso_token — suppresses the
+  // signup popup so it doesn't flash before the SSO call resolves.
+  const hasSsoToken = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).has('sso_token');
+
   const [user, setUser]                = useState<AuthUser | null>(initialUser);
+  const [ssoLoading, setSsoLoading]    = useState(hasSsoToken);
   const [activeNav,   setActiveNav]    = useState('dashboard');
   const [chatMessages,setChatMessages] = useState(seedChatMessages);
   const [calls,       setCalls]        = useState([]);
   const [toasts,      setToasts]       = useState([]);
+  const ssoHandled = useRef(false);
 
   // currentView is now derived from the URL — no separate state needed.
   const currentView = PATH_TO_VIEW[location.pathname] ?? 'dashboard';
@@ -70,9 +77,38 @@ export function AppProvider({ children }) {
     setUser(null);
   }, []);
 
+  // Intercept ?sso_token= on ANY page (SpaceMarvel may redirect to /dashboard)
+  useEffect(() => {
+    if (ssoHandled.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const token  = params.get('sso_token') || params.get('token');
+    if (!token) return;
+
+    ssoHandled.current = true;
+    // Strip token from URL immediately so it can't be replayed
+    window.history.replaceState({}, '', window.location.pathname);
+
+    ssoCallback(token)
+      .then(({ user: u }) => {
+        setUser(u);
+        navigate('/dashboard', { replace: true });
+      })
+      .catch((err: any) => {
+        const msg = err?.detail
+          ? (typeof err.detail === 'string' ? err.detail : err.detail?.detail)
+          : err?.message;
+        addToast('SSO sign-in failed: ' + (msg || 'invalid or expired token'), 'error');
+      })
+      .finally(() => {
+        setSsoLoading(false);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <AppContext.Provider value={{
       user, signedIn, signOut,
+      ssoLoading,
       currentView, showView,
       activeNav, setActiveNav,
       chatMessages, setChatMessages,
