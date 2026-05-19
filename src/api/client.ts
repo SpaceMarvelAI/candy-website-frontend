@@ -7,7 +7,7 @@
  *  • For multipart uploads, callers pass FormData and we drop the JSON
  *    Content-Type so the browser sets the multipart boundary.
  */
-const RAW_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8001';
+const RAW_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8002';
 export const API_BASE = RAW_BASE.replace(/\/$/, '');
 
 const TOKEN_KEY = 'candy.token';

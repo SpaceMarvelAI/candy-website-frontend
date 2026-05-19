@@ -14,7 +14,7 @@ import { createEmbedInstall, listEmbedInstalls, type EmbedInstall } from '../../
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
 
-const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8001';
+const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8002';
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
@@ -173,7 +173,7 @@ function EmbedGuide({ agentId, agentName, agentType = 'chat' }: {
   agentId: string; agentName: string; agentType?: 'chat' | 'voice';
 }) {
   const { addToast } = useApp();
-  const BASE = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8001';
+  const BASE = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8002';
   const isVoice = agentType === 'voice';
 
   // Settings

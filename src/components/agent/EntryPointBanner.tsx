@@ -110,7 +110,7 @@ export default function EntryPointBanner({
   const [requestingNumber, setRequestingNumber] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
 
-  const BASE_URL  = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8001';
+  const BASE_URL  = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8002';
   const hostedUrl = agentId
     ? `${window.location.protocol}//${window.location.host}/chat/${agentId}`
     : '';
