@@ -94,6 +94,53 @@ export function getTtsAvatarStream(): MediaStream | null {
 }
 
 /**
+ * Lower-level access to the TTS audio graph: the AudioContext and the
+ * MediaElementAudioSourceNode that wraps the TTS <audio> element.
+ *
+ * Currently unused by AvatarPanel (the burst-send pattern via
+ * onTtsBlob is faster) but kept exported for any future worklet/PCM
+ * processing that wants raw access.
+ */
+export function getTtsAvatarSource(): {
+  ctx: AudioContext;
+  source: AudioNode;
+} | null {
+  ensureTtsAudioGraph();
+  if (!_ttsAudioCtx || !_ttsAudioSrc) return null;
+  return { ctx: _ttsAudioCtx, source: _ttsAudioSrc };
+}
+
+// ─── TTS Blob subscription ────────────────────────────────────────────────
+// AvatarPanel listens to every TTS audio Blob produced by the demo turn,
+// converts it to PCM16 16 kHz, and bursts it into Simli's sendAudioData()
+// as fast as the network allows. That bypasses the local <audio> element
+// playing in real-time — Simli gets the whole sentence in ~50 ms instead
+// of waiting `sentence_duration` seconds for the audio element to drain.
+//
+// Listeners are module-level so AvatarPanel can subscribe without needing
+// access to the TtsQueue instance (which is per-test-session inside
+// TestPanel's component closure).
+
+type TtsBlobListener = (blob: Blob) => void;
+const _ttsBlobListeners = new Set<TtsBlobListener>();
+
+/**
+ * Subscribe to TTS audio Blobs. The callback fires once per Blob the
+ * moment its synthesis promise resolves — BEFORE the local audio
+ * element starts playing it. Returns a cleanup function.
+ */
+export function onTtsBlob(fn: TtsBlobListener): () => void {
+  _ttsBlobListeners.add(fn);
+  return () => { _ttsBlobListeners.delete(fn); };
+}
+
+function _emitTtsBlob(blob: Blob): void {
+  for (const fn of _ttsBlobListeners) {
+    try { fn(blob); } catch (e) { console.warn('[ttsBlob listener]', e); }
+  }
+}
+
+/**
  * Toggle whether the local TTS <audio> element plays through speakers.
  *
  * When the Simli avatar is mounted, we set this to false — Simli echoes
@@ -144,6 +191,13 @@ class TtsQueue {
   /** Reserve a slot for the upcoming TTS Blob. */
   enqueue(blobPromise: Promise<Blob>) {
     if (this.cancelled) return;
+    // Fire avatar/PCM16 listeners as soon as the Blob is ready, in
+    // parallel with the URL.createObjectURL path that feeds the local
+    // <audio> element. This is what lets AvatarPanel burst-send the
+    // PCM16 to Simli at network speed instead of real-time playback
+    // speed — the avatar starts rendering frames before the audio
+    // element has even loaded the src.
+    blobPromise.then(blob => _emitTtsBlob(blob)).catch(() => {});
     const slot = blobPromise
       .then(blob => URL.createObjectURL(blob))
       .catch(err => {

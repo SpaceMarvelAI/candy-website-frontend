@@ -36,8 +36,13 @@
  *   - simli-client package not installed → caught at import time
  */
 import { useEffect, useRef, useState } from 'react';
-import { getTtsAvatarStream, setLocalTtsOutput } from './TestPanel';
+import { onTtsBlob, setLocalTtsOutput, ensureTtsAudioGraph } from './TestPanel';
+import { audioBlobToPcm16 } from '../../utils/audioToPcm16';
 import { createAvatarSession, type AvatarSession } from '../../api/avatar';
+
+// Simli's sendAudioData expects chunks of around this size. Matches the
+// reference implementation in SpaceMarvelAI/AI-Realtime-Avatar.
+const SIMLI_CHUNK_BYTES = 6000;
 
 interface Props {
   agentId: string | null;
@@ -56,6 +61,9 @@ export default function AvatarPanel({ agentId, faceId }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const clientRef = useRef<any>(null);
+  // onTtsBlob unsubscribe handle. Set after Simli connects, cleared on
+  // unmount so we stop pumping audio into a dead client.
+  const unsubRef = useRef<(() => void) | null>(null);
 
   const [status, setStatus]    = useState<Status>('idle');
   const [errorMsg, setErrMsg]  = useState<string | null>(null);
@@ -150,21 +158,39 @@ export default function AvatarPanel({ agentId, faceId }: Props) {
       //    overlap (local instant vs WebRTC-buffered).
       setLocalTtsOutput(false);
 
-      // 5. Pipe TestPanel's TTS-only MediaStream into Simli for lipsync.
-      //    NOTE: getTtsAvatarStream() returns a dedicated stream that
-      //    captures ONLY the TTS audio element — never the mic. Don't
-      //    swap this for recordingDest: that stream has the mic mixed
-      //    in for session recording, and Simli would echo the user's
-      //    own voice back through the avatar.
-      try {
-        const ttsStream = getTtsAvatarStream();
-        const track = ttsStream?.getAudioTracks()?.[0];
-        if (track) {
-          clientRef.current?.listenToMediastreamTrack?.(track);
+      // 5. Subscribe to every TTS Blob produced by TestPanel and burst-
+      //    send it to Simli as PCM16. This is the critical perf path
+      //    that brings latency down from ~5s (worklet, real-time
+      //    delivery) to ~2s. Match SpaceMarvelAI/AI-Realtime-Avatar's
+      //    proven pattern:
+      //      blob → decode (fast) → PCM16 16 kHz → 6 KB chunks → tight loop
+      const ttsCtx = ensureTtsAudioGraph().ctx;
+      const unsub = onTtsBlob(async (blob: Blob) => {
+        try {
+          // Resume the shared AudioContext if it's suspended — Chrome
+          // sometimes parks it before the first user gesture, which
+          // would make decodeAudioData hang.
+          if (ttsCtx.state === 'suspended') {
+            try { await ttsCtx.resume(); } catch {}
+          }
+          const bytes = await audioBlobToPcm16(blob, ttsCtx);
+          // Burst-send: no awaits between chunks. Simli's WebRTC layer
+          // queues internally, so this completes in ~50 ms even for a
+          // 4-second sentence — far faster than the audio could play
+          // through an <audio> element.
+          for (let i = 0; i < bytes.length; i += SIMLI_CHUNK_BYTES) {
+            const chunk = bytes.subarray(i, Math.min(i + SIMLI_CHUNK_BYTES, bytes.length));
+            try {
+              clientRef.current?.sendAudioData?.(chunk);
+            } catch (err) {
+              console.warn('AvatarPanel: sendAudioData failed', err);
+            }
+          }
+        } catch (err) {
+          console.warn('AvatarPanel: audioBlobToPcm16 failed', err);
         }
-      } catch (e: any) {
-        console.warn('AvatarPanel: could not bind TTS audio track', e);
-      }
+      });
+      unsubRef.current = unsub;
     })();
 
     return () => {
@@ -172,6 +198,9 @@ export default function AvatarPanel({ agentId, faceId }: Props) {
       // Restore TestPanel's local speakers so other voice pages
       // (or future remounts) behave normally.
       setLocalTtsOutput(true);
+      // Stop receiving TTS Blobs so we don't push audio at a dead client.
+      try { unsubRef.current?.(); } catch {}
+      unsubRef.current = null;
       try {
         clientRef.current?.stop?.();
       } catch {}
