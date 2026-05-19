@@ -74,8 +74,12 @@ export function AppProvider({ children }) {
 
   const signOut = useCallback(() => {
     apiLogout();
+    // Wipe everything — both SSO session and any persisted login data
+    try { sessionStorage.clear(); } catch {}
+    try { localStorage.removeItem('candy.token'); localStorage.removeItem('candy.user'); } catch {}
     setUser(null);
-  }, []);
+    navigate('/', { replace: true });
+  }, [navigate]);
 
   // Intercept ?sso_token= on ANY page (SpaceMarvel may redirect to /dashboard)
   useEffect(() => {
