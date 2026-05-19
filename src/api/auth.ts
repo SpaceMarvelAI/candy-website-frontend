@@ -1,4 +1,4 @@
-import { api, setToken } from './client';
+import { api, setToken, setSessionToken } from './client';
 
 export interface AuthUser {
   user_id: string;
@@ -22,9 +22,10 @@ export interface TokenResponse {
 
 const USER_KEY = 'candy.user';
 
+// SSO sessions are stored in sessionStorage; regular login in localStorage.
 export function loadStoredUser(): AuthUser | null {
   try {
-    const raw = localStorage.getItem(USER_KEY);
+    const raw = sessionStorage.getItem(USER_KEY) || localStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
@@ -32,6 +33,12 @@ export function storeUser(u: AuthUser | null) {
   try {
     if (u) localStorage.setItem(USER_KEY, JSON.stringify(u));
     else   localStorage.removeItem(USER_KEY);
+  } catch {}
+}
+function storeSessionUser(u: AuthUser | null) {
+  try {
+    if (u) sessionStorage.setItem(USER_KEY, JSON.stringify(u));
+    else   sessionStorage.removeItem(USER_KEY);
   } catch {}
 }
 
@@ -71,4 +78,25 @@ export async function me(): Promise<AuthUser> {
 export function logout() {
   setToken(null);
   storeUser(null);
+  setSessionToken(null);
+  storeSessionUser(null);
+}
+
+export async function ssoCallback(token: string): Promise<{ user: AuthUser }> {
+  const tok = await api<TokenResponse>(`/v1/auth/sso/callback?token=${encodeURIComponent(token)}`, {
+    method: 'GET',
+    auth: false,
+  });
+  // Store token + user in sessionStorage (tab-scoped, not persisted across sessions)
+  setSessionToken(tok.access_token);
+  const user: AuthUser = {
+    user_id:      tok.user_id,
+    email:        tok.email,
+    role:         tok.role,
+    company_id:   tok.company_id,
+    company_name: tok.company_name,
+    full_name:    null,
+  };
+  storeSessionUser(user);
+  return { user };
 }

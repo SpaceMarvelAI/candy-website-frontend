@@ -4,8 +4,9 @@ import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
 import AppLayout   from './layouts/AppLayout';
 
-// Infrastructure components stay eagerly loaded (tiny, always needed)
-const AuthPage = lazy(() => import('./pages/auth/AuthPage'));
+
+const LandingPage     = lazy(() => import('./pages/landing'));
+const SSOCallbackPage = lazy(() => import('./pages/sso'));
 
 // App-layout pages
 const DashboardPage  = lazy(() => import('./pages/dashboard'));
@@ -59,9 +60,19 @@ export default function App() {
       <AmbientBg />
       <Suspense fallback={<PageLoader />}>
         <Routes>
+          {/* Landing — shown at root and as fallback for unknown paths */}
+          <Route path="/" element={
+            <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
+              <LandingPage />
+            </div>
+          } />
+
+          {/* /auth — SSO entry point from SpaceMarvel (?sso_token=…)
+              AppContext intercepts the token on any page, so this just
+              shows the SSO processing screen while the redirect happens. */}
           <Route path="/auth" element={
             <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
-              <AuthPage />
+              <SSOCallbackPage />
             </div>
           } />
 
@@ -94,9 +105,8 @@ export default function App() {
           <Route path="/agents/marketing"  element={<MarketingAgent />} />
           <Route path="/agents/hr"         element={<HRAgent />} />
 
-          {/* Fallback */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          {/* Fallback — unknown paths go back to landing */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
       <ToastHost />

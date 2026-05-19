@@ -87,39 +87,6 @@ export default function Sidebar() {
         }}
       >
 
-        {/* ── Workspace header ── */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: expanded ? 'space-between' : 'center',
-            padding: expanded ? '6px 6px 18px' : '6px 0 18px',
-            borderBottom: '1px solid var(--border)',
-            marginBottom: 10,
-            gap: 8,
-          }}
-        >
-          <div style={{ ...styles.wsRow, padding: expanded ? 4 : 0, flex: expanded ? 1 : 'none' }}>
-            <div style={styles.wsAvatar}>SM</div>
-            {expanded && (
-              <div style={styles.wsMeta}>
-                <span style={styles.wsName}>SpaceMarvel</span>
-                <span style={styles.wsPlan}>Pro · Team</span>
-              </div>
-            )}
-          </div>
-          {expanded && (
-            <button
-              style={styles.iconBtn}
-              className="tooltip-wrap"
-              data-tip="New workspace"
-              onClick={() => addToast('New workspace — coming soon', 'info')}
-            >
-              <Icon name="plus" size={14} />
-            </button>
-          )}
-        </div>
-
         {/* ── Nav sections ── */}
         {NAV_SECTIONS.map(section => (
           <div key={section.label}>
