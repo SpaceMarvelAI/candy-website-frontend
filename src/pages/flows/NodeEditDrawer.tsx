@@ -141,8 +141,22 @@ function ActionConfigFields({
   );
   if (appType === 'calendly') return (
     <>
-      {inp('booking_url', 'Your Calendly booking link', 'https://calendly.com/yourname/30min')}
+      {inp('booking_url', 'Booking page URL', 'https://cal.com/yourname/30min  or  https://calendly.com/yourname/30min')}
       {inp('event_name',  'Event name shown to customer', 'e.g. Book a 30-min demo')}
+    </>
+  );
+  if (appType === 'gmail') return (
+    <>
+      {inp('to_email',         'Send to (email address)', 'team@yourcompany.com')}
+      {inp('subject_template', 'Subject line',            'New message from {{visitor_name}}')}
+      {inp('body_template',    'Email body template',     'Name: {{visitor_name}}\nEmail: {{visitor_email}}\nMessage: {{message}}')}
+    </>
+  );
+  if (appType === 'google_sheets') return (
+    <>
+      {inp('sheet_url',  'Google Sheet URL',   'https://docs.google.com/spreadsheets/d/…')}
+      {inp('sheet_tab',  'Sheet tab name',     'Sheet1')}
+      {inp('columns',    'Columns to log',     'timestamp, visitor_name, visitor_email, message')}
     </>
   );
   if (appType === 'custom_webhook') return (
@@ -595,9 +609,30 @@ function AppEditor({
 
       {/* Auth setup */}
       {appMeta.authScheme === 'oauth2' ? (
-        <button onClick={handleOAuth} style={primaryBtn}>
-          {connection?.is_connected ? `Reconnect ${appMeta.label} ↗` : `Connect with ${appMeta.label} ↗`}
-        </button>
+        <>
+          {(appMeta.type === 'gmail' || appMeta.type === 'google_sheets') && (
+            <InfoBox color={appMeta.type === 'gmail' ? '#EA4335' : '#0F9D58'}>
+              <strong style={{ color: 'var(--text-1)' }}>
+                {appMeta.type === 'gmail' ? 'Connect your Google account to send emails.' : 'Connect your Google account to log data to Sheets.'}
+              </strong>
+              <br />
+              Click the button below — Google will ask you to allow Candy CX to{' '}
+              {appMeta.type === 'gmail' ? 'send emails on your behalf' : 'read and write your Google Sheets'}.
+              No passwords shared — you can revoke access any time from your Google account settings.
+              {connection?.is_connected && connection.masked_key && (
+                <><br /><span style={{ color: 'var(--green)', fontWeight: 600 }}>✓ Connected as {connection.masked_key}</span></>
+              )}
+            </InfoBox>
+          )}
+          <button onClick={handleOAuth} style={{
+            ...primaryBtn,
+            background: appMeta.type === 'gmail' ? '#EA4335' : appMeta.type === 'google_sheets' ? '#0F9D58' : undefined,
+          }}>
+            {connection?.is_connected
+              ? `Reconnect ${appMeta.label} ↗`
+              : `Connect ${appMeta.label} with Google ↗`}
+          </button>
+        </>
       ) : (appMeta.authScheme === 'api_key' || appMeta.authScheme === 'bearer') ? (
         <>
           {APP_KEY_GUIDE[appMeta.type] && (
@@ -632,14 +667,45 @@ function AppEditor({
         </>
       ) : appMeta.authScheme === 'none' && appMeta.type === 'calendly' ? (
         <InfoBox color="#006BFF">
-          <strong style={{ color: 'var(--text-1)' }}>No account connection needed.</strong>
+          <strong style={{ color: 'var(--text-1)' }}>Works with Cal.com or Calendly.</strong>
           <br />
-          Just paste your Calendly booking page URL in the field below.
-          When an escalation or demo request happens, Candy will share that link with the customer so they can book directly.
+          Paste your booking page URL below — the agent will collect the visitor's name and email,
+          then share a personalised link with their details pre-filled so they just pick a time slot.
           <br /><br />
           <span style={{ color: 'var(--text-4)' }}>
-            Find your link at <a href="https://calendly.com" target="_blank" rel="noreferrer"
-              style={{ color: '#006BFF' }}>calendly.com</a> → your event type → Copy Link.
+            Find your link at{' '}
+            <a href="https://cal.com" target="_blank" rel="noreferrer" style={{ color: '#006BFF' }}>cal.com</a>
+            {' '}or{' '}
+            <a href="https://calendly.com" target="_blank" rel="noreferrer" style={{ color: '#006BFF' }}>calendly.com</a>
+            {' '}→ your event type → Copy Link.
+          </span>
+          <br /><br />
+          <span style={{ color: 'var(--text-4)', fontSize: 11 }}>
+            💡 <strong style={{ color: 'var(--text-2)' }}>Want the agent to book silently without the visitor clicking?</strong>
+            {' '}Go to the agent's Settings → Integrations and connect your Cal.com API key.
+          </span>
+        </InfoBox>
+      ) : appMeta.authScheme === 'none' && appMeta.type === 'gmail' ? (
+        <InfoBox color="#EA4335">
+          <strong style={{ color: 'var(--text-1)' }}>Send emails from your Google account.</strong>
+          <br />
+          Configure the recipient, subject, and body below. Use <code style={{ fontSize: 11 }}>{'{{visitor_name}}'}</code>,{' '}
+          <code style={{ fontSize: 11 }}>{'{{visitor_email}}'}</code>, and <code style={{ fontSize: 11 }}>{'{{message}}'}</code> as placeholders.
+          <br /><br />
+          <span style={{ color: 'var(--text-4)', fontSize: 11 }}>
+            💡 To send from your own Gmail account, go to the agent's Settings → Integrations and click <strong style={{ color: 'var(--text-2)' }}>Connect Google</strong>.
+          </span>
+        </InfoBox>
+      ) : appMeta.authScheme === 'none' && appMeta.type === 'google_sheets' ? (
+        <InfoBox color="#0F9D58">
+          <strong style={{ color: 'var(--text-1)' }}>Log data to a Google Sheet automatically.</strong>
+          <br />
+          Paste your Google Sheet URL and tab name below. Every time this flow triggers, a new row
+          is appended with the details you choose.
+          <br /><br />
+          <span style={{ color: 'var(--text-4)', fontSize: 11 }}>
+            💡 Make sure to share the sheet with your Google service account, or connect Google in the
+            agent's Settings → Integrations.
           </span>
         </InfoBox>
       ) : appMeta.authScheme === 'none' && appMeta.type === 'custom_webhook' ? (

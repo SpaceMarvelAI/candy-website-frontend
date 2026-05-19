@@ -2,14 +2,32 @@ import { api } from './client';
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 export interface AnalyticsSummary {
-  total_sessions: number;
-  total_messages: number;
-  total_agents: number;
-  avg_latency_ms: number | null;
-  knowledge_gap_rate: number | null;
-  top_language: string | null;
-  period_start: string | null;
-  period_end: string | null;
+  // Core counts
+  total_sessions?: number | null;
+  total_messages?: number | null;
+  total_agents?: number | null;
+  completed?: number | null;
+  abandoned?: number | null;
+  escalated_proxy?: number | null;
+  // Rates & scores
+  success_rate?: number | null;
+  escalation_rate?: number | null;
+  avg_rating?: number | null;
+  avg_turns?: number | null;
+  // Latency
+  avg_latency_ms?: number | null;
+  latency_p50_ms?: number | null;
+  latency_p95_ms?: number | null;
+  latency_p99_ms?: number | null;
+  // Misc
+  window_days?: number | null;
+  knowledge_gap_rate?: number | null;
+  top_language?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  // Complex nested fields
+  sessions_by_day?: unknown[] | null;
+  top_failing_agents?: unknown[] | null;
   [key: string]: unknown;
 }
 
@@ -20,15 +38,16 @@ export async function getAnalyticsSummary(params?: Record<string, string>): Prom
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 export interface AnalyticsSession {
-  session_id: string;
-  agent_id: string | null;
-  agent_name: string | null;
-  use_case_slug: string | null;
-  language: string | null;
-  message_count: number;
-  duration_ms: number | null;
+  id: string;
+  status: string | null;
+  session_type: string | null;
+  feedback_rating: number | null;
+  feedback_notes: string | null;
+  turn_count: number | null;
   started_at: string;
   ended_at: string | null;
+  agent_name: string | null;
+  use_case_id: string | null;
   [key: string]: unknown;
 }
 
@@ -38,15 +57,18 @@ export async function getAnalyticsSessions(params?: Record<string, string>): Pro
 }
 
 // ── Latency ───────────────────────────────────────────────────────────────────
+export interface LatencyComponent {
+  p50: number | null;
+  p95: number | null;
+}
 export interface AnalyticsLatency {
-  avg_ms: number | null;
-  p50_ms: number | null;
-  p95_ms: number | null;
-  p99_ms: number | null;
-  min_ms: number | null;
-  max_ms: number | null;
-  sample_count: number;
-  buckets: { label: string; count: number }[];
+  sample_size?: number | null;
+  stt?: LatencyComponent | null;
+  llm?: LatencyComponent | null;
+  tts?: LatencyComponent | null;
+  total?: LatencyComponent | null;
+  targets?: Record<string, unknown> | null;
+  note?: string | null;
   [key: string]: unknown;
 }
 
@@ -57,12 +79,11 @@ export async function getAnalyticsLatency(params?: Record<string, string>): Prom
 
 // ── Knowledge Gaps ────────────────────────────────────────────────────────────
 export interface KnowledgeGap {
-  gap_id: string;
-  question: string;
-  frequency: number;
-  agent_id: string | null;
+  utterance: string;
+  occurrences: number;
+  first_seen: string | null;
+  last_seen: string | null;
   agent_name: string | null;
-  last_seen_at: string | null;
   [key: string]: unknown;
 }
 
@@ -73,10 +94,9 @@ export async function getAnalyticsKnowledgeGaps(params?: Record<string, string>)
 
 // ── Languages ─────────────────────────────────────────────────────────────────
 export interface LanguageStat {
-  language_code: string;
-  language_name: string | null;
-  session_count: number;
-  percentage: number | null;
+  code: string;
+  name: string | null;
+  sessions: number;
   [key: string]: unknown;
 }
 
@@ -88,12 +108,15 @@ export async function getAnalyticsLanguages(params?: Record<string, string>): Pr
 // ── Agents ────────────────────────────────────────────────────────────────────
 export interface AgentStat {
   agent_id: string;
-  agent_name: string | null;
-  use_case_slug: string | null;
-  total_sessions: number;
-  avg_latency_ms: number | null;
-  avg_messages: number | null;
-  knowledge_gap_rate: number | null;
+  name: string | null;
+  use_case: string | null;
+  call_direction: string | null;
+  status: string | null;
+  sessions: number;
+  completed: number | null;
+  abandoned: number | null;
+  avg_rating: number | null;
+  avg_turns: number | null;
   [key: string]: unknown;
 }
 
@@ -104,12 +127,10 @@ export async function getAnalyticsAgents(params?: Record<string, string>): Promi
 
 // ── Events ────────────────────────────────────────────────────────────────────
 export interface AnalyticsEvent {
-  event_id: string;
+  id: string;
   event_type: string;
   agent_id: string | null;
-  agent_name: string | null;
-  session_id: string | null;
-  detail: string | null;
+  payload: unknown | null;
   occurred_at: string;
   [key: string]: unknown;
 }

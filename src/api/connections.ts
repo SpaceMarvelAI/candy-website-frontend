@@ -14,6 +14,7 @@ import { api } from './client';
 export type AppType =
   | 'jira' | 'asana' | 'slack' | 'linear' | 'notion'
   | 'github' | 'zoho_desk' | 'zoho_crm' | 'calendly'
+  | 'gmail' | 'google_sheets'
   | 'custom_webhook';
 
 export type AuthScheme = 'oauth2' | 'api_key' | 'bearer' | 'basic' | 'none';
@@ -102,5 +103,7 @@ export const APP_CATALOGUE: AppMeta[] = [
   { type: 'zoho_desk',     label: 'Zoho Desk',      icon: '🎯', authScheme: 'api_key',      description: 'Create support tickets',           color: '#E42527' },
   { type: 'zoho_crm',      label: 'Zoho CRM',       icon: '📊', authScheme: 'api_key',      description: 'Log leads & contacts',             color: '#E42527' },
   { type: 'calendly',      label: 'Calendly',       icon: '📅', authScheme: 'none',         description: 'Share booking links with customers', color: '#006BFF' },
+  { type: 'gmail',         label: 'Gmail',          icon: '✉️', authScheme: 'oauth2',       description: 'Send emails from your Google account', color: '#EA4335' },
+  { type: 'google_sheets', label: 'Google Sheets',  icon: '🟢', authScheme: 'oauth2',       description: 'Log data rows to a spreadsheet',    color: '#0F9D58' },
   { type: 'custom_webhook',label: 'Custom Endpoint',icon: '🔗', authScheme: 'none',         description: 'POST to any HTTPS URL',            color: '#7B5BE3' },
 ];

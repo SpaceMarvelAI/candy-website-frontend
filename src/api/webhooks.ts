@@ -2,40 +2,42 @@ import { api } from './client';
 
 // ── Webhook ───────────────────────────────────────────────────────────────────
 export interface Webhook {
-  webhook_id: string;
+  id: string;
   url: string;
-  events: string[];
+  event_types: string[];
+  description: string | null;
   is_active: boolean;
-  secret: string | null;
+  total_delivered: number | null;
+  last_success_at: string | null;
+  last_failure_at: string | null;
   created_at: string;
-  updated_at: string | null;
   [key: string]: unknown;
 }
 
 export interface WebhookCreate {
   url: string;
-  events: string[];
-  is_active?: boolean;
-  secret?: string;
+  event_types: string[];
+  description?: string;
 }
 
 export interface WebhookUpdate {
   url?: string;
-  events?: string[];
+  event_types?: string[];
   is_active?: boolean;
-  secret?: string;
+  description?: string;
 }
 
 // ── Delivery ──────────────────────────────────────────────────────────────────
 export interface WebhookDelivery {
-  delivery_id: string;
-  webhook_id: string;
+  id: string;
   event_type: string;
-  status: 'success' | 'failed' | 'pending' | string;
   http_status: number | null;
-  response_body: string | null;
-  payload: string | null;
+  status: 'success' | 'failed' | 'pending' | string;
+  duration_ms: number | null;
+  attempt: number | null;
+  delivered_at: string | null;
   created_at: string;
+  response_body: string | null;
   [key: string]: unknown;
 }
 

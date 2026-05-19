@@ -9,6 +9,7 @@
  *     • Agents — quick overview of every agent on the company.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import LiveStats from './LiveStats';
 import Icon from '../../assets/icons';
@@ -48,9 +49,14 @@ function formatTime(iso: string): string {
   }
 }
 
+const VALID_TABS: Tab[] = ['demo', 'live', 'chat', 'agents'];
+
 export default function LiveCallsPage() {
   const { addToast } = useApp();
-  const [tab, setTab]                = useState<Tab>('demo');
+  const { tab: rawTab } = useParams<{ tab: string }>();
+  const navigate = useNavigate();
+  const tab: Tab = (VALID_TABS.includes(rawTab as Tab) ? rawTab : 'demo') as Tab;
+  function setTab(t: Tab) { navigate(`/live/${t}`, { replace: true }); }
   const [demoRecs,  setDemoRecs]     = useState<RecordingRow[]>([]);
   const [liveRecs,  setLiveRecs]     = useState<RecordingRow[]>([]);
   const [chatSess,  setChatSess]     = useState<ChatSessionRow[]>([]);
@@ -318,6 +324,8 @@ export default function LiveCallsPage() {
 }
 
 // ── Recordings table ──────────────────────────────────────────────────────────
+const PAGE_SIZE = 20;
+
 function RecordingsTable({
   rows, loading, emptyHint, playingId, deletingId, downloadingId,
   onPlay, onDelete, onView, onDownload,
@@ -333,6 +341,29 @@ function RecordingsTable({
   onView: (r: RecordingRow) => void;
   onDownload: (r: RecordingRow) => void;
 }) {
+  const [page, setPage] = useState(1);
+
+  // Reset to page 1 whenever the list changes (tab switch / refresh)
+  const prevLenRef = useRef(rows.length);
+  if (prevLenRef.current !== rows.length) {
+    prevLenRef.current = rows.length;
+    if (page !== 1) setPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage   = Math.min(page, totalPages);
+  const pageRows   = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const from       = rows.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const to         = Math.min(safePage * PAGE_SIZE, rows.length);
+
+  const btnBase: React.CSSProperties = {
+    minWidth: 32, height: 32, borderRadius: 8, padding: '0 10px',
+    background: 'transparent', border: '1px solid var(--border)',
+    color: 'var(--text-2)', cursor: 'pointer', fontSize: 12.5,
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    transition: 'all 0.15s',
+  };
+
   return (
     <div
       style={{
@@ -352,6 +383,11 @@ function RecordingsTable({
         <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>
           {rows.length} recording{rows.length === 1 ? '' : 's'}
         </h3>
+        {rows.length > PAGE_SIZE && (
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            {from}–{to} of {rows.length}
+          </span>
+        )}
       </div>
 
       {loading && rows.length === 0 ? (
@@ -359,147 +395,222 @@ function RecordingsTable({
       ) : rows.length === 0 ? (
         <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>{emptyHint}</div>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr>
-              {['Agent', 'Captured', 'Duration', 'Size', 'Language', 'Transcript', ''].map((h, i) => (
-                <th
-                  key={h || `c${i}`}
-                  style={{
-                    textAlign: i === 6 ? 'right' : 'left',
-                    padding: '12px 22px',
-                    color: 'var(--text-3)',
-                    fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em',
-                    fontWeight: 500,
-                    background: 'var(--surface-soft)',
-                    borderBottom: '1px solid var(--border)',
-                  }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r => {
-              const isPlaying = playingId === r.recording_id;
-              return (
-                <tr key={r.recording_id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '14px 22px' }}>
-                    <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{r.agent_name || '—'}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                      {(r.use_case_slug && SLUG_LABEL[r.use_case_slug]) || r.use_case_slug || ''}
-                    </div>
-                  </td>
-                  <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontSize: 12.5 }}>
-                    {formatTime(r.created_at)}
-                  </td>
-                  <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5 }}>
-                    {formatDuration(r.duration_ms)}
-                  </td>
-                  <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5 }}>
-                    {formatSize(r.size_bytes)}
-                  </td>
-                  <td style={{ padding: '14px 22px' }}>
-                    <span
-                      style={{
-                        fontSize: 10.5, padding: '2px 8px', borderRadius: 99,
-                        background: 'var(--tint-2)', color: 'var(--text-2)',
-                        fontFamily: "'JetBrains Mono', monospace", fontWeight: 600,
-                      }}
-                    >
-                      {(r.language_code || 'en').toUpperCase()}
-                    </span>
-                  </td>
-                  <td
-                    onClick={() => onView(r)}
+        <>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                {['Agent', 'Captured', 'Duration', 'Size', 'Language', 'Transcript', ''].map((h, i) => (
+                  <th
+                    key={h || `c${i}`}
                     style={{
-                      padding: '14px 22px', color: 'var(--text-3)',
-                      fontSize: 12, maxWidth: 320,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      cursor: 'pointer',
+                      textAlign: i === 6 ? 'right' : 'left',
+                      padding: '12px 22px',
+                      color: 'var(--text-3)',
+                      fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em',
+                      fontWeight: 500,
+                      background: 'var(--surface-soft)',
+                      borderBottom: '1px solid var(--border)',
                     }}
-                    title="Click to view full transcript"
-                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--purple-hi)'; e.currentTarget.style.textDecoration = 'underline'; }}
-                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-3)'; e.currentTarget.style.textDecoration = 'none'; }}
                   >
-                    {r.transcript || <em style={{ color: 'var(--text-4)' }}>(no transcript)</em>}
-                  </td>
-                  <td style={{ padding: '14px 22px', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: 6 }}>
-                      <button
-                        onClick={() => onPlay(r)}
-                        disabled={!r.signed_url}
-                        title={r.signed_url ? (isPlaying ? 'Pause' : 'Play recording') : 'Stored locally on backend (no signed URL)'}
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map(r => {
+                const isPlaying = playingId === r.recording_id;
+                return (
+                  <tr key={r.recording_id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '14px 22px' }}>
+                      <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{r.agent_name || '—'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                        {(r.use_case_slug && SLUG_LABEL[r.use_case_slug]) || r.use_case_slug || ''}
+                      </div>
+                    </td>
+                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontSize: 12.5 }}>
+                      {formatTime(r.created_at)}
+                    </td>
+                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5 }}>
+                      {formatDuration(r.duration_ms)}
+                    </td>
+                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5 }}>
+                      {formatSize(r.size_bytes)}
+                    </td>
+                    <td style={{ padding: '14px 22px' }}>
+                      <span
                         style={{
-                          width: 30, height: 30, borderRadius: 8,
-                          background: isPlaying ? 'rgba(76,175,80,0.18)' : 'transparent',
-                          border: `1px solid ${isPlaying ? 'var(--green)' : 'var(--border)'}`,
-                          color: isPlaying ? 'var(--green)' : 'var(--text-2)',
-                          cursor: r.signed_url ? 'pointer' : 'not-allowed',
-                          opacity: r.signed_url ? 1 : 0.4,
-                          display: 'inline-grid', placeItems: 'center',
+                          fontSize: 10.5, padding: '2px 8px', borderRadius: 99,
+                          background: 'var(--tint-2)', color: 'var(--text-2)',
+                          fontFamily: "'JetBrains Mono', monospace", fontWeight: 600,
                         }}
                       >
-                        <Icon name={isPlaying ? 'pause' : 'play'} size={12} />
-                      </button>
+                        {(r.language_code || 'en').toUpperCase()}
+                      </span>
+                    </td>
+                    <td
+                      onClick={() => onView(r)}
+                      style={{
+                        padding: '14px 22px', color: 'var(--text-3)',
+                        fontSize: 12, maxWidth: 320,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        cursor: 'pointer',
+                      }}
+                      title="Click to view full transcript"
+                      onMouseEnter={e => { e.currentTarget.style.color = 'var(--purple-hi)'; e.currentTarget.style.textDecoration = 'underline'; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-3)'; e.currentTarget.style.textDecoration = 'none'; }}
+                    >
+                      {r.transcript || <em style={{ color: 'var(--text-4)' }}>(no transcript)</em>}
+                    </td>
+                    <td style={{ padding: '14px 22px', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: 6 }}>
+                        <button
+                          onClick={() => onPlay(r)}
+                          disabled={!r.signed_url}
+                          title={r.signed_url ? (isPlaying ? 'Pause' : 'Play recording') : 'Stored locally on backend (no signed URL)'}
+                          style={{
+                            width: 30, height: 30, borderRadius: 8,
+                            background: isPlaying ? 'rgba(76,175,80,0.18)' : 'transparent',
+                            border: `1px solid ${isPlaying ? 'var(--green)' : 'var(--border)'}`,
+                            color: isPlaying ? 'var(--green)' : 'var(--text-2)',
+                            cursor: r.signed_url ? 'pointer' : 'not-allowed',
+                            opacity: r.signed_url ? 1 : 0.4,
+                            display: 'inline-grid', placeItems: 'center',
+                          }}
+                        >
+                          <Icon name={isPlaying ? 'pause' : 'play'} size={12} />
+                        </button>
+                        <button
+                          onClick={() => onDownload(r)}
+                          disabled={!r.signed_url || downloadingId === r.recording_id}
+                          title={r.signed_url ? 'Download recording' : 'No download URL available'}
+                          style={{
+                            width: 30, height: 30, borderRadius: 8,
+                            background: downloadingId === r.recording_id ? 'rgba(24,218,252,0.12)' : 'transparent',
+                            border: `1px solid ${downloadingId === r.recording_id ? 'var(--blue)' : 'var(--border)'}`,
+                            color: downloadingId === r.recording_id ? 'var(--blue)' : 'var(--text-2)',
+                            cursor: r.signed_url ? 'pointer' : 'not-allowed',
+                            opacity: r.signed_url ? 1 : 0.4,
+                            display: 'inline-grid', placeItems: 'center',
+                            transition: 'all 0.15s',
+                          }}
+                          onMouseEnter={e => { if (r.signed_url && downloadingId !== r.recording_id) { e.currentTarget.style.background = 'rgba(24,218,252,0.1)'; e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)'; } }}
+                          onMouseLeave={e => { if (downloadingId !== r.recording_id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-2)'; } }}
+                        >
+                          <Icon name={downloadingId === r.recording_id ? 'refresh' : 'export'} size={12} />
+                        </button>
+                        <button
+                          onClick={() => onDelete(r)}
+                          disabled={deletingId === r.recording_id}
+                          title="Delete recording"
+                          aria-label="Delete recording"
+                          style={{
+                            width: 30, height: 30, borderRadius: 8,
+                            background: deletingId === r.recording_id ? 'rgba(255,90,120,0.15)' : 'transparent',
+                            border: '1px solid var(--border)',
+                            color: deletingId === r.recording_id ? 'var(--red)' : 'var(--text-2)',
+                            cursor: deletingId === r.recording_id ? 'wait' : 'pointer',
+                            display: 'inline-grid', placeItems: 'center',
+                            transition: 'all 0.15s',
+                          }}
+                          onMouseEnter={e => {
+                            if (deletingId !== r.recording_id) {
+                              e.currentTarget.style.background = 'rgba(255,90,120,0.1)';
+                              e.currentTarget.style.borderColor = 'rgba(255,90,120,0.4)';
+                              e.currentTarget.style.color = 'var(--red)';
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (deletingId !== r.recording_id) {
+                              e.currentTarget.style.background = 'transparent';
+                              e.currentTarget.style.borderColor = 'var(--border)';
+                              e.currentTarget.style.color = 'var(--text-2)';
+                            }
+                          }}
+                        >
+                          <Icon name={deletingId === r.recording_id ? 'refresh' : 'x'} size={12} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* Pagination bar */}
+          {totalPages > 1 && (
+            <div
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '14px 22px', borderTop: '1px solid var(--border)',
+              }}
+            >
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                Showing {from}–{to} of {rows.length}
+              </span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <button
+                  onClick={() => setPage(1)}
+                  disabled={safePage === 1}
+                  style={{ ...btnBase, opacity: safePage === 1 ? 0.3 : 1, cursor: safePage === 1 ? 'default' : 'pointer' }}
+                >
+                  «
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  style={{ ...btnBase, opacity: safePage === 1 ? 0.3 : 1, cursor: safePage === 1 ? 'default' : 'pointer' }}
+                >
+                  ‹ Prev
+                </button>
+
+                {/* Page number pills */}
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                  .reduce<(number | '…')[]>((acc, p, i, arr) => {
+                    if (i > 0 && (p as number) - (arr[i - 1] as number) > 1) acc.push('…');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) =>
+                    p === '…' ? (
+                      <span key={`ellipsis-${i}`} style={{ fontSize: 12, color: 'var(--text-4)', padding: '0 4px' }}>…</span>
+                    ) : (
                       <button
-                        onClick={() => onDownload(r)}
-                        disabled={!r.signed_url || downloadingId === r.recording_id}
-                        title={r.signed_url ? 'Download recording' : 'No download URL available'}
+                        key={p}
+                        onClick={() => setPage(p as number)}
                         style={{
-                          width: 30, height: 30, borderRadius: 8,
-                          background: downloadingId === r.recording_id ? 'rgba(24,218,252,0.12)' : 'transparent',
-                          border: `1px solid ${downloadingId === r.recording_id ? 'var(--blue)' : 'var(--border)'}`,
-                          color: downloadingId === r.recording_id ? 'var(--blue)' : 'var(--text-2)',
-                          cursor: r.signed_url ? 'pointer' : 'not-allowed',
-                          opacity: r.signed_url ? 1 : 0.4,
-                          display: 'inline-grid', placeItems: 'center',
-                          transition: 'all 0.15s',
-                        }}
-                        onMouseEnter={e => { if (r.signed_url && downloadingId !== r.recording_id) { e.currentTarget.style.background = 'rgba(24,218,252,0.1)'; e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)'; } }}
-                        onMouseLeave={e => { if (downloadingId !== r.recording_id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-2)'; } }}
-                      >
-                        <Icon name={downloadingId === r.recording_id ? 'refresh' : 'export'} size={12} />
-                      </button>
-                      <button
-                        onClick={() => onDelete(r)}
-                        disabled={deletingId === r.recording_id}
-                        title="Delete recording"
-                        aria-label="Delete recording"
-                        style={{
-                          width: 30, height: 30, borderRadius: 8,
-                          background: deletingId === r.recording_id ? 'rgba(255,90,120,0.15)' : 'transparent',
-                          border: '1px solid var(--border)',
-                          color: deletingId === r.recording_id ? 'var(--red)' : 'var(--text-2)',
-                          cursor: deletingId === r.recording_id ? 'wait' : 'pointer',
-                          display: 'inline-grid', placeItems: 'center',
-                          transition: 'all 0.15s',
-                        }}
-                        onMouseEnter={e => {
-                          if (deletingId !== r.recording_id) {
-                            e.currentTarget.style.background = 'rgba(255,90,120,0.1)';
-                            e.currentTarget.style.borderColor = 'rgba(255,90,120,0.4)';
-                            e.currentTarget.style.color = 'var(--red)';
-                          }
-                        }}
-                        onMouseLeave={e => {
-                          if (deletingId !== r.recording_id) {
-                            e.currentTarget.style.background = 'transparent';
-                            e.currentTarget.style.borderColor = 'var(--border)';
-                            e.currentTarget.style.color = 'var(--text-2)';
-                          }
+                          ...btnBase,
+                          background: safePage === p ? 'var(--tint-4)' : 'transparent',
+                          border: safePage === p ? '1px solid var(--border-strong)' : '1px solid var(--border)',
+                          color: safePage === p ? 'var(--text-1)' : 'var(--text-2)',
+                          fontWeight: safePage === p ? 600 : 400,
                         }}
                       >
-                        <Icon name={deletingId === r.recording_id ? 'refresh' : 'x'} size={12} />
+                        {p}
                       </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    )
+                  )}
+
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  style={{ ...btnBase, opacity: safePage === totalPages ? 0.3 : 1, cursor: safePage === totalPages ? 'default' : 'pointer' }}
+                >
+                  Next ›
+                </button>
+                <button
+                  onClick={() => setPage(totalPages)}
+                  disabled={safePage === totalPages}
+                  style={{ ...btnBase, opacity: safePage === totalPages ? 0.3 : 1, cursor: safePage === totalPages ? 'default' : 'pointer' }}
+                >
+                  »
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -673,6 +784,27 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail]         = useState<ChatSessionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [page, setPage] = useState(1);
+
+  const prevLenRef = useRef(sessions.length);
+  if (prevLenRef.current !== sessions.length) {
+    prevLenRef.current = sessions.length;
+    if (page !== 1) setPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(sessions.length / PAGE_SIZE));
+  const safePage   = Math.min(page, totalPages);
+  const pageSess   = sessions.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const from       = sessions.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const to         = Math.min(safePage * PAGE_SIZE, sessions.length);
+
+  const btnBase: React.CSSProperties = {
+    minWidth: 32, height: 32, borderRadius: 8, padding: '0 10px',
+    background: 'transparent', border: '1px solid var(--border)',
+    color: 'var(--text-2)', cursor: 'pointer', fontSize: 12.5,
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    transition: 'all 0.15s',
+  };
 
   async function toggle(s: ChatSessionRow) {
     if (expandedId === s.session_id) { setExpandedId(null); setDetail(null); return; }
@@ -693,10 +825,15 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-      <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
         <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>
           {sessions.length} chat session{sessions.length === 1 ? '' : 's'}
         </h3>
+        {sessions.length > PAGE_SIZE && (
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            {from}–{to} of {sessions.length}
+          </span>
+        )}
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
@@ -712,7 +849,7 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
           </tr>
         </thead>
         <tbody>
-          {sessions.map(s => {
+          {pageSess.map(s => {
             const isOpen = expandedId === s.session_id;
             return (
               <>
@@ -774,18 +911,105 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
           })}
         </tbody>
       </table>
+
+      {/* Pagination bar */}
+      {totalPages > 1 && (
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '14px 22px', borderTop: '1px solid var(--border)',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            Showing {from}–{to} of {sessions.length}
+          </span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button
+              onClick={() => setPage(1)}
+              disabled={safePage === 1}
+              style={{ ...btnBase, opacity: safePage === 1 ? 0.3 : 1, cursor: safePage === 1 ? 'default' : 'pointer' }}
+            >«</button>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={safePage === 1}
+              style={{ ...btnBase, opacity: safePage === 1 ? 0.3 : 1, cursor: safePage === 1 ? 'default' : 'pointer' }}
+            >‹ Prev</button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+              .reduce<(number | '…')[]>((acc, p, i, arr) => {
+                if (i > 0 && (p as number) - (arr[i - 1] as number) > 1) acc.push('…');
+                acc.push(p);
+                return acc;
+              }, [])
+              .map((p, i) =>
+                p === '…' ? (
+                  <span key={`ellipsis-${i}`} style={{ fontSize: 12, color: 'var(--text-4)', padding: '0 4px' }}>…</span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p as number)}
+                    style={{
+                      ...btnBase,
+                      background: safePage === p ? 'var(--tint-4)' : 'transparent',
+                      border: safePage === p ? '1px solid var(--border-strong)' : '1px solid var(--border)',
+                      color: safePage === p ? 'var(--text-1)' : 'var(--text-2)',
+                      fontWeight: safePage === p ? 600 : 400,
+                    }}
+                  >{p}</button>
+                )
+              )}
+
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={safePage === totalPages}
+              style={{ ...btnBase, opacity: safePage === totalPages ? 0.3 : 1, cursor: safePage === totalPages ? 'default' : 'pointer' }}
+            >Next ›</button>
+            <button
+              onClick={() => setPage(totalPages)}
+              disabled={safePage === totalPages}
+              style={{ ...btnBase, opacity: safePage === totalPages ? 0.3 : 1, cursor: safePage === totalPages ? 'default' : 'pointer' }}
+            >»</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Agents overview ───────────────────────────────────────────────────────────
+const AGENTS_PAGE_SIZE = 10;
+
 function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean }) {
+  const [page, setPage] = useState(1);
+
+  const prevLenRef = useRef(agents.length);
+  if (prevLenRef.current !== agents.length) {
+    prevLenRef.current = agents.length;
+    if (page !== 1) setPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(agents.length / AGENTS_PAGE_SIZE));
+  const safePage   = Math.min(page, totalPages);
+  const pageAgents = agents.slice((safePage - 1) * AGENTS_PAGE_SIZE, safePage * AGENTS_PAGE_SIZE);
+  const from       = agents.length === 0 ? 0 : (safePage - 1) * AGENTS_PAGE_SIZE + 1;
+  const to         = Math.min(safePage * AGENTS_PAGE_SIZE, agents.length);
+
+  const btnBase: React.CSSProperties = {
+    minWidth: 32, height: 32, borderRadius: 8, padding: '0 10px',
+    background: 'transparent', border: '1px solid var(--border)',
+    color: 'var(--text-2)', cursor: 'pointer', fontSize: 12.5,
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    transition: 'all 0.15s',
+  };
+
   if (loading && agents.length === 0) {
     return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Loading…</div>;
   }
   if (agents.length === 0) {
     return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>No agents on this account yet.</div>;
   }
+
   return (
     <div
       style={{
@@ -795,6 +1019,15 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
         overflow: 'hidden',
       }}
     >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>
+          {agents.length} agent{agents.length === 1 ? '' : 's'}
+        </h3>
+        {agents.length > AGENTS_PAGE_SIZE && (
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{from}–{to} of {agents.length}</span>
+        )}
+      </div>
+
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr>
@@ -817,7 +1050,7 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
           </tr>
         </thead>
         <tbody>
-          {agents.map(a => (
+          {pageAgents.map(a => (
             <tr key={a.id} style={{ borderBottom: '1px solid var(--border)' }}>
               <td style={{ padding: '14px 22px', fontWeight: 500, color: 'var(--text-1)' }}>{a.name}</td>
               <td style={{ padding: '14px 22px', color: 'var(--text-2)' }}>
@@ -842,6 +1075,54 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
           ))}
         </tbody>
       </table>
+
+      {/* Pagination bar */}
+      {totalPages > 1 && (
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '14px 22px', borderTop: '1px solid var(--border)',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            Showing {from}–{to} of {agents.length}
+          </span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button onClick={() => setPage(1)} disabled={safePage === 1}
+              style={{ ...btnBase, opacity: safePage === 1 ? 0.3 : 1, cursor: safePage === 1 ? 'default' : 'pointer' }}>«</button>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
+              style={{ ...btnBase, opacity: safePage === 1 ? 0.3 : 1, cursor: safePage === 1 ? 'default' : 'pointer' }}>‹ Prev</button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+              .reduce<(number | '…')[]>((acc, p, i, arr) => {
+                if (i > 0 && (p as number) - (arr[i - 1] as number) > 1) acc.push('…');
+                acc.push(p);
+                return acc;
+              }, [])
+              .map((p, i) =>
+                p === '…' ? (
+                  <span key={`ellipsis-${i}`} style={{ fontSize: 12, color: 'var(--text-4)', padding: '0 4px' }}>…</span>
+                ) : (
+                  <button key={p} onClick={() => setPage(p as number)}
+                    style={{
+                      ...btnBase,
+                      background: safePage === p ? 'var(--tint-4)' : 'transparent',
+                      border: safePage === p ? '1px solid var(--border-strong)' : '1px solid var(--border)',
+                      color: safePage === p ? 'var(--text-1)' : 'var(--text-2)',
+                      fontWeight: safePage === p ? 600 : 400,
+                    }}
+                  >{p}</button>
+                )
+              )}
+
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
+              style={{ ...btnBase, opacity: safePage === totalPages ? 0.3 : 1, cursor: safePage === totalPages ? 'default' : 'pointer' }}>Next ›</button>
+            <button onClick={() => setPage(totalPages)} disabled={safePage === totalPages}
+              style={{ ...btnBase, opacity: safePage === totalPages ? 0.3 : 1, cursor: safePage === totalPages ? 'default' : 'pointer' }}>»</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
