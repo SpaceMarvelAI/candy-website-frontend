@@ -1,31 +1,49 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import AmbientBg from './components/AmbientBg';
-import ToastHost from './components/Toast';
-import AppLayout from './layouts/AppLayout';
+import AmbientBg   from './components/AmbientBg';
+import ToastHost   from './components/Toast';
+import AppLayout   from './layouts/AppLayout';
 
-import AuthPage      from './pages/auth/AuthPage';
-import DashboardPage from './pages/dashboard';
-import HRFlowPage    from './pages/hrflow';
-import LiveCallsPage from './pages/live';
-import ChatbotsPage  from './pages/chatbots';
+// Infrastructure components stay eagerly loaded (tiny, always needed)
+const AuthPage = lazy(() => import('./pages/auth/AuthPage'));
 
-import EcommerceAgent  from './pages/ecommerce';
-import FinancialAgent  from './pages/financial';
-import LogisticsAgent  from './pages/logistics';
-import HealthcareAgent from './pages/healthcare';
-import MarketingAgent  from './pages/marketing';
-import HRAgent         from './pages/hr';
+// App-layout pages
+const DashboardPage  = lazy(() => import('./pages/dashboard'));
+const LiveCallsPage  = lazy(() => import('./pages/live'));
+const HRFlowPage     = lazy(() => import('./pages/hrflow'));
+const AnalyticsPage  = lazy(() => import('./pages/analytics'));
+const WebhooksPage   = lazy(() => import('./pages/webhooks'));
+const FlowsPage      = lazy(() => import('./pages/flows'));
+const ChatbotsPage   = lazy(() => import('./pages/chatbots'));
 
-import ChatbotCS     from './pages/chatbot-cs';
-import ChatbotTech   from './pages/chatbot-tech';
-import ChatbotHealth from './pages/chatbot-health';
-import ChatbotBank   from './pages/chatbot-bank';
-import ChatbotAppt   from './pages/chatbot-appt';
-import ChatbotHR     from './pages/chatbot-hr';
+// Chatbot workspaces
+const ChatbotCS      = lazy(() => import('./pages/chatbot-cs'));
+const ChatbotTech    = lazy(() => import('./pages/chatbot-tech'));
+const ChatbotHealth  = lazy(() => import('./pages/chatbot-health'));
+const ChatbotBank    = lazy(() => import('./pages/chatbot-bank'));
+const ChatbotAppt    = lazy(() => import('./pages/chatbot-appt'));
+const ChatbotHR      = lazy(() => import('./pages/chatbot-hr'));
 
-import AnalyticsPage from './pages/analytics';
-import WebhooksPage  from './pages/webhooks';
-import FlowsPage     from './pages/flows';
+// Voice agent workspaces
+const EcommerceAgent  = lazy(() => import('./pages/ecommerce'));
+const FinancialAgent  = lazy(() => import('./pages/financial'));
+const LogisticsAgent  = lazy(() => import('./pages/logistics'));
+const HealthcareAgent = lazy(() => import('./pages/healthcare'));
+const MarketingAgent  = lazy(() => import('./pages/marketing'));
+const HRAgent         = lazy(() => import('./pages/hr'));
+
+function PageLoader() {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minHeight: '100vh', color: 'var(--text-4)', fontSize: 13,
+      }}
+    >
+      Loading…
+    </div>
+  );
+}
 
 function WithLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -39,46 +57,48 @@ export default function App() {
   return (
     <>
       <AmbientBg />
-      <Routes>
-        <Route path="/auth" element={
-          <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
-            <AuthPage />
-          </div>
-        } />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/auth" element={
+            <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
+              <AuthPage />
+            </div>
+          } />
 
-        {/* App views — rendered inside AppLayout (sidebar + topbar) */}
-        <Route path="/dashboard" element={<WithLayout><DashboardPage /></WithLayout>} />
-        <Route path="/live"          element={<Navigate to="/live/demo" replace />} />
-        <Route path="/live/:tab"     element={<WithLayout><LiveCallsPage /></WithLayout>} />
-        <Route path="/hrchat"        element={<WithLayout><HRFlowPage /></WithLayout>} />
-        <Route path="/analytics"     element={<Navigate to="/analytics/summary" replace />} />
-        <Route path="/analytics/:tab" element={<WithLayout><AnalyticsPage /></WithLayout>} />
-        <Route path="/webhooks"  element={<WithLayout><WebhooksPage /></WithLayout>} />
-        <Route path="/flows"     element={<WithLayout><FlowsPage /></WithLayout>} />
+          {/* App views — rendered inside AppLayout (sidebar + topbar) */}
+          <Route path="/dashboard"      element={<WithLayout><DashboardPage /></WithLayout>} />
+          <Route path="/live"           element={<Navigate to="/live/demo" replace />} />
+          <Route path="/live/:tab"      element={<WithLayout><LiveCallsPage /></WithLayout>} />
+          <Route path="/hrchat"         element={<WithLayout><HRFlowPage /></WithLayout>} />
+          <Route path="/analytics"      element={<Navigate to="/analytics/summary" replace />} />
+          <Route path="/analytics/:tab" element={<WithLayout><AnalyticsPage /></WithLayout>} />
+          <Route path="/webhooks"       element={<WithLayout><WebhooksPage /></WithLayout>} />
+          <Route path="/flows"          element={<WithLayout><FlowsPage /></WithLayout>} />
 
-        {/* Chatbots landing page — must be listed before /chatbots/* sub-routes */}
-        <Route path="/chatbots" element={<WithLayout><ChatbotsPage /></WithLayout>} />
+          {/* Chatbots landing — must be listed before /chatbots/* sub-routes */}
+          <Route path="/chatbots"        element={<WithLayout><ChatbotsPage /></WithLayout>} />
 
-        {/* Chatbot workspaces — full-screen, no sidebar */}
-        <Route path="/chatbots/cs"     element={<ChatbotCS />} />
-        <Route path="/chatbots/tech"   element={<ChatbotTech />} />
-        <Route path="/chatbots/health" element={<ChatbotHealth />} />
-        <Route path="/chatbots/bank"   element={<ChatbotBank />} />
-        <Route path="/chatbots/appt"   element={<ChatbotAppt />} />
-        <Route path="/chatbots/hr"     element={<ChatbotHR />} />
+          {/* Chatbot workspaces — full-screen, no sidebar */}
+          <Route path="/chatbots/cs"     element={<ChatbotCS />} />
+          <Route path="/chatbots/tech"   element={<ChatbotTech />} />
+          <Route path="/chatbots/health" element={<ChatbotHealth />} />
+          <Route path="/chatbots/bank"   element={<ChatbotBank />} />
+          <Route path="/chatbots/appt"   element={<ChatbotAppt />} />
+          <Route path="/chatbots/hr"     element={<ChatbotHR />} />
 
-        {/* Voice agent workspaces — full-screen, no sidebar */}
-        <Route path="/agents/ecommerce"  element={<EcommerceAgent />} />
-        <Route path="/agents/financial"  element={<FinancialAgent />} />
-        <Route path="/agents/logistics"  element={<LogisticsAgent />} />
-        <Route path="/agents/healthcare" element={<HealthcareAgent />} />
-        <Route path="/agents/marketing"  element={<MarketingAgent />} />
-        <Route path="/agents/hr"         element={<HRAgent />} />
+          {/* Voice agent workspaces — full-screen, no sidebar */}
+          <Route path="/agents/ecommerce"  element={<EcommerceAgent />} />
+          <Route path="/agents/financial"  element={<FinancialAgent />} />
+          <Route path="/agents/logistics"  element={<LogisticsAgent />} />
+          <Route path="/agents/healthcare" element={<HealthcareAgent />} />
+          <Route path="/agents/marketing"  element={<MarketingAgent />} />
+          <Route path="/agents/hr"         element={<HRAgent />} />
 
-        {/* Fallback */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
+          {/* Fallback */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Suspense>
       <ToastHost />
     </>
   );
