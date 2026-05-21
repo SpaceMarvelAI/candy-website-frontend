@@ -83,6 +83,15 @@ export function AppProvider({ children }) {
     navigate('/', { replace: true });
   }, [navigate]);
 
+  // Clear user + redirect to SSO when the API client fires a 401
+  useEffect(() => {
+    function onAuthExpired() {
+      setUser(null);
+    }
+    window.addEventListener('candy:auth-expired', onAuthExpired);
+    return () => window.removeEventListener('candy:auth-expired', onAuthExpired);
+  }, []);
+
   // Intercept ?sso_token= on ANY page (SpaceMarvel may redirect to /dashboard)
   useEffect(() => {
     if (ssoHandled.current) return;

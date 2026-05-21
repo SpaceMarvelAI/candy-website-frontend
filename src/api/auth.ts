@@ -87,8 +87,8 @@ export async function ssoCallback(token: string): Promise<{ user: AuthUser }> {
     method: 'GET',
     auth: false,
   });
-  // Store token + user in sessionStorage (tab-scoped, not persisted across sessions)
-  setSessionToken(tok.access_token);
+  // Persist in localStorage so the session survives tab close/reopen
+  setToken(tok.access_token);
   const user: AuthUser = {
     user_id:      tok.user_id,
     email:        tok.email,
@@ -97,6 +97,6 @@ export async function ssoCallback(token: string): Promise<{ user: AuthUser }> {
     company_name: tok.company_name,
     full_name:    null,
   };
-  storeSessionUser(user);
+  storeUser(user);
   return { user };
 }

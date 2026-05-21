@@ -48,6 +48,16 @@ function PageLoader() {
   );
 }
 
+function RootRedirect() {
+  const { user } = useApp();
+  if (user) return <Navigate to="/dashboard" replace />;
+  return (
+    <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
+      <LandingPage />
+    </div>
+  );
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useApp();
   if (!user) {
@@ -71,12 +81,8 @@ export default function App() {
       <AmbientBg />
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Landing — shown at root and as fallback for unknown paths */}
-          <Route path="/" element={
-            <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
-              <LandingPage />
-            </div>
-          } />
+          {/* Landing — redirects to /dashboard if already signed in */}
+          <Route path="/" element={<RootRedirect />} />
 
           {/* /auth — SSO entry point from SpaceMarvel (?sso_token=…)
               AppContext intercepts the token on any page, so this just
