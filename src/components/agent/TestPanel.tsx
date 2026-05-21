@@ -1895,7 +1895,7 @@ export default function TestPanel({
               fontSize: 10.5, fontWeight: 600, color: 'var(--text-2)',
               padding: '2px 7px', borderRadius: 99,
               background: 'var(--tint-1)', border: '1px solid var(--border)',
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "'Zalando Sans'",
             }}
           >
             {convLang.split('-')[0].toUpperCase()}
@@ -1992,7 +1992,7 @@ export default function TestPanel({
                   <span
                     style={{
                       fontSize: 10, marginLeft: 6, color: 'var(--text-3)',
-                      fontFamily: "'JetBrains Mono', monospace",
+                      fontFamily: "'Zalando Sans'",
                     }}
                   >
                     …
@@ -2003,7 +2003,7 @@ export default function TestPanel({
                 <span
                   style={{
                     fontSize: 10, color: 'var(--text-4)',
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "'Zalando Sans'",
                     paddingLeft: 4,
                   }}
                 >
@@ -2047,7 +2047,7 @@ export default function TestPanel({
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               fontSize: 11, color: 'var(--text-3)',
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "'Zalando Sans'",
             }}
           >
             <span

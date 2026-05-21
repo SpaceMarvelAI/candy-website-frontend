@@ -431,10 +431,10 @@ function RecordingsTable({
                     <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontSize: 12.5 }}>
                       {formatTime(r.created_at)}
                     </td>
-                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5 }}>
+                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'", fontSize: 12.5 }}>
                       {formatDuration(r.duration_ms)}
                     </td>
-                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5 }}>
+                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'", fontSize: 12.5 }}>
                       {formatSize(r.size_bytes)}
                     </td>
                     <td style={{ padding: '14px 22px' }}>
@@ -442,7 +442,7 @@ function RecordingsTable({
                         style={{
                           fontSize: 10.5, padding: '2px 8px', borderRadius: 99,
                           background: 'var(--tint-2)', color: 'var(--text-2)',
-                          fontFamily: "'JetBrains Mono', monospace", fontWeight: 600,
+                          fontFamily: "'Zalando Sans'", fontWeight: 600,
                         }}
                       >
                         {(r.language_code || 'en').toUpperCase()}
@@ -866,7 +866,7 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
                   <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontSize: 12.5 }}>
                     {formatTime(s.started_at)}
                   </td>
-                  <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'JetBrains Mono', monospace" }}>
+                  <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'" }}>
                     {s.message_count}
                   </td>
                   <td style={{ padding: '14px 22px', color: 'var(--text-3)', fontSize: 12, maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

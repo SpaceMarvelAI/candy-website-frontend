@@ -48,7 +48,7 @@ export default function QuickActions() {
           </div>
           <span
             style={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "'Zalando Sans'",
               fontSize: 10, padding: '2px 6px',
               border: '1px solid var(--border-strong)', borderRadius: 4,
               color: 'var(--text-3)',

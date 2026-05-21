@@ -130,13 +130,13 @@ function DeliveriesPanel({ webhookId }: { webhookId: string }) {
                   <td style={{ padding: '10px 22px', color: 'var(--text-3)', fontSize: 12 }}>
                     {fmtTime(d.delivered_at ?? d.created_at)}
                   </td>
-                  <td style={{ padding: '10px 22px', fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: 'var(--text-2)' }}>
+                  <td style={{ padding: '10px 22px', fontFamily: "'Zalando Sans'", fontSize: 11.5, color: 'var(--text-2)' }}>
                     {d.event_type}
                   </td>
                   <td style={{ padding: '10px 22px' }}>
                     <DeliveryStatusPill status={d.status} httpStatus={d.http_status} />
                   </td>
-                  <td style={{ padding: '10px 22px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-3)' }}>
+                  <td style={{ padding: '10px 22px', fontFamily: "'Zalando Sans'", color: 'var(--text-3)' }}>
                     {d.http_status ?? '—'}
                   </td>
                   <td style={{ padding: '10px 22px', textAlign: 'right', color: 'var(--text-4)', fontSize: 11 }}>
@@ -156,7 +156,7 @@ function DeliveriesPanel({ webhookId }: { webhookId: string }) {
                                 background: 'var(--bg-3)', border: '1px solid var(--border)',
                                 borderRadius: 8, padding: '10px 14px', fontSize: 11.5,
                                 color: 'var(--text-2)', overflowX: 'auto', margin: 0,
-                                fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6,
+                                fontFamily: "'Zalando Sans'", lineHeight: 1.6,
                                 maxHeight: 200, overflowY: 'auto',
                               }}
                             >
@@ -331,7 +331,7 @@ function WebhookDrawer({ existing, onSave, onClose }: DrawerProps) {
                     {eventTypes.includes(ev) && <Icon name="check" size={10} style={{ color: '#fff' }} />}
                   </div>
                   <span
-                    style={{ fontSize: 12.5, color: 'var(--text-2)', fontFamily: "'JetBrains Mono', monospace" }}
+                    style={{ fontSize: 12.5, color: 'var(--text-2)', fontFamily: "'Zalando Sans'" }}
                     onClick={() => toggleEvent(ev)}
                   >
                     {ev}
@@ -641,13 +641,13 @@ export default function WebhooksPage() {
                           style={{
                             fontWeight: 500, color: 'var(--text-1)',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                            fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5,
+                            fontFamily: "'Zalando Sans'", fontSize: 12.5,
                           }}
                           title={w.url}
                         >
                           {w.url}
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, fontFamily: "'JetBrains Mono', monospace" }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, fontFamily: "'Zalando Sans'" }}>
                           {w.id.slice(0, 8)}…
                         </div>
                       </td>
@@ -661,7 +661,7 @@ export default function WebhooksPage() {
                               style={{
                                 fontSize: 10.5, padding: '1px 7px', borderRadius: 99,
                                 background: 'var(--tint-2)', color: 'var(--text-3)',
-                                fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
+                                fontFamily: "'Zalando Sans'", fontWeight: 500,
                               }}
                             >
                               {ev}

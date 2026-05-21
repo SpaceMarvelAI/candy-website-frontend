@@ -199,7 +199,7 @@ export default function AgentPicker({
             fontSize: 11.5,
             padding: '8px 12px', borderRadius: 8,
             marginBottom: 10,
-            fontFamily: "'JetBrains Mono', 'SF Mono', Menlo, monospace",
+            fontFamily: "'Zalando Sans'",
             lineHeight: 1.6,
           }}
         >
@@ -266,7 +266,7 @@ export default function AgentPicker({
                 <span
                   style={{
                     fontSize: 10.5, color: 'var(--text-4)',
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "'Zalando Sans'",
                   }}
                 >
                   {a.id.slice(0, 8)}

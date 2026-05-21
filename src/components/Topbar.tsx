@@ -121,7 +121,7 @@ export default function Topbar() {
         />
         <span
           style={{
-            fontFamily: "'JetBrains Mono', monospace",
+            fontFamily: "'Zalando Sans'",
             fontSize: 10, padding: '3px 6px',
             border: '1px solid var(--border-strong)', borderRadius: 5,
             color: 'var(--text-3)', background: 'var(--tint-1)',

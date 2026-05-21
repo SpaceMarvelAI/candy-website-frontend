@@ -333,7 +333,7 @@ export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: P
                           <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
                             <span style={triggerBadge(cfg.trigger_type)}>{TRIGGER_LABELS[cfg.trigger_type]}</span>
                             {' · '}
-                            <span style={{ fontFamily: 'monospace', fontSize: 10.5 }}>
+                            <span style={{ fontFamily: 'inherit', fontSize: 10.5 }}>
                               {cfg.webhook_url.replace(/^https?:\/\//, '').slice(0, 38)}
                               {cfg.webhook_url.length > 45 ? '…' : ''}
                             </span>
@@ -471,7 +471,7 @@ export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: P
 
               <Field label="Body Template (JSON)" hint="Use {{variable}} for dynamic values">
                 <textarea
-                  style={{ ...inputStyle, fontFamily: 'monospace', fontSize: 11.5, minHeight: 130, resize: 'vertical' }}
+                  style={{ ...inputStyle, fontFamily: 'inherit', fontSize: 11.5, minHeight: 130, resize: 'vertical' }}
                   value={formBody}
                   onChange={e => setFormBody(e.target.value)}
                   spellCheck={false}

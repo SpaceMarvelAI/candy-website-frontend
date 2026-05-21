@@ -26,10 +26,10 @@ const NAV_SECTIONS = [
     label: 'Main',
     items: [
       { id: 'dashboard', label: 'Voice Bots',  icon: 'voicebot', path: '/dashboard' },
-      { id: 'chatbots',  label: 'Chatbots',   icon: 'chat',     path: '/chatbots', badge: 'NEW' },
-      { id: 'voice',     label: 'Live Calls', icon: 'mic',      path: '/live' },
+      { id: 'chatbots',  label: 'Chatbots',   icon: 'chat',     path: '/chatbots' },
+      { id: 'voice',     label: 'Live Calls', icon: 'livecall', path: '/live' },
       { id: 'analytics', label: 'Analytics',  icon: 'chart',    path: '/analytics' },
-      { id: 'flows',     label: 'Flows',      icon: 'zap',      path: '/flows',     badge: 'NEW' },
+      { id: 'flows',     label: 'Flows',      icon: 'flowsnav', path: '/flows' },
     ],
   },
 ];

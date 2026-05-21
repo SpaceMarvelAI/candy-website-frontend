@@ -217,7 +217,7 @@ function CodeBlock({ code }: { code: string }) {
           color: 'var(--text-2)',
           overflowX: 'auto',
           whiteSpace: 'pre',
-          fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+          fontFamily: "'Zalando Sans'",
           maxHeight: 320,
           overflowY: 'auto',
         }}

@@ -40,7 +40,7 @@ function CopyBox({ value, mono = true }: { value: string; mono?: boolean }) {
         flex: 1, padding: '7px 10px', borderRadius: 7,
         background: 'var(--bg-0)', border: '1px solid var(--border)',
         fontSize: 11.5, color: 'var(--text-2)', overflowX: 'auto',
-        whiteSpace: 'nowrap', fontFamily: mono ? 'monospace' : 'inherit',
+        whiteSpace: 'nowrap', fontFamily: 'inherit',
       }}>
         {value}
       </code>
@@ -888,7 +888,7 @@ const codePre: React.CSSProperties = {
   margin: 0, padding: '12px 14px',
   background: 'var(--bg-0)', border: '1px solid var(--border)',
   borderRadius: 8, fontSize: 11.5, lineHeight: 1.65, color: 'var(--text-2)',
-  overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace',
+  overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'inherit',
   maxHeight: 240, overflowY: 'auto',
 };
 

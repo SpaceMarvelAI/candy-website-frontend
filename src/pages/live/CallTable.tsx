@@ -132,7 +132,7 @@ export default function CallTable({ calls, flashIds }) {
                   style={{
                     padding: '14px 22px', verticalAlign: 'middle',
                     color: 'var(--text-2)',
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5,
+                    fontFamily: "'Zalando Sans'", fontSize: 12.5,
                   }}
                 >
                   {c.phone}
@@ -170,7 +170,7 @@ export default function CallTable({ calls, flashIds }) {
                   style={{
                     padding: '14px 22px', verticalAlign: 'middle',
                     color: 'var(--text-3)', fontSize: 12,
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "'Zalando Sans'",
                   }}
                 >
                   {c.duration === 'live'

@@ -48,7 +48,7 @@ class TabErrorBoundary extends Component<
           }}
         >
           <div style={{ fontWeight: 600, color: 'var(--red)', marginBottom: 6 }}>Failed to render this view</div>
-          <code style={{ fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-3)' }}>
+          <code style={{ fontSize: 12, fontFamily: "'Zalando Sans'", color: 'var(--text-3)' }}>
             {this.state.error}
           </code>
           <div style={{ marginTop: 10 }}>
@@ -182,7 +182,7 @@ const TD_STYLE: React.CSSProperties = {
   borderBottom: '1px solid var(--border)',
 };
 const MONO: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', monospace",
+  fontFamily: "'Zalando Sans'",
   fontSize: 12.5,
 };
 
@@ -247,7 +247,7 @@ function SessionsByDayChart({ rows }: { rows: { date: string; sessions: number }
             <div
               style={{
                 width: 88, fontSize: 11.5, color: 'var(--text-3)',
-                fontFamily: "'JetBrains Mono', monospace", flexShrink: 0,
+                fontFamily: "'Zalando Sans'", flexShrink: 0,
               }}
             >
               {r.date}
@@ -267,7 +267,7 @@ function SessionsByDayChart({ rows }: { rows: { date: string; sessions: number }
               style={{
                 width: 36, fontSize: 12.5, fontWeight: 600,
                 color: 'var(--text-1)', textAlign: 'right', flexShrink: 0,
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: "'Zalando Sans'",
               }}
             >
               {r.sessions}
@@ -351,7 +351,7 @@ function ObjectArrayTable({ label, rows }: { label: string; rows: Record<string,
                         padding: '12px 18px',
                         color: accent || (isNameCol ? 'var(--text-1)' : 'var(--text-2)'),
                         fontWeight: isNameCol ? 600 : 400,
-                        fontFamily: typeof v === 'number' ? "'JetBrains Mono', monospace" : undefined,
+                        fontFamily: typeof v === 'number' ? "'Zalando Sans'" : undefined,
                         fontSize: 12.5,
                         whiteSpace: 'nowrap',
                       }}
@@ -427,7 +427,7 @@ function SummaryView({ data, loading }: { data: AnalyticsSummary | null; loading
               <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-4)' }}>
                 {k.replace(/_/g, ' ')}
               </span>
-              <span style={{ fontSize: 13, color: 'var(--text-2)', fontFamily: "'JetBrains Mono', monospace" }}>
+              <span style={{ fontSize: 13, color: 'var(--text-2)', fontFamily: "'Zalando Sans'" }}>
                 {renderScalar(v)}
               </span>
             </div>
@@ -690,7 +690,7 @@ function LanguagesView({ data, loading }: { data: LanguageStat[]; loading: boole
                         style={{
                           padding: '2px 9px', borderRadius: 99,
                           background: 'var(--tint-4)', color: 'var(--text-1)',
-                          fontWeight: 700, fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                          fontWeight: 700, fontSize: 11, fontFamily: "'Zalando Sans'",
                         }}
                       >
                         {l.code.toUpperCase()}
@@ -713,7 +713,7 @@ function LanguagesView({ data, loading }: { data: LanguageStat[]; loading: boole
                           }}
                         />
                       </div>
-                      <span style={{ fontSize: 12, color: 'var(--text-3)', minWidth: 42, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-3)', minWidth: 42, textAlign: 'right', fontFamily: "'Zalando Sans'" }}>
                         {pct.toFixed(1)}%
                       </span>
                     </div>
@@ -749,7 +749,7 @@ function AgentsView({ data, loading }: { data: AgentStat[]; loading: boolean }) 
                 <td style={TD_STYLE}>
                   <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{a.name || '—'}</div>
                   {a.agent_id && (
-                    <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, fontFamily: "'JetBrains Mono', monospace" }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, fontFamily: "'Zalando Sans'" }}>
                       {a.agent_id.slice(0, 8)}…
                     </div>
                   )}
@@ -805,7 +805,7 @@ function EventTypePill({ type }: { type: string }) {
       style={{
         fontSize: 10.5, padding: '2px 9px', borderRadius: 99,
         background: 'var(--tint-2)', color,
-        fontWeight: 600, fontFamily: "'JetBrains Mono', monospace",
+        fontWeight: 600, fontFamily: "'Zalando Sans'",
         letterSpacing: '0.03em',
       }}
     >
@@ -836,7 +836,7 @@ function EventsView({ data, loading }: { data: AnalyticsEvent[]; loading: boolea
                 <td style={{ ...TD_STYLE, ...MONO, fontSize: 11.5, color: 'var(--text-3)' }}>
                   {e.agent_id ? `${e.agent_id.slice(0, 8)}…` : '—'}
                 </td>
-                <td style={{ ...TD_STYLE, color: 'var(--text-3)', maxWidth: 360, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>
+                <td style={{ ...TD_STYLE, color: 'var(--text-3)', maxWidth: 360, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: "'Zalando Sans'", fontSize: 11.5 }}>
                   {e.payload != null ? JSON.stringify(e.payload).slice(0, 80) : '—'}
                 </td>
               </tr>
