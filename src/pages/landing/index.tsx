@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import Icon from '../../assets/icons';
 
 const _isLocalhost =
@@ -11,6 +12,17 @@ const _callbackUrl = encodeURIComponent(
 const SIGNIN_URL = `https://spacemarvel.ai/login?redirect_uri=${_callbackUrl}`;
 
 export default function LandingPage() {
+  const [seconds, setSeconds] = useState(5);
+
+  useEffect(() => {
+    if (seconds <= 0) {
+      window.location.href = SIGNIN_URL;
+      return;
+    }
+    const t = setTimeout(() => setSeconds(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [seconds]);
+
   return (
     <div
       style={{
@@ -136,7 +148,7 @@ export default function LandingPage() {
           textAlign: 'center',
         }}
       >
-        Access is provided through your SpaceMarvel workspace.
+        Redirecting in {seconds}s — or click above to sign in now.
       </p>
     </div>
   );
