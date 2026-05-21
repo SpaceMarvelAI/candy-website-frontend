@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react';
 
-const REDIRECT_URL = 'https://spacemarvel.ai/login';
 const COUNTDOWN = 5;
+
+function redirectToLogin() {
+  const isLocalhost =
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1';
+  const callbackUrl = encodeURIComponent(
+    isLocalhost
+      ? `${window.location.origin}/sso/callback`
+      : 'https://app.candy.cx/sso/callback'
+  );
+  window.location.href = `https://spacemarvel.ai/login?redirect_uri=${callbackUrl}`;
+}
 
 interface Props {
   onClose: () => void;
@@ -12,7 +23,7 @@ export default function SignupPopup({ onClose }: Props) {
 
   useEffect(() => {
     if (seconds <= 0) {
-      window.location.href = REDIRECT_URL;
+      redirectToLogin();
       return;
     }
     const t = setTimeout(() => setSeconds(s => s - 1), 1000);
@@ -72,7 +83,7 @@ export default function SignupPopup({ onClose }: Props) {
         </p>
 
         <button
-          onClick={() => { window.location.href = REDIRECT_URL; }}
+          onClick={() => { redirectToLogin(); }}
           className="btn-primary-shimmer"
           style={{
             width: '100%',

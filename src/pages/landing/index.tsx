@@ -1,6 +1,14 @@
 import Icon from '../../assets/icons';
 
-const SIGNIN_URL = 'https://spacemarvel.ai/login';
+const _isLocalhost =
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1';
+const _callbackUrl = encodeURIComponent(
+  _isLocalhost
+    ? `${window.location.origin}/sso/callback`
+    : 'https://app.candy.cx/sso/callback'
+);
+const SIGNIN_URL = `https://spacemarvel.ai/login?redirect_uri=${_callbackUrl}`;
 
 export default function LandingPage() {
   return (

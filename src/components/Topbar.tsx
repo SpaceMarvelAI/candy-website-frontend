@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
 import { Icon } from '../assets/icons';
 import SignupPopup from './SignupPopup';
+import { redirectToSSO } from '../utils/sso';
 
 const crumbMap = {
   dashboard:  [{ t: 'Home' }, { t: 'Dashboard',     current: true }],
@@ -331,7 +332,7 @@ export default function Topbar() {
           </div>
         ) : (
           <button
-            onClick={() => setShowSignup(true)}
+            onClick={redirectToSSO}
             className="btn-primary-shimmer"
             style={{
               height: 38,

@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
 import AppLayout   from './layouts/AppLayout';
+import { redirectToSSO } from './utils/sso';
+import { useApp } from './context/AppContext';
 
 
 const LandingPage     = lazy(() => import('./pages/landing'));
@@ -46,6 +48,15 @@ function PageLoader() {
   );
 }
 
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useApp();
+  if (!user) {
+    redirectToSSO();
+    return null;
+  }
+  return <>{children}</>;
+}
+
 function WithLayout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ position: 'relative', zIndex: 1 }}>
@@ -76,34 +87,36 @@ export default function App() {
             </div>
           } />
 
+          <Route path="/sso/callback" element={<SSOCallbackPage />} />
+
           {/* App views — rendered inside AppLayout (sidebar + topbar) */}
-          <Route path="/dashboard"      element={<WithLayout><DashboardPage /></WithLayout>} />
+          <Route path="/dashboard"      element={<ProtectedRoute><WithLayout><DashboardPage /></WithLayout></ProtectedRoute>} />
           <Route path="/live"           element={<Navigate to="/live/demo" replace />} />
-          <Route path="/live/:tab"      element={<WithLayout><LiveCallsPage /></WithLayout>} />
-          <Route path="/hrchat"         element={<WithLayout><HRFlowPage /></WithLayout>} />
+          <Route path="/live/:tab"      element={<ProtectedRoute><WithLayout><LiveCallsPage /></WithLayout></ProtectedRoute>} />
+          <Route path="/hrchat"         element={<ProtectedRoute><WithLayout><HRFlowPage /></WithLayout></ProtectedRoute>} />
           <Route path="/analytics"      element={<Navigate to="/analytics/summary" replace />} />
-          <Route path="/analytics/:tab" element={<WithLayout><AnalyticsPage /></WithLayout>} />
-          <Route path="/webhooks"       element={<WithLayout><WebhooksPage /></WithLayout>} />
-          <Route path="/flows"          element={<WithLayout><FlowsPage /></WithLayout>} />
+          <Route path="/analytics/:tab" element={<ProtectedRoute><WithLayout><AnalyticsPage /></WithLayout></ProtectedRoute>} />
+          <Route path="/webhooks"       element={<ProtectedRoute><WithLayout><WebhooksPage /></WithLayout></ProtectedRoute>} />
+          <Route path="/flows"          element={<ProtectedRoute><WithLayout><FlowsPage /></WithLayout></ProtectedRoute>} />
 
           {/* Chatbots landing — must be listed before /chatbots/* sub-routes */}
-          <Route path="/chatbots"        element={<WithLayout><ChatbotsPage /></WithLayout>} />
+          <Route path="/chatbots"        element={<ProtectedRoute><WithLayout><ChatbotsPage /></WithLayout></ProtectedRoute>} />
 
           {/* Chatbot workspaces — full-screen, no sidebar */}
-          <Route path="/chatbots/cs"     element={<ChatbotCS />} />
-          <Route path="/chatbots/tech"   element={<ChatbotTech />} />
-          <Route path="/chatbots/health" element={<ChatbotHealth />} />
-          <Route path="/chatbots/bank"   element={<ChatbotBank />} />
-          <Route path="/chatbots/appt"   element={<ChatbotAppt />} />
-          <Route path="/chatbots/hr"     element={<ChatbotHR />} />
+          <Route path="/chatbots/cs"     element={<ProtectedRoute><ChatbotCS /></ProtectedRoute>} />
+          <Route path="/chatbots/tech"   element={<ProtectedRoute><ChatbotTech /></ProtectedRoute>} />
+          <Route path="/chatbots/health" element={<ProtectedRoute><ChatbotHealth /></ProtectedRoute>} />
+          <Route path="/chatbots/bank"   element={<ProtectedRoute><ChatbotBank /></ProtectedRoute>} />
+          <Route path="/chatbots/appt"   element={<ProtectedRoute><ChatbotAppt /></ProtectedRoute>} />
+          <Route path="/chatbots/hr"     element={<ProtectedRoute><ChatbotHR /></ProtectedRoute>} />
 
           {/* Voice agent workspaces — full-screen, no sidebar */}
-          <Route path="/agents/ecommerce"  element={<EcommerceAgent />} />
-          <Route path="/agents/financial"  element={<FinancialAgent />} />
-          <Route path="/agents/logistics"  element={<LogisticsAgent />} />
-          <Route path="/agents/healthcare" element={<HealthcareAgent />} />
-          <Route path="/agents/marketing"  element={<MarketingAgent />} />
-          <Route path="/agents/hr"         element={<HRAgent />} />
+          <Route path="/agents/ecommerce"  element={<ProtectedRoute><EcommerceAgent /></ProtectedRoute>} />
+          <Route path="/agents/financial"  element={<ProtectedRoute><FinancialAgent /></ProtectedRoute>} />
+          <Route path="/agents/logistics"  element={<ProtectedRoute><LogisticsAgent /></ProtectedRoute>} />
+          <Route path="/agents/healthcare" element={<ProtectedRoute><HealthcareAgent /></ProtectedRoute>} />
+          <Route path="/agents/marketing"  element={<ProtectedRoute><MarketingAgent /></ProtectedRoute>} />
+          <Route path="/agents/hr"         element={<ProtectedRoute><HRAgent /></ProtectedRoute>} />
 
           {/* Fallback — unknown paths go back to landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
