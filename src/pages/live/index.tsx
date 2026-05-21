@@ -13,6 +13,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import LiveStats from './LiveStats';
 import Icon from '../../assets/icons';
+import { SkeletonTable } from '../../components/Skeleton';
 import { listAgents, type Agent } from '../../api/agents';
 import { listAllRecordings, deleteRecording, downloadRecordingBlob, type RecordingRow } from '../../api/recordings';
 import { listChatSessions, getChatSession, type ChatSessionRow, type ChatSessionDetail } from '../../api/chat-sessions';
@@ -391,7 +392,7 @@ function RecordingsTable({
       </div>
 
       {loading && rows.length === 0 ? (
-        <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Loading…</div>
+        <SkeletonTable rows={8} cols={['20%', '12%', '10%', '8%', '10%', '12%', '12%']} />
       ) : rows.length === 0 ? (
         <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>{emptyHint}</div>
       ) : (
@@ -819,7 +820,7 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
   }
 
   if (loading && sessions.length === 0)
-    return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Loading…</div>;
+    return <SkeletonTable rows={8} cols={['20%', '12%', '10%', '8%', '10%', '12%', '12%']} />;
   if (sessions.length === 0)
     return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>No chat sessions yet — open a chatbot workspace, select an agent, and click "Start chat session".</div>;
 
@@ -1004,7 +1005,7 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
   };
 
   if (loading && agents.length === 0) {
-    return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Loading…</div>;
+    return <SkeletonTable rows={8} cols={['20%', '12%', '10%', '8%', '10%', '12%', '12%']} />;
   }
   if (agents.length === 0) {
     return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>No agents on this account yet.</div>;

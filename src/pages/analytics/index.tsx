@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
 import { ApiError } from '../../api/client';
+import { SkeletonTable, SkeletonCard } from '../../components/Skeleton';
 import {
   getAnalyticsSummary,
   getAnalyticsSessions,
@@ -138,7 +139,7 @@ function StatCard({ label, value, sub, accent }: {
 
 // ── Empty / loading shared states ─────────────────────────────────────────────
 function LoadingRow() {
-  return <div style={{ padding: '28px 22px', color: 'var(--text-3)', fontSize: 13 }}>Loading…</div>;
+  return <SkeletonTable rows={6} cols={['20%', '14%', '10%', '12%', '12%', '14%', '14%']} />;
 }
 function EmptyRow({ msg }: { msg: string }) {
   return <div style={{ padding: '28px 22px', color: 'var(--text-3)', fontSize: 13 }}>{msg}</div>;
@@ -371,7 +372,16 @@ function ObjectArrayTable({ label, rows }: { label: string; rows: Record<string,
 
 // ── Tab: Summary ──────────────────────────────────────────────────────────────
 function SummaryView({ data, loading }: { data: AnalyticsSummary | null; loading: boolean }) {
-  if (loading) return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Loading…</div>;
+  if (loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 14 }}>
+        {[0, 1, 2, 3, 4].map(i => <SkeletonCard key={i} />)}
+      </div>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--surface)' }}>
+        <SkeletonTable rows={7} cols={['18%', '10%', '8%', '10%', '10%', '12%', '12%']} />
+      </div>
+    </div>
+  );
   if (!data)   return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>No summary data available.</div>;
 
   // Build stat cards only for fields that are present and non-null in the response
@@ -538,7 +548,11 @@ function SessionsView({ data, loading }: { data: AnalyticsSession[]; loading: bo
 
 // ── Tab: Latency ──────────────────────────────────────────────────────────────
 function LatencyView({ data, loading }: { data: AnalyticsLatency | null; loading: boolean }) {
-  if (loading) return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Loading…</div>;
+  if (loading) return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--surface)' }}>
+      <SkeletonTable rows={5} cols={['30%', '15%', '15%', '15%', '15%']} />
+    </div>
+  );
   if (!data)   return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>No latency data available.</div>;
 
   // The API returns a note when there's no voice call data

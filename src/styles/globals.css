@@ -156,6 +156,24 @@ button, input, textarea { font-family: inherit; }
 }
 .toast-in { animation: toastIn 0.3s ease-out; }
 
+/* ── Skeleton loading ── */
+@keyframes skeletonShimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--tint-2) 25%,
+    var(--tint-4) 50%,
+    var(--tint-2) 75%
+  );
+  background-size: 400px 100%;
+  animation: skeletonShimmer 1.6s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
 /* ── Gradient text utility ── */
 .grad-text {
   background: var(--grad-brand);

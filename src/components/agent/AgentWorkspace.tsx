@@ -149,6 +149,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
           category={category}
           slug={slug}
           agents={agents}
+          loading={loading}
           selectedId={agent?.id ?? null}
           onSelect={id => { selectAgent(id); setStatusOverride(null); }}
           onCreate={createNewAgent}

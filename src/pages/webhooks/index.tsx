@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
 import { ApiError } from '../../api/client';
+import { SkeletonTable } from '../../components/Skeleton';
 import {
   listWebhooks,
   createWebhook,
@@ -587,7 +588,7 @@ export default function WebhooksPage() {
         </div>
 
         {loading && webhooks.length === 0 ? (
-          <div style={{ padding: '28px 22px', color: 'var(--text-3)', fontSize: 13 }}>Loading…</div>
+          <SkeletonTable rows={6} cols={['35%', '20%', '10%', '12%', '10%']} />
         ) : webhooks.length === 0 ? (
           <div style={{ padding: '40px 22px', textAlign: 'center' }}>
             <div style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 14 }}>

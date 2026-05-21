@@ -217,6 +217,7 @@ export default function ChatbotWorkspace({
           category={category}
           slug={slug}
           agents={agents}
+          loading={loading}
           selectedId={agent?.id ?? null}
           onSelect={id => { setSelectedId(id); setStatusOverride(null); }}
           onCreate={createNewAgent}

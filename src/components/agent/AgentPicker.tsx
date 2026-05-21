@@ -13,6 +13,7 @@ import Icon from '../../assets/icons';
 import { listAgents, type Agent } from '../../api/agents';
 import { useApp } from '../../context/AppContext';
 import { ApiError, API_BASE } from '../../api/client';
+import { SkeletonBox } from '../Skeleton';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
@@ -24,6 +25,7 @@ interface Props {
   category: string;
   slug: string;
   agents: Agent[];
+  loading?: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onCreate: (name: string) => Promise<void>;
@@ -40,7 +42,7 @@ const SLUG_LABEL: Record<string, string> = {
 
 export default function AgentPicker({
   tint = 'purple', category, slug,
-  agents, selectedId, onSelect, onCreate, onDelete, onReload,
+  agents, loading = false, selectedId, onSelect, onCreate, onDelete, onReload,
 }: Props) {
   const { user, addToast } = useApp();
   const [creating, setCreating]     = useState(false);
@@ -209,6 +211,13 @@ export default function AgentPicker({
         </div>
       )}
 
+      {loading ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {[110, 130, 95, 120, 115].map((w, i) => (
+            <SkeletonBox key={i} width={w} height={34} radius={10} />
+          ))}
+        </div>
+      ) : (
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {visible.length === 0 && (
           <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '6px 0' }}>
@@ -309,6 +318,7 @@ export default function AgentPicker({
           );
         })}
       </div>
+      )}
 
       {showAll && otherSlugs.length > 0 && (
         <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 10 }}>
