@@ -113,12 +113,10 @@ export default function Sidebar() {
                     margin: expanded ? '0 0 2px 0' : '0 auto 6px',
                     borderRadius: expanded ? 10 : 12,
                     background: isActive
-                      ? (expanded
-                          ? 'linear-gradient(90deg, rgba(117,91,227,0.18), rgba(117,91,227,0.04))'
-                          : 'rgba(117,91,227,0.18)')
+                      ? 'rgba(0, 113, 227, 0.15)'
                       : 'transparent',
                     border: isActive
-                      ? '1px solid rgba(117,91,227,0.30)'
+                      ? '1px solid rgba(0, 113, 227, 0.25)'
                       : '1px solid transparent',
                     color: isActive ? 'var(--text-1)' : 'var(--text-2)',
                   }}
@@ -250,7 +248,7 @@ const styles = {
     fontSize: 10,
     padding: '2px 7px',
     borderRadius: 99,
-    background: 'rgba(24,218,252,0.15)',
+    background: 'rgba(0, 113, 227, 0.12)',
     color: 'var(--blue)',
     fontWeight: 600,
     letterSpacing: '0.04em',
@@ -259,7 +257,7 @@ const styles = {
     padding: 12,
     border: '1px solid var(--border-strong)',
     borderRadius: 'var(--radius)',
-    background: 'linear-gradient(160deg, rgba(117,91,227,0.12), rgba(24,218,252,0.06))',
+    background: 'rgba(0, 113, 227, 0.08)',
     position: 'relative',
     overflow: 'hidden',
   },

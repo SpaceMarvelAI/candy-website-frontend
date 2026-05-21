@@ -15,117 +15,101 @@ export default function HeroPrompt() {
     <div
       style={{
         margin: '32px 0 40px',
-        position: 'relative',
         background: 'var(--hero-bg)',
         border: '1px solid var(--border-strong)',
         borderRadius: 'var(--radius-xl)',
         padding: 28,
-        overflow: 'hidden',
       }}
     >
-      {/* Background radials */}
+      <h3
+        style={{
+          fontSize: 20, fontWeight: 600, marginBottom: 6,
+          display: 'flex', alignItems: 'center', gap: 10,
+          color: 'var(--text-1)',
+        }}
+      >
+        <span
+          className="pulse-dot"
+          style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: 'var(--green)',
+            flexShrink: 0,
+          }}
+        />
+        Ask Metaspace AI
+      </h3>
+      <p style={{ color: 'var(--text-3)', fontSize: 13.5, marginBottom: 20 }}>
+        Describe a workflow, upload a list, or launch a campaign — one prompt away.
+      </p>
+
+      {/* Prompt field */}
       <div
         style={{
-          position: 'absolute', inset: 0,
-          background: `
-            radial-gradient(ellipse 500px 200px at 15% 20%, rgba(117,91,227,0.22), transparent 60%),
-            radial-gradient(ellipse 400px 200px at 85% 80%, rgba(24,218,252,0.15), transparent 60%)`,
-          pointerEvents: 'none',
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: 'var(--input-bg-strong)',
+          border: '1px solid var(--border-strong)',
+          borderRadius: 'var(--radius)',
+          padding: '14px 16px',
+          transition: 'border-color 0.15s',
         }}
-      />
-
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <h3
-          style={{
-            fontSize: 20, fontWeight: 600, marginBottom: 6,
-            display: 'flex', alignItems: 'center', gap: 10,
-            color: 'var(--text-1)',
-          }}
-        >
-          <span
-            className="pulse-dot"
-            style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: 'var(--green)',
-              boxShadow: '0 0 10px var(--green)',
-              flexShrink: 0,
-            }}
-          />
-          Ask Metaspace AI
-        </h3>
-        <p style={{ color: 'var(--text-3)', fontSize: 13.5, marginBottom: 20 }}>
-          Describe a workflow, upload a list, or launch a campaign — one prompt away.
-        </p>
-
-        {/* Prompt field */}
+        onFocus={e => { e.currentTarget.style.borderColor = 'var(--purple)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,113,227,0.12)'; }}
+        onBlur={e  => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.boxShadow = 'none'; }}
+      >
         <div
           style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            background: 'var(--input-bg-strong)',
-            border: '1px solid var(--border-strong)',
-            borderRadius: 'var(--radius)',
-            padding: '14px 16px',
-            transition: 'border-color 0.15s',
+            width: 28, height: 28, borderRadius: 8,
+            background: 'var(--purple)',
+            display: 'grid', placeItems: 'center',
+            flexShrink: 0,
           }}
-          onFocus={e => { e.currentTarget.style.borderColor = 'var(--purple)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(117,91,227,0.12)'; }}
-          onBlur={e  => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.boxShadow = 'none'; }}
         >
-          <div
-            style={{
-              width: 28, height: 28, borderRadius: 8,
-              background: 'var(--grad-brand)',
-              display: 'grid', placeItems: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <Icon name="spark" size={14} />
-          </div>
-          <input
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            placeholder="e.g. 'Call 200 candidates and screen for React experience'"
-            style={{
-              flex: 1, background: 'transparent', border: 'none', outline: 'none',
-              color: 'var(--text-1)', fontSize: 14.5,
-            }}
-          />
-          <button
-            style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: 'var(--tint-3)',
-              border: '1px solid var(--border-strong)',
-              color: 'var(--text-1)', cursor: 'pointer',
-              display: 'grid', placeItems: 'center',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--grad-brand)'; e.currentTarget.style.borderColor = 'transparent'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'var(--tint-3)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
-          >
-            <Icon name="arrowRight" size={14} />
-          </button>
+          <Icon name="spark" size={14} />
         </div>
+        <input
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder="e.g. 'Call 200 candidates and screen for React experience'"
+          style={{
+            flex: 1, background: 'transparent', border: 'none', outline: 'none',
+            color: 'var(--text-1)', fontSize: 14.5,
+          }}
+        />
+        <button
+          style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'var(--tint-3)',
+            border: '1px solid var(--border-strong)',
+            color: 'var(--text-1)', cursor: 'pointer',
+            display: 'grid', placeItems: 'center',
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--purple)'; e.currentTarget.style.borderColor = 'transparent'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'var(--tint-3)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
+        >
+          <Icon name="arrowRight" size={14} />
+        </button>
+      </div>
 
-        {/* Suggestion chips */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
-          {chips.map(chip => (
-            <button
-              key={chip.label}
-              onClick={() => setValue(chip.prompt)}
-              style={{
-                padding: '7px 12px', borderRadius: 99,
-                background: 'var(--tint-2)',
-                border: '1px solid var(--border-strong)',
-                color: 'var(--text-2)', fontSize: 12.5,
-                cursor: 'pointer', transition: 'all 0.15s',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(117,91,227,0.15)'; e.currentTarget.style.borderColor = 'var(--purple)'; e.currentTarget.style.color = 'var(--text-1)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'var(--tint-2)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-2)'; }}
-            >
-              {chip.emoji} {chip.label}
-            </button>
-          ))}
-        </div>
+      {/* Suggestion chips */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+        {chips.map(chip => (
+          <button
+            key={chip.label}
+            onClick={() => setValue(chip.prompt)}
+            style={{
+              padding: '7px 12px', borderRadius: 99,
+              background: 'var(--tint-2)',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-2)', fontSize: 12.5,
+              cursor: 'pointer', transition: 'all 0.15s',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,113,227,0.12)'; e.currentTarget.style.borderColor = 'var(--purple)'; e.currentTarget.style.color = 'var(--text-1)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--tint-2)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-2)'; }}
+          >
+            {chip.emoji} {chip.label}
+          </button>
+        ))}
       </div>
     </div>
   );
