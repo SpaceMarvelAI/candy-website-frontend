@@ -140,6 +140,16 @@ const iconPaths = {
       <polyline points="8 6 2 12 8 18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
     </>
   ),
+  voicebot: (
+    <>
+      <line x1="2"  y1="12" x2="2"  y2="12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="6"  y1="8"  x2="6"  y2="16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="10" y1="4"  x2="10" y2="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="14" y1="7"  x2="14" y2="17" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="18" y1="10" x2="18" y2="14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="22" y1="12" x2="22" y2="12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+    </>
+  ),
 };
 
 export function Icon({ name, size = 16, className = '', style = {} }) {

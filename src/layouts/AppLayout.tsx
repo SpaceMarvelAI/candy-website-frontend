@@ -6,7 +6,7 @@ export default function AppLayout({ children }) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '76px 1fr',
+        gridTemplateColumns: '56px 1fr',
         minHeight: '100vh',
       }}
     >

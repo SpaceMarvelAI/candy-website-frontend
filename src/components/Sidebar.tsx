@@ -6,8 +6,8 @@ import Icon from '../assets/icons';
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout constants
 // ─────────────────────────────────────────────────────────────────────────────
-const COLLAPSED_W = 76;
-const EXPANDED_W  = 248;
+const COLLAPSED_W = 56;
+const EXPANDED_W  = 220;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Navigation config — single source of truth for all sidebar routes.
@@ -17,7 +17,7 @@ const NAV_SECTIONS = [
   {
     label: 'Main',
     items: [
-      { id: 'dashboard', label: 'Voice Bots',  icon: 'grid',     path: '/dashboard' },
+      { id: 'dashboard', label: 'Voice Bots',  icon: 'voicebot', path: '/dashboard' },
       { id: 'chatbots',  label: 'Chatbots',   icon: 'chat',     path: '/chatbots', badge: 'NEW' },
       { id: 'voice',     label: 'Live Calls', icon: 'mic',      path: '/live' },
       { id: 'analytics', label: 'Analytics',  icon: 'chart',    path: '/analytics' },
@@ -77,7 +77,7 @@ export default function Sidebar() {
           display: 'flex',
           flexDirection: 'column',
           gap: 2,
-          padding: expanded ? '20px 14px' : '20px 12px',
+          padding: expanded ? '14px 10px' : '14px 8px',
           background: 'var(--sidebar-bg)',
           borderRight: '1px solid var(--border)',
           overflowY: 'auto',
@@ -86,6 +86,19 @@ export default function Sidebar() {
           zIndex: 50,
         }}
       >
+
+        {/* ── Workspace branding ── */}
+        <div style={{ ...styles.wsRow, marginBottom: 14, padding: '2px 2px' }}>
+          <div style={styles.wsAvatar}>
+            <Icon name="grid" size={13} />
+          </div>
+          {expanded && (
+            <div style={styles.wsMeta as React.CSSProperties}>
+              <span style={styles.wsName}>SpaceMarvel</span>
+              <span style={styles.wsPlan}>Pro workspace</span>
+            </div>
+          )}
+        </div>
 
         {/* ── Nav sections ── */}
         {NAV_SECTIONS.map(section => (
@@ -107,10 +120,10 @@ export default function Sidebar() {
                   style={{
                     ...styles.navBtn,
                     justifyContent: 'center',
-                    padding: expanded ? '10px 12px' : 0,
-                    width:  expanded ? '100%' : 44,
-                    height: expanded ? 'auto' : 44,
-                    margin: expanded ? '0 0 2px 0' : '0 auto 6px',
+                    padding: expanded ? '8px 10px' : 0,
+                    width:  expanded ? '100%' : 36,
+                    height: expanded ? 'auto' : 36,
+                    margin: expanded ? '0 0 2px 0' : '0 auto 4px',
                     borderRadius: expanded ? 10 : 12,
                     background: isActive
                       ? 'rgba(0, 113, 227, 0.15)'
@@ -123,7 +136,7 @@ export default function Sidebar() {
                 >
                   {isActive && expanded && <span style={styles.accentBar} />}
 
-                  <Icon name={item.icon} size={20} />
+                  <Icon name={item.icon} size={16} />
 
                   {expanded && (
                     <>
@@ -168,15 +181,16 @@ const styles = {
     minWidth: 0,
   },
   wsAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
-    background: 'var(--grad-brand)',
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    background: 'var(--tint-2)',
+    border: '1px solid var(--border)',
     display: 'grid',
     placeItems: 'center',
     fontWeight: 700,
     fontSize: 14,
-    color: '#fff',
+    color: 'var(--text-2)',
     flexShrink: 0,
   },
   wsMeta: {

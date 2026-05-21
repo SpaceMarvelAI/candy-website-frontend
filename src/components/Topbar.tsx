@@ -29,7 +29,7 @@ export default function Topbar() {
     : null;
 
   const iconBtnStyle: React.CSSProperties = {
-    width: 38, height: 38,
+    width: 32, height: 32,
     background: 'transparent',
     border: '1px solid var(--border)',
     borderRadius: 10,
@@ -65,8 +65,10 @@ export default function Topbar() {
   return (
     <header
       style={{
-        height: 64,
-        padding: '0 28px',
+        height: 48,
+        width: '100%',
+        boxSizing: 'border-box',
+        padding: '0 20px',
         display: 'flex',
         alignItems: 'center',
         gap: 16,
@@ -133,7 +135,6 @@ export default function Topbar() {
       {/* Right actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
         {[
-          { icon: 'zap',  tip: "What's new" },
           { icon: 'bell', tip: 'Notifications', dot: true },
         ].map(({ icon, tip, dot }) => (
           <button
@@ -183,8 +184,8 @@ export default function Topbar() {
             <button
               onClick={() => setShowProfile(p => !p)}
               style={{
-                width: 38, height: 38,
-                borderRadius: 10,
+                width: 32, height: 32,
+                borderRadius: 8,
                 background: 'var(--grad-brand)',
                 display: 'grid', placeItems: 'center',
                 fontWeight: 700, fontSize: 13, color: '#fff',
@@ -335,8 +336,8 @@ export default function Topbar() {
             onClick={redirectToSSO}
             className="btn-primary-shimmer"
             style={{
-              height: 38,
-              padding: '0 16px',
+              height: 32,
+              padding: '0 14px',
               background: 'var(--grad-brand)',
               color: '#fff',
               border: 'none',

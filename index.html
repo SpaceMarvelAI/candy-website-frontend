@@ -16,11 +16,7 @@
       (function () {
         try {
           var saved = localStorage.getItem('theme');
-          var prefersLight = window.matchMedia &&
-            window.matchMedia('(prefers-color-scheme: light)').matches;
-          var theme = saved === 'light' || saved === 'dark'
-            ? saved
-            : (prefersLight ? 'light' : 'dark');
+          var theme = (saved === 'light' || saved === 'dark') ? saved : 'light';
           document.documentElement.setAttribute('data-theme', theme);
         } catch (e) {}
       })();
