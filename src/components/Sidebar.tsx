@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useTheme } from '../hooks/useTheme';
 import Icon from '../assets/icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -14,6 +15,13 @@ const EXPANDED_W  = 220;
 // `path` is the React Router path; null items show a "coming soon" toast.
 // ─────────────────────────────────────────────────────────────────────────────
 const NAV_SECTIONS = [
+  {
+    label: 'Products',
+    items: [
+      { id: 'metaspace', label: 'Metaspace', icon: '', img: '/Metaspace.png', path: null },
+      { id: 'finixy',    label: 'Finixy',    icon: '', img: '/Finixy.svg',   path: null },
+    ],
+  },
   {
     label: 'Main',
     items: [
@@ -40,9 +48,15 @@ const PATH_TO_NAV: [string, string][] = [
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Sidebar() {
   const { addToast } = useApp();
-  const navigate  = useNavigate();
-  const location  = useLocation();
+  const { theme }  = useTheme();
+  const navigate   = useNavigate();
+  const location   = useLocation();
   const [expanded, setExpanded] = useState(false);
+
+  // Dark theme → white logos; light theme → dark logos
+  const imgFilter = theme === 'dark'
+    ? 'brightness(0) invert(1)'
+    : 'brightness(0)';
 
   // Derive the active nav item from the current URL pathname.
   const activeId = PATH_TO_NAV.find(([prefix]) =>
@@ -136,7 +150,15 @@ export default function Sidebar() {
                 >
                   {isActive && expanded && <span style={styles.accentBar} />}
 
-                  <Icon name={item.icon} size={16} />
+                  {(item as any).img ? (
+                    <img
+                      src={(item as any).img}
+                      alt={item.label}
+                      style={{ width: 22, height: 22, objectFit: 'contain', filter: imgFilter, flexShrink: 0 }}
+                    />
+                  ) : (
+                    <Icon name={item.icon} size={16} />
+                  )}
 
                   {expanded && (
                     <>
@@ -150,18 +172,6 @@ export default function Sidebar() {
           </div>
         ))}
 
-        {/* ── Upgrade CTA — only shown when expanded ── */}
-        <div style={{ marginTop: 'auto' }}>
-          {expanded && (
-            <div style={styles.upgradeCard} className="sidebar-footer-glow">
-              <p style={styles.upgradeTitle}>Upgrade to Enterprise</p>
-              <p style={styles.upgradeSub}>Unlimited agents, HIPAA, dedicated support.</p>
-              <button style={styles.upgradeCta}>
-                Contact sales <Icon name="arrowRight" size={10} />
-              </button>
-            </div>
-          )}
-        </div>
 
       </div>
     </aside>
@@ -171,7 +181,7 @@ export default function Sidebar() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles
 // ─────────────────────────────────────────────────────────────────────────────
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   wsRow: {
     display: 'flex',
     alignItems: 'center',
