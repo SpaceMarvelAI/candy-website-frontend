@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef } f
 import { useNavigate, useLocation } from 'react-router-dom';
 import { seedChatMessages } from '../utils/mockData';
 import { loadStoredUser, logout as apiLogout, ssoCallback, type AuthUser } from '../api/auth';
+import { themeStore } from '../hooks/useTheme';
 
 // Bidirectional mapping between legacy view names and URL paths.
 // All existing showView('dashboard') calls keep working unchanged.
@@ -68,6 +69,7 @@ export function AppProvider({ children }) {
   }, []);
 
   const signedIn = useCallback((u: AuthUser) => {
+    themeStore.set('light');
     setUser(u);
     navigate('/dashboard');
   }, [navigate]);
@@ -80,6 +82,15 @@ export function AppProvider({ children }) {
     setUser(null);
     navigate('/', { replace: true });
   }, [navigate]);
+
+  // Clear user + redirect to SSO when the API client fires a 401
+  useEffect(() => {
+    function onAuthExpired() {
+      setUser(null);
+    }
+    window.addEventListener('candy:auth-expired', onAuthExpired);
+    return () => window.removeEventListener('candy:auth-expired', onAuthExpired);
+  }, []);
 
   // Intercept ?sso_token= on ANY page (SpaceMarvel may redirect to /dashboard)
   useEffect(() => {
@@ -94,6 +105,7 @@ export function AppProvider({ children }) {
 
     ssoCallback(token)
       .then(({ user: u }) => {
+        themeStore.set('light');
         setUser(u);
         navigate('/dashboard', { replace: true });
       })

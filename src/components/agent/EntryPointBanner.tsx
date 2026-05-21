@@ -86,7 +86,7 @@ function EndpointRow({ label, value, mono = true }: { label: string; value: stri
           border: '1px solid var(--border)',
           borderRadius: 6,
           padding: '4px 9px',
-          fontFamily: mono ? "'JetBrains Mono','Fira Code',monospace" : 'inherit',
+          fontFamily: mono ? "'Zalando Sans'" : 'inherit',
           overflowX: 'auto', whiteSpace: 'nowrap',
           minWidth: 0,
         }}

@@ -312,7 +312,7 @@ export default function FlowsPage() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display:'flex', height:'100%', minHeight:'calc(100vh - 56px)',
+    <div style={{ display:'flex', height:'calc(100vh - 48px)',
       background:'var(--bg-0)', position:'relative', overflow:'hidden' }}>
 
       {/* ── Left panel ─────────────────────────────────────────────────────── */}

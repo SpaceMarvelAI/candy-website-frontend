@@ -248,7 +248,7 @@ const textarea = {
   borderRadius: 10,
   padding: '14px 16px',
   fontSize: 13.5,
-  fontFamily: "'JetBrains Mono', 'SF Mono', Menlo, monospace",
+  fontFamily: "'Zalando Sans'",
   lineHeight: 1.55,
   color: 'var(--text-1)',
   outline: 'none',

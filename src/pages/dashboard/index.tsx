@@ -23,7 +23,7 @@ export default function DashboardPage() {
             lineHeight: 1.1, marginBottom: 12, color: 'var(--text-1)',
           }}
         >
-          Your <span className="grad-text">meta workspace</span> is ready.
+          Your meta workspace is ready.
         </h1>
         <p style={{ color: 'var(--text-3)', fontSize: 15, maxWidth: 560 }}>
           Chat with AI, build automations, and deploy voice agents across industries — from a single command center.

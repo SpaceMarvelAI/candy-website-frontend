@@ -11,7 +11,7 @@ import KnowledgeBase from './KnowledgeBase';
 import PromptEditor from './PromptEditor';
 import LanguagePicker from './LanguagePicker';
 import TestPanel from './TestPanel';
-import AutomationTab from './AutomationTab';
+import SkillsPicker from './SkillsPicker';
 import EntryPointBanner from './EntryPointBanner';
 import { useAgent } from '../../hooks/useAgent';
 import { publishAgent } from '../../api/agents';
@@ -55,10 +55,11 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
   const [publishing, setPublishing]         = useState(false);
   const [statusOverride, setStatusOverride] = useState<string | null>(null);
   const [embedOpen, setEmbedOpen]           = useState(false);
-  const [kbOpen,     setKbOpen]     = useState(false);
-  const [langOpen,   setLangOpen]   = useState(false);
-  const [reqOpen,    setReqOpen]    = useState(false);
-  const [autoOpen,   setAutoOpen]   = useState(false);
+  const [kbOpen,       setKbOpen]       = useState(false);
+  const [langOpen,     setLangOpen]     = useState(false);
+  const [reqOpen,      setReqOpen]      = useState(false);
+  const [skillsOpen,   setSkillsOpen]   = useState(false);
+  const [skillsCount,  setSkillsCount]  = useState(0);
 
   const effectivePrompt = promptText || defaultPrompt;
   const status     = statusOverride || agent?.agent_flow_status || null;
@@ -148,6 +149,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
           category={category}
           slug={slug}
           agents={agents}
+          loading={loading}
           selectedId={agent?.id ?? null}
           onSelect={id => { selectAgent(id); setStatusOverride(null); }}
           onCreate={createNewAgent}
@@ -197,8 +199,20 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
             </div>
           </AccordionItem>
 
-          <AccordionItem open={autoOpen} onToggle={() => setAutoOpen(o => !o)} label="Automations"    icon="🔌" color={color}>
-            <AutomationTab agentId={agent?.id ?? null} agentSlug={slug} tint={tint} />
+          <AccordionItem
+            open={skillsOpen}
+            onToggle={() => setSkillsOpen(o => !o)}
+            label="Skills"
+            icon="🧩"
+            color={color}
+            badge={skillsCount > 0 ? skillsCount : undefined}
+          >
+            <SkillsPicker
+              agentId={agent?.id ?? null}
+              useCaseSlug={slug}
+              tint={tint}
+              onCountChange={setSkillsCount}
+            />
           </AccordionItem>
 
           <AccordionItem open={reqOpen}  onToggle={() => setReqOpen(o => !o)}  label="Requirements"   icon="⚡" color={color}>
@@ -230,13 +244,14 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
 
 // ── Accordion item ────────────────────────────────────────────────────────────
 function AccordionItem({
-  open, onToggle, label, icon, color, children,
+  open, onToggle, label, icon, color, badge, children,
 }: {
   open: boolean;
   onToggle: () => void;
   label: string;
   icon: string;
   color: string;
+  badge?: number;
   children: React.ReactNode;
 }) {
   return (
@@ -263,6 +278,19 @@ function AccordionItem({
       >
         <span style={{ fontSize: 15 }}>{icon}</span>
         <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
+        {badge !== undefined && badge > 0 && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            minWidth: 18, height: 18, borderRadius: 9,
+            background: `${color}30`,
+            border: `1px solid ${color}55`,
+            color: color,
+            fontSize: 10.5, fontWeight: 700,
+            padding: '0 5px',
+          }}>
+            {badge}
+          </span>
+        )}
         <svg
           width="12" height="12" viewBox="0 0 12 12" fill="none"
           stroke="currentColor" strokeWidth="2" strokeLinecap="round"

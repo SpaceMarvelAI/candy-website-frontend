@@ -5,6 +5,14 @@ import ToastHost   from './components/Toast';
 import AppLayout   from './layouts/AppLayout';
 import { redirectToSSO } from './utils/sso';
 import { useApp } from './context/AppContext';
+import {
+  DashboardSkeleton,
+  LiveCallsSkeleton,
+  AnalyticsSkeleton,
+  WebhooksSkeleton,
+  FlowsSkeleton,
+  ChatbotsSkeleton,
+} from './components/PageSkeletons';
 
 
 const LandingPage     = lazy(() => import('./pages/landing'));
@@ -48,6 +56,24 @@ function PageLoader() {
   );
 }
 
+function DefaultContentSkeleton() {
+  return (
+    <div style={{ padding: '32px 40px 60px' }}>
+      <div className="skeleton" style={{ width: '100%', height: 400, borderRadius: 'var(--radius-lg)' }} />
+    </div>
+  );
+}
+
+function RootRedirect() {
+  const { user } = useApp();
+  if (user) return <Navigate to="/dashboard" replace />;
+  return (
+    <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
+      <LandingPage />
+    </div>
+  );
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useApp();
   if (!user) {
@@ -65,18 +91,31 @@ function WithLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AppRoute({
+  children, skeleton,
+}: {
+  children: React.ReactNode;
+  skeleton?: React.ReactNode;
+}) {
+  return (
+    <ProtectedRoute>
+      <WithLayout>
+        <Suspense fallback={skeleton ?? <DefaultContentSkeleton />}>
+          {children}
+        </Suspense>
+      </WithLayout>
+    </ProtectedRoute>
+  );
+}
+
 export default function App() {
   return (
     <>
       <AmbientBg />
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Landing — shown at root and as fallback for unknown paths */}
-          <Route path="/" element={
-            <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
-              <LandingPage />
-            </div>
-          } />
+          {/* Landing — redirects to /dashboard if already signed in */}
+          <Route path="/" element={<RootRedirect />} />
 
           {/* /auth — SSO entry point from SpaceMarvel (?sso_token=…)
               AppContext intercepts the token on any page, so this just
@@ -90,17 +129,17 @@ export default function App() {
           <Route path="/sso/callback" element={<SSOCallbackPage />} />
 
           {/* App views — rendered inside AppLayout (sidebar + topbar) */}
-          <Route path="/dashboard"      element={<ProtectedRoute><WithLayout><DashboardPage /></WithLayout></ProtectedRoute>} />
+          <Route path="/dashboard"      element={<AppRoute skeleton={<DashboardSkeleton />}><DashboardPage /></AppRoute>} />
           <Route path="/live"           element={<Navigate to="/live/demo" replace />} />
-          <Route path="/live/:tab"      element={<ProtectedRoute><WithLayout><LiveCallsPage /></WithLayout></ProtectedRoute>} />
-          <Route path="/hrchat"         element={<ProtectedRoute><WithLayout><HRFlowPage /></WithLayout></ProtectedRoute>} />
+          <Route path="/live/:tab"      element={<AppRoute skeleton={<LiveCallsSkeleton />}><LiveCallsPage /></AppRoute>} />
+          <Route path="/hrchat"         element={<AppRoute><HRFlowPage /></AppRoute>} />
           <Route path="/analytics"      element={<Navigate to="/analytics/summary" replace />} />
-          <Route path="/analytics/:tab" element={<ProtectedRoute><WithLayout><AnalyticsPage /></WithLayout></ProtectedRoute>} />
-          <Route path="/webhooks"       element={<ProtectedRoute><WithLayout><WebhooksPage /></WithLayout></ProtectedRoute>} />
-          <Route path="/flows"          element={<ProtectedRoute><WithLayout><FlowsPage /></WithLayout></ProtectedRoute>} />
+          <Route path="/analytics/:tab" element={<AppRoute skeleton={<AnalyticsSkeleton />}><AnalyticsPage /></AppRoute>} />
+          <Route path="/webhooks"       element={<AppRoute skeleton={<WebhooksSkeleton />}><WebhooksPage /></AppRoute>} />
+          <Route path="/flows"          element={<AppRoute skeleton={<FlowsSkeleton />}><FlowsPage /></AppRoute>} />
 
           {/* Chatbots landing — must be listed before /chatbots/* sub-routes */}
-          <Route path="/chatbots"        element={<ProtectedRoute><WithLayout><ChatbotsPage /></WithLayout></ProtectedRoute>} />
+          <Route path="/chatbots"        element={<AppRoute skeleton={<ChatbotsSkeleton />}><ChatbotsPage /></AppRoute>} />
 
           {/* Chatbot workspaces — full-screen, no sidebar */}
           <Route path="/chatbots/cs"     element={<ProtectedRoute><ChatbotCS /></ProtectedRoute>} />

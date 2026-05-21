@@ -1,61 +1,74 @@
 /* ── Google Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Zalando+Sans:ital,wght@0,200..900;1,200..900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* Core palette */
-  --bg-0: #000000;
-  --bg-1: #0a0a0f;
-  --bg-2: #0f0f17;
-  --bg-3: #14141f;
-  --surface: rgba(22, 22, 32, 0.65);
-  --surface-solid: #16161f;
-  --surface-elev: rgba(30, 30, 44, 0.75);
-  --border: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.12);
-  --border-accent: rgba(117, 91, 227, 0.35);
+/* =========================================================
+   DESIGN TOKENS — Apple-inspired, single accent (Blue).
+   Dark and light themes. No gradients, no glows.
+   ========================================================= */
 
-  /* Brand neons */
-  --purple: #755BE3;
-  --purple-hi: #9B82FF;
-  --blue: #18DAFC;
-  --teal: #4FD1C5;
-  --green: #4CAF50;
-  --pink: #E65AFF;
-  --amber: #FFB547;
-  --red: #FF5C7A;
+/* ---------- DARK (default) ---------- */
+:root {
+  /* Canvas + backgrounds */
+  --bg-0: #000000;                        /* pure black canvas */
+  --bg-1: #1d1d1f;                        /* section-alt / sidebar */
+  --bg-2: #272729;                        /* card surface */
+  --bg-3: #28282a;                        /* elevated card */
+  --surface: rgba(29, 29, 31, 0.80);
+  --surface-solid: #1d1d1f;
+  --surface-elev: rgba(39, 39, 41, 0.85);
+
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.20);
+  --border-accent: rgba(0, 113, 227, 0.35);
+
+  /* Accent — Apple Blue */
+  --purple: #0071e3;                      /* kept as --purple for component compat */
+  --purple-hi: #2997ff;
+  --blue: #0071e3;
+  --teal: #30d158;                        /* Apple green */
+  --green: #30d158;
+  --pink: #ff375f;
+  --amber: #ff9f0a;
+  --red: #ff375f;
 
   /* Text */
-  --text-1: #F5F5FA;
-  --text-2: #B4B4C8;
-  --text-3: #7A7A92;
-  --text-4: #4E4E63;
+  --text-1: #ffffff;
+  --text-2: rgba(255, 255, 255, 0.80);
+  --text-3: rgba(255, 255, 255, 0.56);
+  --text-4: rgba(255, 255, 255, 0.32);
 
-  /* Gradients */
-  --grad-brand: linear-gradient(135deg, #755BE3 0%, #18DAFC 100%);
-  --grad-brand-soft: linear-gradient(135deg, rgba(117,91,227,0.25) 0%, rgba(24,218,252,0.18) 100%);
-  --grad-hero: radial-gradient(ellipse at 50% 0%, rgba(117,91,227,0.25) 0%, rgba(24,218,252,0.08) 35%, transparent 70%);
-  --grad-pink: linear-gradient(135deg, #E65AFF 0%, #755BE3 100%);
-  --grad-teal: linear-gradient(135deg, #18DAFC 0%, #4FD1C5 100%);
+  /* Gradients — flat blue, no neon */
+  --grad-brand: linear-gradient(135deg, #0071e3 0%, #2997ff 100%);
+  --grad-brand-soft: rgba(0, 113, 227, 0.12);
+  --grad-hero: transparent;
+  --grad-pink: linear-gradient(135deg, #ff375f 0%, #ff9f0a 100%);
+  --grad-teal: linear-gradient(135deg, #0071e3 0%, #30d158 100%);
 
-  --radius-sm: 10px;
-  --radius: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
+  /* Radii — Apple scale */
+  --radius-sm:  8px;
+  --radius:     11px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
 
-  --shadow-glow-purple: 0 0 40px rgba(117, 91, 227, 0.35);
-  --shadow-glow-blue: 0 0 40px rgba(24, 218, 252, 0.25);
-  --shadow-card: 0 1px 0 rgba(255,255,255,0.03) inset, 0 20px 40px -20px rgba(0,0,0,0.6);
+  /* Shadows — Apple card shadow, no glows */
+  --shadow-glow-purple: none;
+  --shadow-glow-blue:   none;
+  --shadow-card: rgba(0, 0, 0, 0.5) 3px 5px 30px 0px;
+
+  /* Nav glass */
+  --nav-bg: rgba(0, 0, 0, 0.80);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
   height: 100%;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Zalando Sans';
   background: var(--bg-0);
   color: var(--text-1);
   overflow-x: hidden;
@@ -70,49 +83,13 @@ button, input, textarea { font-family: inherit; }
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
 
-/* ── Ambient Background ── */
+/* ── Ambient Background — flat, no gradient blobs ── */
 .ambient-bg {
   position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  background:
-    radial-gradient(ellipse 800px 600px at 15% 0%, rgba(117,91,227,0.12), transparent 60%),
-    radial-gradient(ellipse 900px 700px at 85% 100%, rgba(24,218,252,0.08), transparent 60%),
-    var(--bg-0);
-}
-.ambient-bg::after {
-  content: "";
-  position: absolute; inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  opacity: 0.4; mix-blend-mode: overlay;
-}
-
-/* ── Auth aura animation ── */
-@keyframes aura {
-  0%   { transform: scale(1) rotate(0deg); }
-  100% { transform: scale(1.15) rotate(10deg); }
-}
-.auth-aura {
-  position: absolute; inset: -80px; z-index: 0;
-  background:
-    radial-gradient(circle at 30% 30%, rgba(117,91,227,0.55), transparent 50%),
-    radial-gradient(circle at 70% 70%, rgba(24,218,252,0.4), transparent 55%);
-  filter: blur(60px);
-  animation: aura 8s ease-in-out infinite alternate;
-  opacity: 0.8;
-}
-
-/* ── Logo shine ── */
-@keyframes shine {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-.logo-mark-shine::before {
-  content: "";
-  position: absolute; inset: 0;
-  background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.3) 50%, transparent 60%);
-  animation: shine 3s infinite;
+  background: var(--bg-0);
 }
 
 /* ── Pulse ── */
@@ -120,7 +97,7 @@ button, input, textarea { font-family: inherit; }
   0%, 100% { transform: scale(1); opacity: 1; }
   50%       { transform: scale(1.4); opacity: 0.6; }
 }
-.pulse-dot { animation: pulse-glow 2s infinite; }
+.pulse-dot    { animation: pulse-glow 2.0s infinite; }
 .pulse-dot-sm { animation: pulse-glow 1.5s infinite; }
 .pulse-dot-xs { animation: pulse-glow 1.2s infinite; }
 
@@ -141,7 +118,7 @@ button, input, textarea { font-family: inherit; }
 .progress-shimmer::after {
   content: "";
   position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
   animation: shimmer 2s infinite;
 }
 
@@ -163,7 +140,7 @@ button, input, textarea { font-family: inherit; }
 
 /* ── Row flash ── */
 @keyframes rowFlash {
-  0%   { background: rgba(24,218,252,0.08); }
+  0%   { background: rgba(0, 113, 227, 0.10); }
   100% { background: transparent; }
 }
 .row-flash { animation: rowFlash 1.2s ease-out; }
@@ -178,6 +155,30 @@ button, input, textarea { font-family: inherit; }
   to { transform: rotate(360deg); }
 }
 .toast-in { animation: toastIn 0.3s ease-out; }
+
+/* ── Waveform animation ── */
+@keyframes waveBar {
+  0%   { transform: scaleY(0.12); }
+  100% { transform: scaleY(1);    }
+}
+
+/* ── Skeleton loading ── */
+@keyframes skeletonShimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--tint-2) 25%,
+    var(--tint-4) 50%,
+    var(--tint-2) 75%
+  );
+  background-size: 400px 100%;
+  animation: skeletonShimmer 1.6s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
 
 /* ── Gradient text utility ── */
 .grad-text {
@@ -198,7 +199,7 @@ button, input, textarea { font-family: inherit; }
   content: "";
   position: absolute; left: -14px; top: 50%; transform: translateY(-50%);
   width: 3px; height: 18px;
-  background: var(--grad-brand);
+  background: #0071e3;
   border-radius: 0 3px 3px 0;
 }
 
@@ -206,7 +207,7 @@ button, input, textarea { font-family: inherit; }
 .btn-primary-shimmer::before {
   content: "";
   position: absolute; inset: 0;
-  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.25) 50%, transparent 70%);
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.18) 50%, transparent 70%);
   transform: translateX(-100%);
   transition: transform 0.6s;
 }
@@ -218,7 +219,7 @@ button, input, textarea { font-family: inherit; }
   content: attr(data-tip);
   position: absolute; bottom: 100%; left: 50%;
   transform: translateX(-50%) translateY(-8px);
-  background: var(--bg-2); color: var(--text-1); font-size: 11px;
+  background: var(--text-1); color: var(--bg-0); font-size: 11px;
   padding: 5px 9px; border-radius: 6px;
   border: 1px solid var(--border-strong);
   white-space: nowrap; pointer-events: none;
@@ -226,14 +227,6 @@ button, input, textarea { font-family: inherit; }
   z-index: 100;
 }
 .tooltip-wrap:hover::after { opacity: 1; }
-
-/* ── Sidebar footer radial corner ── */
-.sidebar-footer-glow::before {
-  content: "";
-  position: absolute; width: 80px; height: 80px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(117,91,227,0.5), transparent 70%);
-  top: -30px; right: -20px;
-}
 
 /* ── Status-tag dot ── */
 .status-tag-dot::before {
@@ -259,7 +252,6 @@ button, input, textarea { font-family: inherit; }
   display: inline-block;
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--green);
-  box-shadow: 0 0 10px var(--green);
   margin-right: 6px;
   animation: pulse-glow 1.2s infinite;
 }
@@ -270,42 +262,35 @@ button, input, textarea { font-family: inherit; }
   display: inline-block;
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--blue);
-  box-shadow: 0 0 8px var(--blue);
   margin-right: 5px;
   animation: pulse-glow 1.5s infinite;
 }
 
-/* ── Light theme overrides ──
- * The dark theme defined in :root above is the default. When the user opts in,
- * we set [data-theme="light"] on <html> and these variables take over. Brand
- * neon colors (purple/blue/pink/etc.) intentionally stay — they're identity.
- * --------------------------------------------------------------------------*/
+/* =========================================================
+   LIGHT THEME
+   ========================================================= */
 [data-theme="light"] {
-  --bg-0: #FFFFFF;
-  --bg-1: #F5F5FA;
-  --bg-2: #ECEDF2;
-  --bg-3: #E2E3EA;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-solid: #FFFFFF;
-  --surface-elev: rgba(255, 255, 255, 0.94);
-  --border: rgba(15, 15, 25, 0.08);
-  --border-strong: rgba(15, 15, 25, 0.14);
-  --border-accent: rgba(117, 91, 227, 0.45);
+  --bg-0: #f5f5f7;
+  --bg-1: #ffffff;
+  --bg-2: #ffffff;
+  --bg-3: #fafafc;
+  --surface: rgba(255, 255, 255, 0.80);
+  --surface-solid: #ffffff;
+  --surface-elev: rgba(255, 255, 255, 0.96);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --border-accent: rgba(0, 113, 227, 0.35);
 
-  --text-1: #15151E;
-  --text-2: #494A5C;
-  --text-3: #74758A;
-  --text-4: #A1A2B5;
+  --text-1: #1d1d1f;
+  --text-2: rgba(0, 0, 0, 0.80);
+  --text-3: rgba(0, 0, 0, 0.48);
+  --text-4: rgba(0, 0, 0, 0.28);
 
-  --grad-hero: radial-gradient(ellipse at 50% 0%, rgba(117,91,227,0.18) 0%, rgba(24,218,252,0.06) 35%, transparent 70%);
-  --shadow-card: 0 1px 0 rgba(255,255,255,0.6) inset, 0 12px 30px -16px rgba(15,15,25,0.18);
+  --grad-hero: transparent;
+  --shadow-card: rgba(0, 0, 0, 0.22) 3px 5px 30px 0px;
 }
 
-/* ── Theme-toggle transition ──
- * Applied only while the theme is actively swapping (a class added by
- * useTheme.ts for ~400ms). Scoping it this way means hover/focus
- * transitions on individual elements stay snappy the rest of the time.
- * --------------------------------------------------------------------------*/
+/* ── Theme-toggle transition ── */
 html.theme-transitioning,
 html.theme-transitioning *,
 html.theme-transitioning *::before,
@@ -318,49 +303,36 @@ html.theme-transitioning *::after {
               box-shadow       0.4s ease !important;
 }
 
-/* Light-mode adjustments for the ambient background and topbar */
 [data-theme="light"] .ambient-bg {
-  background:
-    radial-gradient(ellipse 800px 600px at 15% 0%, rgba(117,91,227,0.10), transparent 60%),
-    radial-gradient(ellipse 900px 700px at 85% 100%, rgba(24,218,252,0.07), transparent 60%),
-    var(--bg-0);
+  background: var(--bg-0);
 }
-[data-theme="light"] .ambient-bg::after { opacity: 0.18; mix-blend-mode: multiply; }
 
-/* ── Theme-aware surface tokens ──
- * Used by inputs, cards, hero panels, chat bubbles, etc. that previously
- * hardcoded `rgba(0,0,0,…)` values. Default values target the dark theme;
- * the [data-theme="light"] block below overrides them.
- * --------------------------------------------------------------------------*/
+/* ── Surface tokens ── */
 :root {
-  --input-bg:        rgba(0, 0, 0, 0.35);
-  --input-bg-strong: rgba(0, 0, 0, 0.50);
+  --input-bg:        rgba(29, 29, 31, 0.80);
+  --input-bg-strong: rgba(29, 29, 31, 0.95);
   --surface-soft:    rgba(0, 0, 0, 0.22);
-  --hero-bg:         linear-gradient(180deg, rgba(22,22,32,0.80), rgba(15,15,23,0.60));
-  --card-bg:         linear-gradient(180deg, rgba(22,22,32,0.75), rgba(15,15,23,0.60));
-  --card-bg-strong:  linear-gradient(180deg, rgba(22,22,32,0.90), rgba(15,15,23,0.90));
-  --sidebar-bg:      linear-gradient(180deg, #0c0c14 0%, #08080f 100%);
+  --hero-bg:         #000000;
+  --card-bg:         #272729;
+  --card-bg-strong:  #1d1d1f;
+  --sidebar-bg:      #1d1d1f;
   --shadow-deep:     0 20px 40px -10px rgba(0, 0, 0, 0.6);
   --shadow-rail:     8px 0 32px rgba(0, 0, 0, 0.45);
 }
 
 [data-theme="light"] {
-  --input-bg:        rgba(255, 255, 255, 0.70);
-  --input-bg-strong: rgba(255, 255, 255, 0.95);
-  --surface-soft:    rgba(15, 15, 25, 0.04);
-  --hero-bg:         linear-gradient(180deg, rgba(255,255,255,0.85), rgba(245,245,250,0.65));
-  --card-bg:         linear-gradient(180deg, rgba(255,255,255,0.85), rgba(245,247,252,0.70));
-  --card-bg-strong:  linear-gradient(180deg, rgba(255,255,255,0.96), rgba(245,247,252,0.90));
-  --sidebar-bg:      linear-gradient(180deg, #FAFAFD 0%, #F1F2F7 100%);
-  --shadow-deep:     0 20px 40px -10px rgba(15, 15, 25, 0.18);
-  --shadow-rail:     8px 0 32px rgba(15, 15, 25, 0.10);
+  --input-bg:        rgba(255, 255, 255, 0.80);
+  --input-bg-strong: rgba(255, 255, 255, 0.98);
+  --surface-soft:    rgba(0, 0, 0, 0.04);
+  --hero-bg:         #f5f5f7;
+  --card-bg:         #ffffff;
+  --card-bg-strong:  #ffffff;
+  --sidebar-bg:      #f5f5f7;
+  --shadow-deep:     0 20px 40px -10px rgba(0, 0, 0, 0.18);
+  --shadow-rail:     8px 0 32px rgba(0, 0, 0, 0.10);
 }
 
-/* ── Tinted overlay tokens ──
- * Replace `rgba(255,255,255,0.0X)` overlays that were dark-only.
- * In light mode they invert to subtle dark tints so chips/cards/hover
- * affordances remain visible.
- * --------------------------------------------------------------------------*/
+/* ── Tint tokens ── */
 :root {
   --tint-1: rgba(255, 255, 255, 0.03);
   --tint-2: rgba(255, 255, 255, 0.05);
@@ -368,8 +340,8 @@ html.theme-transitioning *::after {
   --tint-4: rgba(255, 255, 255, 0.08);
 }
 [data-theme="light"] {
-  --tint-1: rgba(15, 15, 25, 0.04);
-  --tint-2: rgba(15, 15, 25, 0.06);
-  --tint-3: rgba(15, 15, 25, 0.08);
-  --tint-4: rgba(15, 15, 25, 0.11);
+  --tint-1: rgba(0, 0, 0, 0.04);
+  --tint-2: rgba(0, 0, 0, 0.06);
+  --tint-3: rgba(0, 0, 0, 0.08);
+  --tint-4: rgba(0, 0, 0, 0.11);
 }

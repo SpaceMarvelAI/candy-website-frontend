@@ -140,6 +140,32 @@ const iconPaths = {
       <polyline points="8 6 2 12 8 18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
     </>
   ),
+  livecall: (
+    <>
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.33 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+      <path d="M14.5 3.5a8.5 8.5 0 0 1 6 6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" fill="none"/>
+      <path d="M15.5 6.5a4.5 4.5 0 0 1 3 3" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" fill="none"/>
+    </>
+  ),
+  flowsnav: (
+    <>
+      <circle cx="4" cy="12" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <circle cx="20" cy="6" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <circle cx="20" cy="18" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <path d="M6.5 12C9 12 14 6 17.5 6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+      <path d="M6.5 12C9 12 14 18 17.5 18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+    </>
+  ),
+  voicebot: (
+    <>
+      <line x1="2"  y1="12" x2="2"  y2="12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="6"  y1="8"  x2="6"  y2="16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="10" y1="4"  x2="10" y2="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="14" y1="7"  x2="14" y2="17" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="18" y1="10" x2="18" y2="14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="22" y1="12" x2="22" y2="12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+    </>
+  ),
 };
 
 export function Icon({ name, size = 16, className = '', style = {} }) {

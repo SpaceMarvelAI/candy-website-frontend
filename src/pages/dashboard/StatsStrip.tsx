@@ -18,16 +18,8 @@ export default function StatsStrip() {
             borderRadius: 'var(--radius)',
             padding: '18px 20px',
             backdropFilter: 'blur(12px)',
-            position: 'relative', overflow: 'hidden',
           }}
         >
-          {/* Top shimmer line */}
-          <div
-            style={{
-              position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-              background: 'linear-gradient(90deg, transparent, var(--border-strong), transparent)',
-            }}
-          />
           <div
             style={{
               fontSize: 12, color: 'var(--text-3)', marginBottom: 8,

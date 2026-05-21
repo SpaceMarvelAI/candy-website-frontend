@@ -24,16 +24,14 @@ const STORAGE_KEY = 'theme';
 
 // ─── Initial theme ─────────────────────────────────────────────────────────
 function getInitialTheme(): Theme {
-  if (typeof window === 'undefined') return 'dark';
+  if (typeof window === 'undefined') return 'light';
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved === 'light' || saved === 'dark') return saved;
   } catch {
     // localStorage may throw in private mode / sandboxed iframes
   }
-  return window.matchMedia?.('(prefers-color-scheme: light)').matches
-    ? 'light'
-    : 'dark';
+  return 'light';
 }
 
 // ─── Module-level state ────────────────────────────────────────────────────
@@ -96,7 +94,7 @@ export function useTheme() {
   const theme = useSyncExternalStore(
     subscribe,
     () => currentTheme,
-    () => 'dark' as Theme, // SSR fallback
+    () => 'light' as Theme, // SSR fallback
   );
 
   const toggleTheme = useCallback(() => {

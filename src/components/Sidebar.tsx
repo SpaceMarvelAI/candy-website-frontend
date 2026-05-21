@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useTheme } from '../hooks/useTheme';
 import Icon from '../assets/icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout constants
 // ─────────────────────────────────────────────────────────────────────────────
-const COLLAPSED_W = 76;
-const EXPANDED_W  = 248;
+const COLLAPSED_W = 56;
+const EXPANDED_W  = 220;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Navigation config — single source of truth for all sidebar routes.
@@ -15,13 +16,20 @@ const EXPANDED_W  = 248;
 // ─────────────────────────────────────────────────────────────────────────────
 const NAV_SECTIONS = [
   {
+    label: 'Products',
+    items: [
+      { id: 'metaspace', label: 'Metaspace', icon: '', img: '/Metaspace.png', path: null },
+      { id: 'finixy',    label: 'Finixy',    icon: '', img: '/Finixy.svg',   path: null },
+    ],
+  },
+  {
     label: 'Main',
     items: [
-      { id: 'dashboard', label: 'Voice Bots',  icon: 'grid',     path: '/dashboard' },
-      { id: 'chatbots',  label: 'Chatbots',   icon: 'chat',     path: '/chatbots', badge: 'NEW' },
-      { id: 'voice',     label: 'Live Calls', icon: 'mic',      path: '/live' },
+      { id: 'dashboard', label: 'Voice Bots',  icon: 'voicebot', path: '/dashboard' },
+      { id: 'chatbots',  label: 'Chatbots',   icon: 'chat',     path: '/chatbots' },
+      { id: 'voice',     label: 'Live Calls', icon: 'livecall', path: '/live' },
       { id: 'analytics', label: 'Analytics',  icon: 'chart',    path: '/analytics' },
-      { id: 'flows',     label: 'Flows',      icon: 'zap',      path: '/flows',     badge: 'NEW' },
+      { id: 'flows',     label: 'Flows',      icon: 'flowsnav', path: '/flows' },
     ],
   },
 ];
@@ -40,9 +48,15 @@ const PATH_TO_NAV: [string, string][] = [
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Sidebar() {
   const { addToast } = useApp();
-  const navigate  = useNavigate();
-  const location  = useLocation();
+  const { theme }  = useTheme();
+  const navigate   = useNavigate();
+  const location   = useLocation();
   const [expanded, setExpanded] = useState(false);
+
+  // Dark theme → white logos; light theme → dark logos
+  const imgFilter = theme === 'dark'
+    ? 'brightness(0) invert(1)'
+    : 'brightness(0)';
 
   // Derive the active nav item from the current URL pathname.
   const activeId = PATH_TO_NAV.find(([prefix]) =>
@@ -77,7 +91,7 @@ export default function Sidebar() {
           display: 'flex',
           flexDirection: 'column',
           gap: 2,
-          padding: expanded ? '20px 14px' : '20px 12px',
+          padding: expanded ? '14px 10px' : '14px 8px',
           background: 'var(--sidebar-bg)',
           borderRight: '1px solid var(--border)',
           overflowY: 'auto',
@@ -86,6 +100,19 @@ export default function Sidebar() {
           zIndex: 50,
         }}
       >
+
+        {/* ── Workspace branding ── */}
+        <div style={{ ...styles.wsRow, marginBottom: 14, padding: '2px 2px' }}>
+          <div style={styles.wsAvatar}>
+            <Icon name="grid" size={13} />
+          </div>
+          {expanded && (
+            <div style={styles.wsMeta as React.CSSProperties}>
+              <span style={styles.wsName}>SpaceMarvel</span>
+              <span style={styles.wsPlan}>Pro workspace</span>
+            </div>
+          )}
+        </div>
 
         {/* ── Nav sections ── */}
         {NAV_SECTIONS.map(section => (
@@ -107,25 +134,31 @@ export default function Sidebar() {
                   style={{
                     ...styles.navBtn,
                     justifyContent: 'center',
-                    padding: expanded ? '10px 12px' : 0,
-                    width:  expanded ? '100%' : 44,
-                    height: expanded ? 'auto' : 44,
-                    margin: expanded ? '0 0 2px 0' : '0 auto 6px',
+                    padding: expanded ? '8px 10px' : 0,
+                    width:  expanded ? '100%' : 36,
+                    height: expanded ? 'auto' : 36,
+                    margin: expanded ? '0 0 2px 0' : '0 auto 4px',
                     borderRadius: expanded ? 10 : 12,
                     background: isActive
-                      ? (expanded
-                          ? 'linear-gradient(90deg, rgba(117,91,227,0.18), rgba(117,91,227,0.04))'
-                          : 'rgba(117,91,227,0.18)')
+                      ? 'rgba(0, 113, 227, 0.15)'
                       : 'transparent',
                     border: isActive
-                      ? '1px solid rgba(117,91,227,0.30)'
+                      ? '1px solid rgba(0, 113, 227, 0.25)'
                       : '1px solid transparent',
                     color: isActive ? 'var(--text-1)' : 'var(--text-2)',
                   }}
                 >
                   {isActive && expanded && <span style={styles.accentBar} />}
 
-                  <Icon name={item.icon} size={20} />
+                  {(item as any).img ? (
+                    <img
+                      src={(item as any).img}
+                      alt={item.label}
+                      style={{ width: 22, height: 22, objectFit: 'contain', filter: imgFilter, flexShrink: 0 }}
+                    />
+                  ) : (
+                    <Icon name={item.icon} size={16} />
+                  )}
 
                   {expanded && (
                     <>
@@ -139,18 +172,6 @@ export default function Sidebar() {
           </div>
         ))}
 
-        {/* ── Upgrade CTA — only shown when expanded ── */}
-        <div style={{ marginTop: 'auto' }}>
-          {expanded && (
-            <div style={styles.upgradeCard} className="sidebar-footer-glow">
-              <p style={styles.upgradeTitle}>Upgrade to Enterprise</p>
-              <p style={styles.upgradeSub}>Unlimited agents, HIPAA, dedicated support.</p>
-              <button style={styles.upgradeCta}>
-                Contact sales <Icon name="arrowRight" size={10} />
-              </button>
-            </div>
-          )}
-        </div>
 
       </div>
     </aside>
@@ -160,7 +181,7 @@ export default function Sidebar() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles
 // ─────────────────────────────────────────────────────────────────────────────
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   wsRow: {
     display: 'flex',
     alignItems: 'center',
@@ -170,15 +191,16 @@ const styles = {
     minWidth: 0,
   },
   wsAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
-    background: 'var(--grad-brand)',
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    background: 'var(--tint-2)',
+    border: '1px solid var(--border)',
     display: 'grid',
     placeItems: 'center',
     fontWeight: 700,
     fontSize: 14,
-    color: '#fff',
+    color: 'var(--text-2)',
     flexShrink: 0,
   },
   wsMeta: {
@@ -250,7 +272,7 @@ const styles = {
     fontSize: 10,
     padding: '2px 7px',
     borderRadius: 99,
-    background: 'rgba(24,218,252,0.15)',
+    background: 'rgba(0, 113, 227, 0.12)',
     color: 'var(--blue)',
     fontWeight: 600,
     letterSpacing: '0.04em',
@@ -259,7 +281,7 @@ const styles = {
     padding: 12,
     border: '1px solid var(--border-strong)',
     borderRadius: 'var(--radius)',
-    background: 'linear-gradient(160deg, rgba(117,91,227,0.12), rgba(24,218,252,0.06))',
+    background: 'rgba(0, 113, 227, 0.08)',
     position: 'relative',
     overflow: 'hidden',
   },
