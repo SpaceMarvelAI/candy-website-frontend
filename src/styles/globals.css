@@ -156,6 +156,12 @@ button, input, textarea { font-family: inherit; }
 }
 .toast-in { animation: toastIn 0.3s ease-out; }
 
+/* ── Waveform animation ── */
+@keyframes waveBar {
+  0%   { transform: scaleY(0.12); }
+  100% { transform: scaleY(1);    }
+}
+
 /* ── Skeleton loading ── */
 @keyframes skeletonShimmer {
   0%   { background-position: -400px 0; }

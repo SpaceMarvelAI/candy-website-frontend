@@ -9,6 +9,7 @@
  *     • Agents — quick overview of every agent on the company.
  */
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import LiveStats from './LiveStats';
@@ -64,9 +65,12 @@ export default function LiveCallsPage() {
   const [agents,    setAgents]       = useState<Agent[]>([]);
   const [loading,   setLoading]      = useState(true);
   const [error,     setError]        = useState<string | null>(null);
-  const [playingId, setPlayingId]       = useState<string | null>(null);
-  const [deletingId, setDeletingId]     = useState<string | null>(null);
-  const [selectedRec, setSelectedRec]   = useState<RecordingRow | null>(null);
+  const [playerRec,     setPlayerRec]     = useState<RecordingRow | null>(null);
+  const [playerPlaying, setPlayerPlaying] = useState(false);
+  const [playerTime,    setPlayerTime]    = useState(0);
+  const [playerDur,     setPlayerDur]     = useState(0);
+  const [deletingId,    setDeletingId]    = useState<string | null>(null);
+  const [selectedRec,   setSelectedRec]   = useState<RecordingRow | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   async function downloadRec(rec: RecordingRow) {
@@ -151,24 +155,72 @@ export default function LiveCallsPage() {
     return () => { try { audioRef.current?.pause(); } catch {} };
   }, []);
 
-  function play(rec: RecordingRow) {
+  function openPlayer(rec: RecordingRow) {
     if (!rec.signed_url) {
       addToast('No playback URL — recording stored locally on the backend.', 'info');
       return;
     }
     if (!audioRef.current) audioRef.current = new Audio();
-    if (playingId === rec.recording_id) {
-      try { audioRef.current.pause(); } catch {}
-      setPlayingId(null);
+    const audio = audioRef.current;
+
+    // Same recording already loaded — toggle play/pause
+    if (playerRec?.recording_id === rec.recording_id) {
+      if (playerPlaying) {
+        audio.pause();
+        setPlayerPlaying(false);
+      } else {
+        audio.play().then(() => setPlayerPlaying(true)).catch(() => addToast('Playback failed.', 'error'));
+      }
       return;
     }
-    audioRef.current.src = rec.signed_url;
-    audioRef.current.play().then(() => setPlayingId(rec.recording_id))
+
+    // New recording
+    audio.pause();
+    audio.src = rec.signed_url;
+    setPlayerRec(rec);
+    setPlayerTime(0);
+    setPlayerDur(0);
+    setPlayerPlaying(false);
+
+    audio.onloadedmetadata = () => setPlayerDur(audio.duration || 0);
+    audio.ontimeupdate     = () => setPlayerTime(audio.currentTime);
+    audio.onended          = () => setPlayerPlaying(false);
+
+    audio.play()
+      .then(() => setPlayerPlaying(true))
       .catch(err => {
         console.warn('[live] play failed', err);
         addToast('Could not play this recording.', 'error');
       });
-    audioRef.current.onended = () => setPlayingId(null);
+  }
+
+  function closePlayer() {
+    try { audioRef.current?.pause(); audioRef.current && (audioRef.current.src = ''); } catch {}
+    setPlayerRec(null);
+    setPlayerPlaying(false);
+    setPlayerTime(0);
+    setPlayerDur(0);
+  }
+
+  function playerToggle() {
+    if (!audioRef.current || !playerRec) return;
+    if (playerPlaying) {
+      audioRef.current.pause();
+      setPlayerPlaying(false);
+    } else {
+      audioRef.current.play().then(() => setPlayerPlaying(true)).catch(() => addToast('Playback failed.', 'error'));
+    }
+  }
+
+  function playerSeek(time: number) {
+    if (!audioRef.current) return;
+    const t = Math.max(0, Math.min(time, audioRef.current.duration || 0));
+    audioRef.current.currentTime = t;
+    setPlayerTime(t);
+  }
+
+  function playerSkip(delta: number) {
+    playerSeek((audioRef.current?.currentTime || 0) + delta);
   }
 
   async function remove(rec: RecordingRow) {
@@ -177,11 +229,7 @@ export default function LiveCallsPage() {
       `Delete this recording permanently?\n\nAgent: ${rec.agent_name || '—'}\nCaptured: ${rec.created_at}\nDuration: ${formatDuration(rec.duration_ms)}`,
     )) return;
     setDeletingId(rec.recording_id);
-    // If the row is currently playing, stop playback first.
-    if (playingId === rec.recording_id) {
-      try { audioRef.current?.pause(); } catch {}
-      setPlayingId(null);
-    }
+    if (playerRec?.recording_id === rec.recording_id) closePlayer();
     try {
       await deleteRecording(rec.recording_id);
       // Optimistically remove from whichever bucket the row lives in.
@@ -305,9 +353,9 @@ export default function LiveCallsPage() {
               ? 'No demo recordings yet — open any agent and click Start test, talk for a bit, then Stop test.'
               : 'No live call recordings yet — these appear once the telephony bridge starts writing live_call rows.'
           }
-          playingId={playingId}
+          playingId={playerRec?.recording_id ?? null}
           deletingId={deletingId}
-          onPlay={play}
+          onPlay={openPlayer}
           onDelete={remove}
           onView={setSelectedRec}
           onDownload={downloadRec}
@@ -319,6 +367,20 @@ export default function LiveCallsPage() {
 
       {selectedRec && (
         <RecordingDetailModal rec={selectedRec} onClose={() => setSelectedRec(null)} onDownload={downloadRec} />
+      )}
+
+      {playerRec && createPortal(
+        <AudioPlayerPopup
+          rec={playerRec}
+          playing={playerPlaying}
+          currentTime={playerTime}
+          duration={playerDur}
+          onPlayPause={playerToggle}
+          onSeek={playerSeek}
+          onSkip={playerSkip}
+          onClose={closePlayer}
+        />,
+        document.body,
       )}
     </div>
   );
@@ -422,7 +484,7 @@ function RecordingsTable({
               {pageRows.map(r => {
                 const isPlaying = playingId === r.recording_id;
                 return (
-                  <tr key={r.recording_id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <tr key={r.recording_id} data-recording-id={r.recording_id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '14px 22px' }}>
                       <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{r.agent_name || '—'}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
@@ -1124,6 +1186,170 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Audio Player Popup ────────────────────────────────────────────────────────
+const WAVE_BARS = [
+  { dur: 0.60, del: 0.00 }, { dur: 0.80, del: 0.10 }, { dur: 0.50, del: 0.20 },
+  { dur: 0.90, del: 0.05 }, { dur: 0.65, del: 0.15 }, { dur: 0.75, del: 0.25 },
+  { dur: 0.55, del: 0.08 }, { dur: 0.85, del: 0.18 }, { dur: 0.70, del: 0.30 },
+  { dur: 0.60, del: 0.12 }, { dur: 0.80, del: 0.22 }, { dur: 0.50, del: 0.04 },
+  { dur: 0.65, del: 0.16 }, { dur: 0.90, del: 0.06 }, { dur: 0.70, del: 0.20 },
+  { dur: 0.55, del: 0.14 }, { dur: 0.75, del: 0.26 }, { dur: 0.85, del: 0.02 },
+  { dur: 0.60, del: 0.09 }, { dur: 0.70, del: 0.19 },
+];
+
+function fmtSecs(s: number) {
+  if (!isFinite(s) || s < 0) return '0:00';
+  const m = Math.floor(s / 60);
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+}
+
+const playerCtrlBtn: React.CSSProperties = {
+  width: 38, height: 38, borderRadius: 10,
+  background: 'var(--tint-3)', border: '1px solid var(--border)',
+  color: 'var(--text-1)', cursor: 'pointer',
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  gap: 3, fontSize: 11, fontWeight: 600, flexShrink: 0,
+};
+
+function AudioPlayerPopup({
+  rec, playing, currentTime, duration,
+  onPlayPause, onSeek, onSkip, onClose,
+}: {
+  rec: RecordingRow;
+  playing: boolean;
+  currentTime: number;
+  duration: number;
+  onPlayPause: () => void;
+  onSeek: (t: number) => void;
+  onSkip: (delta: number) => void;
+  onClose: () => void;
+}) {
+  const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: 28,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 9999,
+        width: 380,
+        background: 'rgba(18,18,26,0.96)',
+        border: '1px solid var(--border-strong)',
+        borderRadius: 'var(--radius-xl)',
+        boxShadow: '0 12px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)',
+        backdropFilter: 'blur(28px)',
+        padding: '16px 18px 18px',
+        display: 'flex', flexDirection: 'column', gap: 14,
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {rec.agent_name || 'Recording'}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
+            {(rec.use_case_slug && SLUG_LABEL[rec.use_case_slug]) || rec.use_case_slug || ''}
+            {rec.created_at ? ` · ${formatTime(rec.created_at)}` : ''}
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+            background: 'var(--tint-2)', border: '1px solid var(--border)',
+            color: 'var(--text-3)', cursor: 'pointer',
+            display: 'grid', placeItems: 'center',
+          }}
+        >
+          <Icon name="x" size={11} />
+        </button>
+      </div>
+
+      {/* Waveform */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2.5, height: 36 }}>
+        {WAVE_BARS.map((b, i) => (
+          <div
+            key={i}
+            style={{
+              width: 3, height: 36, borderRadius: 2,
+              background: playing ? 'var(--blue)' : 'var(--tint-4)',
+              transformOrigin: 'center bottom',
+              transform: playing ? undefined : 'scaleY(0.13)',
+              animationName: playing ? 'waveBar' : 'none',
+              animationDuration: `${b.dur}s`,
+              animationDelay: `${b.del}s`,
+              animationTimingFunction: 'ease-in-out',
+              animationIterationCount: 'infinite',
+              animationDirection: 'alternate',
+              transition: 'background 0.25s ease',
+            } as React.CSSProperties}
+          />
+        ))}
+      </div>
+
+      {/* Progress bar */}
+      <div>
+        <div
+          onClick={e => {
+            if (duration <= 0) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            onSeek(((e.clientX - rect.left) / rect.width) * duration);
+          }}
+          style={{
+            height: 4, borderRadius: 99, background: 'var(--tint-3)',
+            cursor: duration > 0 ? 'pointer' : 'default', position: 'relative',
+          }}
+        >
+          <div style={{
+            height: '100%', borderRadius: 99, background: 'var(--blue)',
+            width: `${pct}%`, transition: 'width 0.1s linear', pointerEvents: 'none',
+          }} />
+          <div style={{
+            position: 'absolute', top: '50%', left: `${pct}%`,
+            transform: 'translate(-50%, -50%)', pointerEvents: 'none',
+            width: 12, height: 12, borderRadius: '50%',
+            background: 'var(--blue)', boxShadow: '0 0 0 3px rgba(24,218,252,0.22)',
+          }} />
+        </div>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', marginTop: 5,
+          fontSize: 11, color: 'var(--text-3)',
+        }}>
+          <span>{fmtSecs(currentTime)}</span>
+          <span>{fmtSecs(duration)}</span>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+        <button onClick={() => onSkip(-10)} title="Back 10 seconds" style={playerCtrlBtn}>
+          ‹‹ 10s
+        </button>
+        <button
+          onClick={onPlayPause}
+          title={playing ? 'Pause' : 'Play'}
+          style={{
+            width: 48, height: 48, borderRadius: '50%',
+            background: 'var(--blue)', border: 'none',
+            color: '#000', cursor: 'pointer',
+            display: 'inline-grid', placeItems: 'center',
+            boxShadow: playing ? '0 0 16px rgba(24,218,252,0.4)' : 'none',
+            transition: 'box-shadow 0.2s ease',
+          }}
+        >
+          <Icon name={playing ? 'pause' : 'play'} size={18} />
+        </button>
+        <button onClick={() => onSkip(10)} title="Forward 10 seconds" style={playerCtrlBtn}>
+          10s ››
+        </button>
+      </div>
     </div>
   );
 }
