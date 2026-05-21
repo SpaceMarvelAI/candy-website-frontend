@@ -58,8 +58,8 @@ export default function ChatbotWorkspace({
 
   // ── Tab panel state — each section opens independently ─────────────────────
   const [kbOpen,   setKbOpen]   = useState(false);
-  const [reqOpen,  setReqOpen]  = useState(false);
   const [autoOpen, setAutoOpen] = useState(false);
+  const [reqOpen,  setReqOpen]  = useState(false);
 
   const agent   = agents.find(a => a.id === selectedId) ?? null;
   const status  = statusOverride || agent?.agent_flow_status || null;
@@ -201,6 +201,7 @@ export default function ChatbotWorkspace({
       category={category}
       icon={icon}
       tint={tint}
+      typeLabel="Chat Agent"
       status={status}
       agentId={agent?.id ?? null}
       onPublish={onPublish}

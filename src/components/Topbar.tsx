@@ -73,8 +73,7 @@ export default function Topbar() {
         alignItems: 'center',
         gap: 16,
         borderBottom: '1px solid var(--border)',
-        background: 'var(--surface)',
-        backdropFilter: 'blur(20px)',
+        background: 'var(--surface-solid)',
         position: 'sticky',
         top: 0,
         zIndex: 10,
@@ -98,8 +97,8 @@ export default function Topbar() {
           display: 'flex', alignItems: 'center', gap: 10,
           background: 'var(--input-bg)',
           border: '1px solid var(--border-strong)',
-          borderRadius: 10,
-          padding: '9px 14px',
+          borderRadius: 8,
+          padding: '5px 12px',
           transition: 'border-color 0.15s',
         }}
         onFocus={e => {

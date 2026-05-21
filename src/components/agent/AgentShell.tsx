@@ -38,6 +38,7 @@ interface Props {
   category: string;
   icon: string;
   tint?: keyof typeof tintColor;
+  typeLabel?: string;
   status?: string | null;
   agentId?: string | null;
   onPublish?: () => void;
@@ -49,7 +50,7 @@ interface Props {
 }
 
 export default function AgentShell({
-  category, icon, tint = 'purple',
+  category, icon, tint = 'purple', typeLabel = 'Voice Agent',
   status, agentId, onPublish, onEmbed, publishing, publishDisabled, publishHint,
   children,
 }: Props) {
@@ -112,7 +113,7 @@ export default function AgentShell({
                   color: tintColor[tint],
                 }}
               >
-                Voice Agent
+                {typeLabel}
               </div>
               <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)' }}>
                 {category}

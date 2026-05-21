@@ -11,7 +11,6 @@ import KnowledgeBase from './KnowledgeBase';
 import PromptEditor from './PromptEditor';
 import LanguagePicker from './LanguagePicker';
 import TestPanel from './TestPanel';
-import AutomationTab from './AutomationTab';
 import SkillsPicker from './SkillsPicker';
 import EntryPointBanner from './EntryPointBanner';
 import { useAgent } from '../../hooks/useAgent';
@@ -59,7 +58,6 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
   const [kbOpen,       setKbOpen]       = useState(false);
   const [langOpen,     setLangOpen]     = useState(false);
   const [reqOpen,      setReqOpen]      = useState(false);
-  const [autoOpen,     setAutoOpen]     = useState(false);
   const [skillsOpen,   setSkillsOpen]   = useState(false);
   const [skillsCount,  setSkillsCount]  = useState(0);
 
@@ -198,10 +196,6 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
                 onMultilingualChange={setMultilingual}
               />
             </div>
-          </AccordionItem>
-
-          <AccordionItem open={autoOpen} onToggle={() => setAutoOpen(o => !o)} label="Automations"    icon="🔌" color={color}>
-            <AutomationTab agentId={agent?.id ?? null} agentSlug={slug} tint={tint} />
           </AccordionItem>
 
           <AccordionItem
