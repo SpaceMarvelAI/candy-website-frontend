@@ -494,56 +494,107 @@ function StatusPill({ status }: { status: string | null }) {
 }
 
 // ── Tab: Sessions ─────────────────────────────────────────────────────────────
+const SESSIONS_PER_PAGE = 20;
+
 function SessionsView({ data, loading }: { data: AnalyticsSession[]; loading: boolean }) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(data.length / SESSIONS_PER_PAGE));
+  const safePage   = Math.min(page, totalPages);
+  const slice      = data.slice((safePage - 1) * SESSIONS_PER_PAGE, safePage * SESSIONS_PER_PAGE);
+
   return (
     <TableCard title={`${data.length} session${data.length === 1 ? '' : 's'}`}>
       {loading && data.length === 0 ? <LoadingRow /> : data.length === 0 ? (
         <EmptyRow msg="No sessions recorded yet." />
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr>
-              {['Agent', 'Type', 'Turns', 'Status', 'Rating', 'Started', 'Ended'].map(h => (
-                <th key={h} style={TH_STYLE}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((s, idx) => (
-              <tr key={s.id ?? idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={TD_STYLE}>
-                  <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{s.agent_name || '—'}</div>
-                  {s.id && (
-                    <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, ...MONO }}>
-                      {s.id.slice(0, 8)}…
-                    </div>
-                  )}
-                </td>
-                <td style={TD_STYLE}>
-                  {s.session_type ? (
-                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(117,91,227,0.12)', color: 'var(--purple-hi)', fontWeight: 600 }}>
-                      {s.session_type}
-                    </span>
-                  ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
-                </td>
-                <td style={{ ...TD_STYLE, ...MONO }}>{s.turn_count ?? '—'}</td>
-                <td style={TD_STYLE}><StatusPill status={s.status} /></td>
-                <td style={{ ...TD_STYLE, ...MONO }}>
-                  {s.feedback_rating != null ? (
-                    <span style={{ color: s.feedback_rating >= 4 ? 'var(--green)' : s.feedback_rating <= 2 ? 'var(--red)' : 'var(--amber)' }}>
-                      {'★'.repeat(s.feedback_rating)}{'☆'.repeat(5 - s.feedback_rating)}
-                    </span>
-                  ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
-                </td>
-                <td style={{ ...TD_STYLE, fontSize: 12 }}>{fmtTime(s.started_at)}</td>
-                <td style={{ ...TD_STYLE, fontSize: 12 }}>{fmtTime(s.ended_at)}</td>
+        <>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                {['Agent', 'Type', 'Turns', 'Status', 'Rating', 'Started', 'Ended'].map(h => (
+                  <th key={h} style={TH_STYLE}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {slice.map((s, idx) => (
+                <tr key={s.id ?? idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={TD_STYLE}>
+                    <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{s.agent_name || '—'}</div>
+                  </td>
+                  <td style={TD_STYLE}>
+                    {s.session_type ? (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(117,91,227,0.12)', color: 'var(--purple-hi)', fontWeight: 600 }}>
+                        {s.session_type}
+                      </span>
+                    ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
+                  </td>
+                  <td style={{ ...TD_STYLE, ...MONO }}>{s.turn_count ?? '—'}</td>
+                  <td style={TD_STYLE}><StatusPill status={s.status} /></td>
+                  <td style={{ ...TD_STYLE, ...MONO }}>
+                    {s.feedback_rating != null ? (
+                      <span style={{ color: s.feedback_rating >= 4 ? 'var(--green)' : s.feedback_rating <= 2 ? 'var(--red)' : 'var(--amber)' }}>
+                        {'★'.repeat(s.feedback_rating)}{'☆'.repeat(5 - s.feedback_rating)}
+                      </span>
+                    ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
+                  </td>
+                  <td style={{ ...TD_STYLE, fontSize: 12 }}>{fmtTime(s.started_at)}</td>
+                  <td style={{ ...TD_STYLE, fontSize: 12 }}>{fmtTime(s.ended_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Pagination bar */}
+          {totalPages > 1 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '12px 22px', borderTop: '1px solid var(--border)',
+              fontSize: 13, color: 'var(--text-3)',
+            }}>
+              <span>
+                {(safePage - 1) * SESSIONS_PER_PAGE + 1}–{Math.min(safePage * SESSIONS_PER_PAGE, data.length)} of {data.length}
+              </span>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  style={pgBtn(safePage === 1)}
+                >← Prev</button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                  .reduce<(number | '…')[]>((acc, p, i, arr) => {
+                    if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push('…');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) => p === '…'
+                    ? <span key={`ellipsis-${i}`} style={{ padding: '0 6px', color: 'var(--text-4)' }}>…</span>
+                    : <button key={p} onClick={() => setPage(p as number)} style={pgBtn(false, p === safePage)}>{p}</button>
+                  )}
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  style={pgBtn(safePage === totalPages)}
+                >Next →</button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </TableCard>
   );
+}
+
+function pgBtn(disabled: boolean, active = false): React.CSSProperties {
+  return {
+    padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: disabled ? 'default' : 'pointer',
+    border: '1px solid var(--border)',
+    background: active ? 'var(--blue)' : 'var(--tint-2)',
+    color: active ? '#fff' : disabled ? 'var(--text-4)' : 'var(--text-2)',
+    opacity: disabled ? 0.4 : 1,
+    transition: 'all 0.15s',
+  };
 }
 
 // ── Tab: Latency ──────────────────────────────────────────────────────────────
@@ -633,44 +684,82 @@ function LatencyView({ data, loading }: { data: AnalyticsLatency | null; loading
 }
 
 // ── Tab: Knowledge Gaps ───────────────────────────────────────────────────────
+const GAPS_PER_PAGE = 10;
+
 function KnowledgeGapsView({ data, loading }: { data: KnowledgeGap[]; loading: boolean }) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(data.length / GAPS_PER_PAGE));
+  const safePage   = Math.min(page, totalPages);
+  const slice      = data.slice((safePage - 1) * GAPS_PER_PAGE, safePage * GAPS_PER_PAGE);
+
   return (
     <TableCard title={`${data.length} knowledge gap${data.length === 1 ? '' : 's'}`}>
       {loading && data.length === 0 ? <LoadingRow /> : data.length === 0 ? (
         <EmptyRow msg="No knowledge gaps detected." />
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr>
-              {['Utterance', 'Agent', 'Occurrences', 'Last seen'].map(h => (
-                <th key={h} style={TH_STYLE}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((g, idx) => (
-              <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ ...TD_STYLE, maxWidth: 400 }}>
-                  <div style={{ color: 'var(--text-1)', fontWeight: 500 }}>{g.utterance}</div>
-                </td>
-                <td style={TD_STYLE}>{g.agent_name || '—'}</td>
-                <td style={{ ...TD_STYLE, ...MONO }}>
-                  <span
-                    style={{
-                      padding: '2px 9px', borderRadius: 99,
-                      background: g.occurrences > 5 ? 'rgba(255,92,122,0.12)' : 'rgba(255,181,71,0.12)',
-                      color: g.occurrences > 5 ? 'var(--red)' : 'var(--amber)',
-                      fontWeight: 600, fontSize: 12,
-                    }}
-                  >
-                    {g.occurrences}×
-                  </span>
-                </td>
-                <td style={{ ...TD_STYLE, fontSize: 12 }}>{fmtTime(g.last_seen)}</td>
+        <>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                {['Utterance', 'Agent', 'Occurrences', 'Last seen'].map(h => (
+                  <th key={h} style={TH_STYLE}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {slice.map((g, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ ...TD_STYLE, maxWidth: 400 }}>
+                    <div style={{ color: 'var(--text-1)', fontWeight: 500 }}>{g.utterance}</div>
+                  </td>
+                  <td style={TD_STYLE}>{g.agent_name || '—'}</td>
+                  <td style={{ ...TD_STYLE, ...MONO }}>
+                    <span
+                      style={{
+                        padding: '2px 9px', borderRadius: 99,
+                        background: g.occurrences > 5 ? 'rgba(255,92,122,0.12)' : 'rgba(255,181,71,0.12)',
+                        color: g.occurrences > 5 ? 'var(--red)' : 'var(--amber)',
+                        fontWeight: 600, fontSize: 12,
+                      }}
+                    >
+                      {g.occurrences}×
+                    </span>
+                  </td>
+                  <td style={{ ...TD_STYLE, fontSize: 12 }}>{fmtTime(g.last_seen)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 22px', borderTop: '1px solid var(--border)', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-3)', marginRight: 8 }}>
+                {(safePage - 1) * GAPS_PER_PAGE + 1}–{Math.min(safePage * GAPS_PER_PAGE, data.length)} of {data.length}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                style={pgBtn(safePage === 1)}
+              >Prev</button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                .reduce<(number | '…')[]>((acc, p, i, arr) => {
+                  if (i > 0 && (p as number) - (arr[i - 1] as number) > 1) acc.push('…');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, i) =>
+                  p === '…'
+                    ? <span key={`e${i}`} style={{ fontSize: 12, color: 'var(--text-4)', padding: '0 4px' }}>…</span>
+                    : <button key={p} onClick={() => setPage(p as number)} style={pgBtn(false, p === safePage)}>{p}</button>
+                )}
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                style={pgBtn(safePage === totalPages)}
+              >Next</button>
+            </div>
+          )}
+        </>
       )}
     </TableCard>
   );
@@ -743,60 +832,93 @@ function LanguagesView({ data, loading }: { data: LanguageStat[]; loading: boole
 }
 
 // ── Tab: Agents ───────────────────────────────────────────────────────────────
+const AGENTS_PER_PAGE = 10;
+
 function AgentsView({ data, loading }: { data: AgentStat[]; loading: boolean }) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(data.length / AGENTS_PER_PAGE));
+  const safePage   = Math.min(page, totalPages);
+  const slice      = data.slice((safePage - 1) * AGENTS_PER_PAGE, safePage * AGENTS_PER_PAGE);
+
   return (
     <TableCard title={`${data.length} agent${data.length === 1 ? '' : 's'}`}>
       {loading && data.length === 0 ? <LoadingRow /> : data.length === 0 ? (
         <EmptyRow msg="No agent performance data available." />
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr>
-              {['Agent', 'Use case', 'Direction', 'Sessions', 'Completed', 'Abandoned', 'Rating', 'Avg turns'].map(h => (
-                <th key={h} style={TH_STYLE}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((a, idx) => (
-              <tr key={a.agent_id ?? idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={TD_STYLE}>
-                  <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{a.name || '—'}</div>
-                  {a.agent_id && (
-                    <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, fontFamily: "'Zalando Sans'" }}>
-                      {a.agent_id.slice(0, 8)}…
-                    </div>
-                  )}
-                </td>
-                <td style={TD_STYLE}>
-                  {a.use_case ? (
-                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(117,91,227,0.12)', color: 'var(--purple-hi)', fontWeight: 600 }}>
-                      {a.use_case}
-                    </span>
-                  ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
-                </td>
-                <td style={TD_STYLE}>
-                  {a.call_direction ? (
-                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'var(--tint-2)', color: 'var(--text-3)', fontWeight: 500 }}>
-                      {a.call_direction}
-                    </span>
-                  ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
-                </td>
-                <td style={{ ...TD_STYLE, ...MONO }}>{a.sessions}</td>
-                <td style={{ ...TD_STYLE, ...MONO, color: 'var(--green)' }}>{a.completed ?? '—'}</td>
-                <td style={{ ...TD_STYLE, ...MONO, color: a.abandoned ? 'var(--amber)' : 'var(--text-2)' }}>{a.abandoned ?? '—'}</td>
-                <td style={{ ...TD_STYLE, ...MONO }}>
-                  {a.avg_rating != null ? (
-                    <span style={{ color: a.avg_rating >= 4 ? 'var(--green)' : a.avg_rating <= 2 ? 'var(--red)' : 'var(--amber)' }}>
-                      {fmt(a.avg_rating, 2)}
-                    </span>
-                  ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
-                </td>
-                <td style={{ ...TD_STYLE, ...MONO }}>{fmt(a.avg_turns, 1)}</td>
+        <>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                {['Agent', 'Use case', 'Direction', 'Sessions', 'Completed', 'Abandoned', 'Rating', 'Avg turns'].map(h => (
+                  <th key={h} style={TH_STYLE}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {slice.map((a, idx) => (
+                <tr key={a.agent_id ?? idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={TD_STYLE}>
+                    <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{a.name || '—'}</div>
+                  </td>
+                  <td style={TD_STYLE}>
+                    {a.use_case ? (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(117,91,227,0.12)', color: 'var(--purple-hi)', fontWeight: 600 }}>
+                        {a.use_case}
+                      </span>
+                    ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
+                  </td>
+                  <td style={TD_STYLE}>
+                    {a.call_direction ? (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'var(--tint-2)', color: 'var(--text-3)', fontWeight: 500 }}>
+                        {a.call_direction}
+                      </span>
+                    ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
+                  </td>
+                  <td style={{ ...TD_STYLE, ...MONO }}>{a.sessions}</td>
+                  <td style={{ ...TD_STYLE, ...MONO, color: 'var(--green)' }}>{a.completed ?? '—'}</td>
+                  <td style={{ ...TD_STYLE, ...MONO, color: a.abandoned ? 'var(--amber)' : 'var(--text-2)' }}>{a.abandoned ?? '—'}</td>
+                  <td style={{ ...TD_STYLE, ...MONO }}>
+                    {a.avg_rating != null ? (
+                      <span style={{ color: a.avg_rating >= 4 ? 'var(--green)' : a.avg_rating <= 2 ? 'var(--red)' : 'var(--amber)' }}>
+                        {fmt(a.avg_rating, 2)}
+                      </span>
+                    ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
+                  </td>
+                  <td style={{ ...TD_STYLE, ...MONO }}>{fmt(a.avg_turns, 1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 22px', borderTop: '1px solid var(--border)', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-3)', marginRight: 8 }}>
+                {(safePage - 1) * AGENTS_PER_PAGE + 1}–{Math.min(safePage * AGENTS_PER_PAGE, data.length)} of {data.length}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                style={pgBtn(safePage === 1)}
+              >Prev</button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                .reduce<(number | '…')[]>((acc, p, i, arr) => {
+                  if (i > 0 && (p as number) - (arr[i - 1] as number) > 1) acc.push('…');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, i) =>
+                  p === '…'
+                    ? <span key={`e${i}`} style={{ fontSize: 12, color: 'var(--text-4)', padding: '0 4px' }}>…</span>
+                    : <button key={p} onClick={() => setPage(p as number)} style={pgBtn(false, p === safePage)}>{p}</button>
+                )}
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                style={pgBtn(safePage === totalPages)}
+              >Next</button>
+            </div>
+          )}
+        </>
       )}
     </TableCard>
   );
@@ -938,7 +1060,7 @@ export default function AnalyticsPage() {
   }, []);
 
   return (
-    <div className="fade-up">
+    <div className="fade-up" style={{ padding: '32px 40px 60px' }}>
       {/* ── Page header ── */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--blue)', marginBottom: 10 }}>
