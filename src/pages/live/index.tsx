@@ -163,18 +163,13 @@ export default function LiveCallsPage() {
     if (!audioRef.current) audioRef.current = new Audio();
     const audio = audioRef.current;
 
-    // Same recording already loaded — toggle play/pause
+    // Same recording — toggle play/pause
     if (playerRec?.recording_id === rec.recording_id) {
-      if (playerPlaying) {
-        audio.pause();
-        setPlayerPlaying(false);
-      } else {
-        audio.play().then(() => setPlayerPlaying(true)).catch(() => addToast('Playback failed.', 'error'));
-      }
+      if (playerPlaying) { audio.pause(); setPlayerPlaying(false); }
+      else { audio.play().then(() => setPlayerPlaying(true)).catch(() => addToast('Playback failed.', 'error')); }
       return;
     }
 
-    // New recording
     audio.pause();
     audio.src = rec.signed_url;
     setPlayerRec(rec);
@@ -188,10 +183,7 @@ export default function LiveCallsPage() {
 
     audio.play()
       .then(() => setPlayerPlaying(true))
-      .catch(err => {
-        console.warn('[live] play failed', err);
-        addToast('Could not play this recording.', 'error');
-      });
+      .catch(err => { console.warn('[live] play failed', err); addToast('Could not play this recording.', 'error'); });
   }
 
   function closePlayer() {
@@ -204,23 +196,24 @@ export default function LiveCallsPage() {
 
   function playerToggle() {
     if (!audioRef.current || !playerRec) return;
-    if (playerPlaying) {
-      audioRef.current.pause();
-      setPlayerPlaying(false);
-    } else {
-      audioRef.current.play().then(() => setPlayerPlaying(true)).catch(() => addToast('Playback failed.', 'error'));
-    }
+    if (playerPlaying) { audioRef.current.pause(); setPlayerPlaying(false); }
+    else { audioRef.current.play().then(() => setPlayerPlaying(true)).catch(() => addToast('Playback failed.', 'error')); }
   }
 
   function playerSeek(time: number) {
     if (!audioRef.current) return;
-    const t = Math.max(0, Math.min(time, audioRef.current.duration || 0));
-    audioRef.current.currentTime = t;
+    const audio = audioRef.current;
+    const t = Math.max(0, Math.min(time, audio.duration || 0));
+    const wasPlaying = !audio.paused;
+    audio.currentTime = t;
     setPlayerTime(t);
+    // Resume playback after seek — some browsers pause to re-buffer on currentTime change
+    if (wasPlaying) audio.play().catch(() => {});
   }
 
   function playerSkip(delta: number) {
-    playerSeek((audioRef.current?.currentTime || 0) + delta);
+    if (!audioRef.current) return;
+    playerSeek(audioRef.current.currentTime + delta);
   }
 
   async function remove(rec: RecordingRow) {
@@ -1192,13 +1185,16 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
 
 // ── Audio Player Popup ────────────────────────────────────────────────────────
 const WAVE_BARS = [
-  { dur: 0.60, del: 0.00 }, { dur: 0.80, del: 0.10 }, { dur: 0.50, del: 0.20 },
-  { dur: 0.90, del: 0.05 }, { dur: 0.65, del: 0.15 }, { dur: 0.75, del: 0.25 },
-  { dur: 0.55, del: 0.08 }, { dur: 0.85, del: 0.18 }, { dur: 0.70, del: 0.30 },
-  { dur: 0.60, del: 0.12 }, { dur: 0.80, del: 0.22 }, { dur: 0.50, del: 0.04 },
-  { dur: 0.65, del: 0.16 }, { dur: 0.90, del: 0.06 }, { dur: 0.70, del: 0.20 },
-  { dur: 0.55, del: 0.14 }, { dur: 0.75, del: 0.26 }, { dur: 0.85, del: 0.02 },
-  { dur: 0.60, del: 0.09 }, { dur: 0.70, del: 0.19 },
+  { dur: 0.60, del: 0.00 }, { dur: 0.45, del: 0.07 }, { dur: 0.80, del: 0.14 }, { dur: 0.52, del: 0.21 }, { dur: 0.70, del: 0.03 },
+  { dur: 0.90, del: 0.10 }, { dur: 0.55, del: 0.18 }, { dur: 0.65, del: 0.25 }, { dur: 0.48, del: 0.05 }, { dur: 0.75, del: 0.12 },
+  { dur: 0.58, del: 0.20 }, { dur: 0.85, del: 0.28 }, { dur: 0.50, del: 0.08 }, { dur: 0.72, del: 0.16 }, { dur: 0.42, del: 0.23 },
+  { dur: 0.68, del: 0.02 }, { dur: 0.88, del: 0.09 }, { dur: 0.53, del: 0.17 }, { dur: 0.78, del: 0.24 }, { dur: 0.46, del: 0.06 },
+  { dur: 0.63, del: 0.13 }, { dur: 0.82, del: 0.22 }, { dur: 0.57, del: 0.29 }, { dur: 0.44, del: 0.04 }, { dur: 0.74, del: 0.11 },
+  { dur: 0.92, del: 0.19 }, { dur: 0.49, del: 0.26 }, { dur: 0.67, del: 0.01 }, { dur: 0.56, del: 0.15 }, { dur: 0.83, del: 0.08 },
+  { dur: 0.61, del: 0.27 }, { dur: 0.47, del: 0.13 }, { dur: 0.77, del: 0.20 }, { dur: 0.54, del: 0.06 }, { dur: 0.86, del: 0.23 },
+  { dur: 0.43, del: 0.10 }, { dur: 0.71, del: 0.17 }, { dur: 0.59, del: 0.30 }, { dur: 0.89, del: 0.04 }, { dur: 0.64, del: 0.18 },
+  { dur: 0.51, del: 0.25 }, { dur: 0.76, del: 0.09 }, { dur: 0.66, del: 0.16 }, { dur: 0.84, del: 0.02 }, { dur: 0.41, del: 0.22 },
+  { dur: 0.73, del: 0.12 }, { dur: 0.62, del: 0.28 }, { dur: 0.87, del: 0.07 }, { dur: 0.48, del: 0.19 }, { dur: 0.69, del: 0.14 },
 ];
 
 function fmtSecs(s: number) {
@@ -1228,7 +1224,47 @@ function AudioPlayerPopup({
   onSkip: (delta: number) => void;
   onClose: () => void;
 }) {
-  const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const pct        = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const trackRef   = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  // Always-fresh refs so the global listeners never go stale across re-renders
+  const durationRef = useRef(duration);
+  const onSeekRef   = useRef(onSeek);
+  durationRef.current = duration;
+  onSeekRef.current   = onSeek;
+
+  function seekAt(clientX: number) {
+    if (!trackRef.current || durationRef.current <= 0) return;
+    const rect  = trackRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    onSeekRef.current(ratio * durationRef.current);
+  }
+
+  // Attach once on mount — uses refs internally so always sees fresh values
+  useEffect(() => {
+    function onMove(e: MouseEvent) { if (isDragging.current) seekAt(e.clientX); }
+    function onUp()  {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      document.body.style.cursor     = '';
+      document.body.style.userSelect = '';
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    isDragging.current = true;
+    document.body.style.cursor     = 'grabbing';
+    document.body.style.userSelect = 'none';
+    seekAt(e.clientX);
+  }
 
   return (
     <div
@@ -1273,23 +1309,22 @@ function AudioPlayerPopup({
       </div>
 
       {/* Waveform */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2.5, height: 36 }}>
-        {WAVE_BARS.map((b, i) => (
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1.5, height: 36, width: '100%' }}>
+        {WAVE_BARS.map((w, i) => (
           <div
             key={i}
             style={{
-              width: 3, height: 36, borderRadius: 2,
+              flex: 1, minWidth: 0,
+              height: '100%',
+              borderRadius: 2,
               background: playing ? 'var(--blue)' : 'var(--tint-4)',
-              transformOrigin: 'center bottom',
-              transform: playing ? undefined : 'scaleY(0.13)',
-              animationName: playing ? 'waveBar' : 'none',
-              animationDuration: `${b.dur}s`,
-              animationDelay: `${b.del}s`,
-              animationTimingFunction: 'ease-in-out',
-              animationIterationCount: 'infinite',
-              animationDirection: 'alternate',
+              transformOrigin: 'bottom center',
+              transform: playing ? undefined : 'scaleY(0.12)',
+              animation: playing
+                ? `waveBar ${w.dur}s ${w.del}s ease-in-out infinite alternate`
+                : 'none',
               transition: 'background 0.25s ease',
-            } as React.CSSProperties}
+            }}
           />
         ))}
       </div>
@@ -1297,25 +1332,24 @@ function AudioPlayerPopup({
       {/* Progress bar */}
       <div>
         <div
-          onClick={e => {
-            if (duration <= 0) return;
-            const rect = e.currentTarget.getBoundingClientRect();
-            onSeek(((e.clientX - rect.left) / rect.width) * duration);
-          }}
+          ref={trackRef}
+          onMouseDown={onMouseDown}
           style={{
-            height: 4, borderRadius: 99, background: 'var(--tint-3)',
+            height: 6, borderRadius: 99, background: 'var(--tint-3)',
             cursor: duration > 0 ? 'pointer' : 'default', position: 'relative',
+            userSelect: 'none',
           }}
         >
           <div style={{
             height: '100%', borderRadius: 99, background: 'var(--blue)',
-            width: `${pct}%`, transition: 'width 0.1s linear', pointerEvents: 'none',
+            width: `${pct}%`, pointerEvents: 'none',
           }} />
           <div style={{
             position: 'absolute', top: '50%', left: `${pct}%`,
             transform: 'translate(-50%, -50%)', pointerEvents: 'none',
-            width: 12, height: 12, borderRadius: '50%',
-            background: 'var(--blue)', boxShadow: '0 0 0 3px rgba(24,218,252,0.22)',
+            width: 14, height: 14, borderRadius: '50%',
+            background: 'var(--blue)', boxShadow: '0 0 0 4px rgba(24,218,252,0.25)',
+            cursor: 'grab',
           }} />
         </div>
         <div style={{
