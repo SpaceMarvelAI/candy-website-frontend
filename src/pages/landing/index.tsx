@@ -1,8 +1,28 @@
+import { useEffect, useState } from 'react';
 import Icon from '../../assets/icons';
 
-const SIGNIN_URL = 'https://spacemarvel.ai/login';
+const _isLocalhost =
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1';
+const _callbackUrl = encodeURIComponent(
+  _isLocalhost
+    ? `${window.location.origin}/sso/callback`
+    : 'https://app.candy.cx/sso/callback'
+);
+const SIGNIN_URL = `https://spacemarvel.ai/login?redirect_uri=${_callbackUrl}`;
 
 export default function LandingPage() {
+  const [seconds, setSeconds] = useState(5);
+
+  useEffect(() => {
+    if (seconds <= 0) {
+      window.location.href = SIGNIN_URL;
+      return;
+    }
+    const t = setTimeout(() => setSeconds(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [seconds]);
+
   return (
     <div
       style={{
@@ -128,7 +148,7 @@ export default function LandingPage() {
           textAlign: 'center',
         }}
       >
-        Access is provided through your SpaceMarvel workspace.
+        Redirecting in {seconds}s — or click above to sign in now.
       </p>
     </div>
   );
