@@ -45,10 +45,20 @@ export default function AgentPicker({
   const { user, addToast } = useApp();
   const [creating, setCreating]     = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [newName, setNewName]           = useState('');
   const [showAll, setShowAll]       = useState(false);
   const [allAgents, setAll]         = useState<Agent[] | null>(null);
   const [loadingAll, setLoadingAll] = useState(false);
   const [debug, setDebug]           = useState(false);
+
+  async function handleRefresh() {
+    if (refreshing || !onReload) return;
+    setRefreshing(true);
+    try { await onReload(); } finally { setRefreshing(false); }
+    setAll(null);
+  }
 
   async function handleDelete(a: Agent, ev?: React.MouseEvent) {
     if (ev) { ev.preventDefault(); ev.stopPropagation(); }
@@ -86,15 +96,19 @@ export default function AgentPicker({
     return () => { cancelled = true; };
   }, [showAll, allAgents, addToast]);
 
-  async function newAgent() {
-    if (creating) return;
-    const suggested = `${category} agent ${agents.length + 1}`;
-    const name = window.prompt(`Name for the new ${category} agent?`, suggested);
-    if (!name || !name.trim()) return;
+  function openNewModal() {
+    setNewName(`${category} agent ${agents.length + 1}`);
+    setShowNewModal(true);
+  }
+
+  async function confirmNewAgent() {
+    const trimmed = newName.trim();
+    if (!trimmed || creating) return;
     setCreating(true);
+    setShowNewModal(false);
     try {
-      await onCreate(name.trim());
-      addToast(`Created "${name.trim()}"`, 'success');
+      await onCreate(trimmed);
+      addToast(`Created "${trimmed}"`, 'success');
     } catch (e) {
       const msg = e instanceof ApiError
         ? (typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message))
@@ -133,6 +147,7 @@ export default function AgentPicker({
     : [];
 
   return (
+    <>
     <section style={section}>
       <header style={sectionHeader}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -143,11 +158,17 @@ export default function AgentPicker({
         <div style={{ display: 'flex', gap: 6 }}>
           {onReload && (
             <button
-              onClick={() => { onReload(); setAll(null); /* force allAgents to reload too */ }}
+              onClick={handleRefresh}
+              disabled={refreshing}
               title="Re-fetch the agent list"
-              style={newBtn}
+              style={{ ...newBtn, opacity: refreshing ? 0.7 : 1 }}
             >
-              <Icon name="refresh" size={11} /> Refresh
+              <Icon
+                name="refresh"
+                size={11}
+                style={refreshing ? { animation: 'spin 0.7s linear infinite' } : {}}
+              />
+              {refreshing ? 'Refreshing…' : 'Refresh'}
             </button>
           )}
           <button
@@ -163,7 +184,7 @@ export default function AgentPicker({
           >
             <Icon name="settings" size={11} />
           </button>
-          <button onClick={newAgent} disabled={creating} style={newBtn}>
+          <button onClick={openNewModal} disabled={creating} style={newBtn}>
             <Icon name="plus" size={12} /> {creating ? 'Creating…' : 'New agent'}
           </button>
         </div>
@@ -295,6 +316,83 @@ export default function AgentPicker({
         </div>
       )}
     </section>
+
+    {/* ── New agent modal ── */}
+
+    {showNewModal && (
+      <div
+        onClick={() => setShowNewModal(false)}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 200,
+          background: 'rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            width: 420,
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border-strong)',
+            borderRadius: 'var(--radius-xl)',
+            padding: 28,
+            boxShadow: 'var(--shadow-card)',
+            animation: 'fadeUp 0.18s ease-out',
+          }}
+        >
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-1)', marginBottom: 6 }}>
+            New {category} agent
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 20 }}>
+            Give your agent a name — you can rename it later.
+          </div>
+          <input
+            autoFocus
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') confirmNewAgent(); if (e.key === 'Escape') setShowNewModal(false); }}
+            placeholder={`${category} agent ${agents.length + 1}`}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              padding: '10px 14px',
+              background: 'var(--input-bg)',
+              border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--radius)',
+              color: 'var(--text-1)', fontSize: 14,
+              outline: 'none', marginBottom: 20,
+            }}
+            onFocus={e => { e.currentTarget.style.borderColor = 'var(--purple)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,113,227,0.12)'; }}
+            onBlur={e  => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.boxShadow = 'none'; }}
+          />
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => setShowNewModal(false)}
+              style={{
+                padding: '9px 18px', borderRadius: 'var(--radius)',
+                background: 'var(--tint-2)', border: '1px solid var(--border-strong)',
+                color: 'var(--text-2)', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmNewAgent}
+              disabled={!newName.trim()}
+              style={{
+                padding: '9px 18px', borderRadius: 'var(--radius)',
+                background: 'var(--purple)', border: 'none',
+                color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                opacity: newName.trim() ? 1 : 0.5,
+              }}
+            >
+              Create agent
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
