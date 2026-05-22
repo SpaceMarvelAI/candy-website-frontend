@@ -1,6 +1,7 @@
 import { Component, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import Icon from '../../assets/icons';
 import { ApiError } from '../../api/client';
 import { SkeletonTable, SkeletonCard } from '../../components/Skeleton';
@@ -508,7 +509,8 @@ function SessionsView({ data, loading }: { data: AnalyticsSession[]; loading: bo
         <EmptyRow msg="No sessions recorded yet." />
       ) : (
         <>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
             <thead>
               <tr>
                 {['Agent', 'Type', 'Turns', 'Status', 'Rating', 'Started', 'Ended'].map(h => (
@@ -544,11 +546,13 @@ function SessionsView({ data, loading }: { data: AnalyticsSession[]; loading: bo
               ))}
             </tbody>
           </table>
+          </div>
 
           {/* Pagination bar */}
           {totalPages > 1 && (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexWrap: 'wrap', gap: 8,
               padding: '12px 22px', borderTop: '1px solid var(--border)',
               fontSize: 13, color: 'var(--text-3)',
             }}>
@@ -638,7 +642,8 @@ function LatencyView({ data, loading }: { data: AnalyticsLatency | null; loading
         <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--border)' }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>Component breakdown</span>
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 480 }}>
           <thead>
             <tr>
               {['Component', 'p50', 'p95', 'Target p95', 'Status'].map(h => (
@@ -678,6 +683,7 @@ function LatencyView({ data, loading }: { data: AnalyticsLatency | null; loading
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
@@ -698,7 +704,8 @@ function KnowledgeGapsView({ data, loading }: { data: KnowledgeGap[]; loading: b
         <EmptyRow msg="No knowledge gaps detected." />
       ) : (
         <>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 460 }}>
             <thead>
               <tr>
                 {['Utterance', 'Agent', 'Occurrences', 'Last seen'].map(h => (
@@ -730,6 +737,7 @@ function KnowledgeGapsView({ data, loading }: { data: KnowledgeGap[]; loading: b
               ))}
             </tbody>
           </table>
+          </div>
           {totalPages > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 22px', borderTop: '1px solid var(--border)', justifyContent: 'flex-end' }}>
               <span style={{ fontSize: 12, color: 'var(--text-3)', marginRight: 8 }}>
@@ -774,7 +782,8 @@ function LanguagesView({ data, loading }: { data: LanguageStat[]; loading: boole
       {loading && data.length === 0 ? <LoadingRow /> : data.length === 0 ? (
         <EmptyRow msg="No language data available." />
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 380 }}>
           <thead>
             <tr>
               {['Language', 'Sessions', 'Share'].map(h => (
@@ -826,6 +835,7 @@ function LanguagesView({ data, loading }: { data: LanguageStat[]; loading: boole
             })}
           </tbody>
         </table>
+        </div>
       )}
     </TableCard>
   );
@@ -846,7 +856,8 @@ function AgentsView({ data, loading }: { data: AgentStat[]; loading: boolean }) 
         <EmptyRow msg="No agent performance data available." />
       ) : (
         <>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 740 }}>
             <thead>
               <tr>
                 {['Agent', 'Use case', 'Direction', 'Sessions', 'Completed', 'Abandoned', 'Rating', 'Avg turns'].map(h => (
@@ -889,8 +900,9 @@ function AgentsView({ data, loading }: { data: AgentStat[]; loading: boolean }) 
               ))}
             </tbody>
           </table>
+          </div>
           {totalPages > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 22px', borderTop: '1px solid var(--border)', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 22px', borderTop: '1px solid var(--border)', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: 'var(--text-3)', marginRight: 8 }}>
                 {(safePage - 1) * AGENTS_PER_PAGE + 1}–{Math.min(safePage * AGENTS_PER_PAGE, data.length)} of {data.length}
               </span>
@@ -956,7 +968,8 @@ function EventsView({ data, loading }: { data: AnalyticsEvent[]; loading: boolea
       {loading && data.length === 0 ? <LoadingRow /> : data.length === 0 ? (
         <EmptyRow msg="No events recorded." />
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 500 }}>
           <thead>
             <tr>
               {['Time', 'Type', 'Agent', 'Payload'].map(h => (
@@ -979,6 +992,7 @@ function EventsView({ data, loading }: { data: AnalyticsEvent[]; loading: boolea
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </TableCard>
   );
@@ -1007,6 +1021,8 @@ function toArray(v: unknown): unknown[] {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const { addToast } = useApp();
+  const isMobile = useMediaQuery('(max-width: 640px)');
+  const isTablet = useMediaQuery('(max-width: 1024px)');
   const { tab: rawTab } = useParams<{ tab: string }>();
   const navigate = useNavigate();
   const tab: Tab = (TABS.some(t => t.key === rawTab) ? rawTab : 'summary') as Tab;
@@ -1060,13 +1076,13 @@ export default function AnalyticsPage() {
   }, []);
 
   return (
-    <div className="fade-up" style={{ padding: '32px 40px 60px' }}>
+    <div className="fade-up" style={{ padding: isMobile ? '20px 16px 48px' : isTablet ? '24px 24px 52px' : '32px 40px 60px' }}>
       {/* ── Page header ── */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--blue)', marginBottom: 10 }}>
           Analytics · Insights
         </div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--text-1)' }}>
+        <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--text-1)' }}>
           Analytics
         </h1>
         <p style={{ color: 'var(--text-3)', fontSize: 15, marginTop: 8 }}>
@@ -1091,39 +1107,43 @@ export default function AnalyticsPage() {
       )}
 
       {/* ── Tab strip ── */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 24, flexWrap: 'wrap' }}>
-        {TABS.map(t => (
+      <div style={{ overflowX: isMobile ? 'auto' : 'visible', WebkitOverflowScrolling: 'touch' as any, marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: isMobile ? 'nowrap' : 'wrap', minWidth: isMobile ? 'max-content' : undefined }}>
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              style={{
+                padding: '7px 14px', borderRadius: 99,
+                background: tab === t.key ? 'var(--tint-4)' : 'var(--tint-2)',
+                border: tab === t.key ? '1px solid var(--border-strong)' : '1px solid var(--border)',
+                color: tab === t.key ? 'var(--text-1)' : 'var(--text-2)',
+                cursor: 'pointer', fontSize: 12.5,
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+                transition: 'all 0.15s',
+                flexShrink: 0,
+              }}
+            >
+              <Icon name={t.icon} size={13} />
+              {t.label}
+            </button>
+          ))}
+          {!isMobile && <div style={{ flex: 1 }} />}
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => { refresh().then(() => addToast('Analytics refreshed', 'success')); }}
             style={{
-              padding: '7px 14px', borderRadius: 99,
-              background: tab === t.key ? 'var(--tint-4)' : 'var(--tint-2)',
-              border: tab === t.key ? '1px solid var(--border-strong)' : '1px solid var(--border)',
-              color: tab === t.key ? 'var(--text-1)' : 'var(--text-2)',
-              cursor: 'pointer', fontSize: 12.5,
-              display: 'inline-flex', alignItems: 'center', gap: 7,
+              padding: '7px 12px', borderRadius: 99,
+              background: 'var(--tint-2)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-2)', cursor: 'pointer', fontSize: 12.5,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
               transition: 'all 0.15s',
+              flexShrink: 0,
             }}
           >
-            <Icon name={t.icon} size={13} />
-            {t.label}
+            <Icon name="refresh" size={12} /> Refresh
           </button>
-        ))}
-        <div style={{ flex: 1 }} />
-        <button
-          onClick={() => { refresh().then(() => addToast('Analytics refreshed', 'success')); }}
-          style={{
-            padding: '7px 12px', borderRadius: 99,
-            background: 'var(--tint-2)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-2)', cursor: 'pointer', fontSize: 12.5,
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            transition: 'all 0.15s',
-          }}
-        >
-          <Icon name="refresh" size={12} /> Refresh
-        </button>
+        </div>
       </div>
 
       {/* ── Active tab view — wrapped in error boundary so one bad row can't blank the page ── */}
