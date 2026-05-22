@@ -1,19 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import Icon from '../assets/icons';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Layout constants
 // ─────────────────────────────────────────────────────────────────────────────
 const COLLAPSED_W = 56;
 const EXPANDED_W  = 220;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Navigation config — single source of truth for all sidebar routes.
-// `path` is the React Router path; null items show a "coming soon" toast.
-// ─────────────────────────────────────────────────────────────────────────────
 const NAV_SECTIONS = [
   {
     label: 'Products',
@@ -34,8 +29,6 @@ const NAV_SECTIONS = [
   },
 ];
 
-// Maps a URL pathname prefix → active nav item id.
-// /chatbots/cs, /chatbots/tech, etc. all keep "chatbots" highlighted.
 const PATH_TO_NAV: [string, string][] = [
   ['/dashboard', 'dashboard'],
   ['/chatbots',  'chatbots'],
@@ -46,67 +39,133 @@ const PATH_TO_NAV: [string, string][] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-export default function Sidebar() {
-  const { addToast } = useApp();
-  const { theme }  = useTheme();
-  const navigate   = useNavigate();
-  const location   = useLocation();
-  const [expanded, setExpanded] = useState(false);
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onClose?: () => void;
+}
 
-  // Dark theme → white logos; light theme → dark logos
+export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
+  const { addToast } = useApp();
+  const { theme }    = useTheme();
+  const navigate     = useNavigate();
+  const location     = useLocation();
+  const [expanded, setExpanded] = useState(false);
+  const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
+
   const imgFilter = theme === 'dark'
     ? 'brightness(0) invert(1)'
     : 'brightness(0)';
 
-  // Derive the active nav item from the current URL pathname.
   const activeId = PATH_TO_NAV.find(([prefix]) =>
     location.pathname === prefix || location.pathname.startsWith(prefix + '/')
   )?.[1] ?? null;
 
+  // Lock body scroll while mobile drawer is open
+  useEffect(() => {
+    document.body.style.overflow = (isMobileOrTablet && mobileOpen) ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [isMobileOrTablet, mobileOpen]);
+
   function handleNav(item: { path: string | null; label: string }) {
     if (item.path) {
       navigate(item.path);
+      if (isMobileOrTablet) onClose?.();
     } else {
       addToast(`"${item.label}" — coming soon`, 'info');
     }
   }
 
+  // On mobile/tablet: always fully expanded; on desktop: hover-driven.
+  const panelExpanded = isMobileOrTablet ? true : expanded;
+  const panelWidth    = panelExpanded ? EXPANDED_W : COLLAPSED_W;
+
+  // Mobile: slide in/out via translateX. Desktop: width transition only.
+  const panelTransform = isMobileOrTablet
+    ? (mobileOpen ? 'translateX(0)' : `translateX(-${EXPANDED_W}px)`)
+    : 'translateX(0)';
+  const panelTransition = isMobileOrTablet
+    ? 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
+    : 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)';
+
+  const hasShadow = expanded || (isMobileOrTablet && mobileOpen);
+
   return (
-    // Outer <aside> reserves the COLLAPSED width in layout flow.
-    // The inner panel is `position: fixed` so the expanded state overlays
-    // content instead of pushing it.
-    <aside
-      style={{ width: COLLAPSED_W, flexShrink: 0 }}
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
-    >
+    <>
+      {/* ── Backdrop (mobile/tablet only) ──────────────────────────────────── */}
+      {isMobileOrTablet && (
+        <div
+          onClick={onClose}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.55)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 48,
+            opacity: mobileOpen ? 1 : 0,
+            pointerEvents: mobileOpen ? 'auto' : 'none',
+            transition: 'opacity 0.25s ease',
+          }}
+        />
+      )}
+
+      {/* ── Fixed navigation panel ─────────────────────────────────────────── */}
+      {/*  NOTE: This is intentionally a SIBLING of <aside>, NOT a child.       */}
+      {/*  The <aside> gets display:none on mobile; if the panel were inside it, */}
+      {/*  it would be hidden too — even with position:fixed.                   */}
       <div
+        onMouseEnter={!isMobileOrTablet ? () => setExpanded(true)  : undefined}
+        onMouseLeave={!isMobileOrTablet ? () => setExpanded(false) : undefined}
         style={{
           position: 'fixed',
           top: 0,
           left: 0,
           height: '100vh',
-          width: expanded ? EXPANDED_W : COLLAPSED_W,
-          transition: 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+          width: panelWidth,
+          transform: panelTransform,
+          transition: panelTransition,
           display: 'flex',
           flexDirection: 'column',
           gap: 2,
-          padding: expanded ? '14px 10px' : '14px 8px',
+          padding: panelExpanded ? '14px 10px' : '14px 8px',
           background: 'var(--sidebar-bg)',
           borderRight: '1px solid var(--border)',
           overflowY: 'auto',
           overflowX: 'hidden',
-          boxShadow: expanded ? 'var(--shadow-rail)' : 'none',
+          boxShadow: hasShadow ? 'var(--shadow-rail)' : 'none',
           zIndex: 50,
         }}
       >
+        {/* Close button — mobile/tablet only */}
+        {isMobileOrTablet && (
+          <button
+            onClick={onClose}
+            aria-label="Close menu"
+            style={{
+              alignSelf: 'flex-end',
+              width: 30, height: 30,
+              borderRadius: 8,
+              background: 'var(--tint-2)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-2)',
+              display: 'grid', placeItems: 'center',
+              cursor: 'pointer',
+              marginBottom: 6,
+              flexShrink: 0,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--tint-4)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--tint-2)'; }}
+          >
+            <Icon name="x" size={14} />
+          </button>
+        )}
 
-        {/* ── Workspace branding ── */}
+        {/* Workspace branding */}
         <div style={{ ...styles.wsRow, marginBottom: 14, padding: '2px 2px' }}>
           <div style={styles.wsAvatar}>
             <Icon name="grid" size={13} />
           </div>
-          {expanded && (
+          {panelExpanded && (
             <div style={styles.wsMeta as React.CSSProperties}>
               <span style={styles.wsName}>SpaceMarvel</span>
               <span style={styles.wsPlan}>Pro workspace</span>
@@ -114,45 +173,41 @@ export default function Sidebar() {
           )}
         </div>
 
-        {/* ── Nav sections ── */}
+        {/* Nav sections */}
         {NAV_SECTIONS.map(section => (
           <div key={section.label}>
-            {expanded ? (
+            {panelExpanded ? (
               <p style={styles.sectionLabel}>{section.label}</p>
             ) : (
               <div style={styles.sectionDivider} />
             )}
 
-            {section.items.map(item => {
+            {section.items.map((item: any) => {
               const isActive = activeId === item.id;
               return (
                 <button
                   key={item.id}
                   onClick={() => handleNav(item)}
-                  className={!expanded ? 'tooltip-wrap' : ''}
-                  data-tip={!expanded ? item.label : undefined}
+                  className={!panelExpanded ? 'tooltip-wrap' : ''}
+                  data-tip={!panelExpanded ? item.label : undefined}
                   style={{
                     ...styles.navBtn,
-                    justifyContent: 'center',
-                    padding: expanded ? '8px 10px' : 0,
-                    width:  expanded ? '100%' : 36,
-                    height: expanded ? 'auto' : 36,
-                    margin: expanded ? '0 0 2px 0' : '0 auto 4px',
-                    borderRadius: expanded ? 10 : 12,
-                    background: isActive
-                      ? 'rgba(0, 113, 227, 0.15)'
-                      : 'transparent',
-                    border: isActive
-                      ? '1px solid rgba(0, 113, 227, 0.25)'
-                      : '1px solid transparent',
-                    color: isActive ? 'var(--text-1)' : 'var(--text-2)',
+                    justifyContent: panelExpanded ? 'flex-start' : 'center',
+                    padding:        panelExpanded ? '8px 10px' : 0,
+                    width:          panelExpanded ? '100%' : 36,
+                    height:         panelExpanded ? 'auto' : 36,
+                    margin:         panelExpanded ? '0 0 2px 0' : '0 auto 4px',
+                    borderRadius:   panelExpanded ? 10 : 12,
+                    background:     isActive ? 'rgba(0, 113, 227, 0.15)' : 'transparent',
+                    border:         isActive ? '1px solid rgba(0, 113, 227, 0.25)' : '1px solid transparent',
+                    color:          isActive ? 'var(--text-1)' : 'var(--text-2)',
                   }}
                 >
-                  {isActive && expanded && <span style={styles.accentBar} />}
+                  {isActive && panelExpanded && <span style={styles.accentBar} />}
 
-                  {(item as any).img ? (
+                  {item.img ? (
                     <img
-                      src={(item as any).img}
+                      src={item.img}
                       alt={item.label}
                       style={{ width: 22, height: 22, objectFit: 'contain', filter: imgFilter, flexShrink: 0 }}
                     />
@@ -160,7 +215,7 @@ export default function Sidebar() {
                     <Icon name={item.icon} size={16} />
                   )}
 
-                  {expanded && (
+                  {panelExpanded && (
                     <>
                       <span style={{ flex: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
                       {item.badge && <span style={styles.badge}>{item.badge}</span>}
@@ -171,145 +226,56 @@ export default function Sidebar() {
             })}
           </div>
         ))}
-
-
       </div>
-    </aside>
+
+      {/* ── Grid placeholder ────────────────────────────────────────────────── */}
+      {/*  Reserves 56px in the desktop CSS grid.                               */}
+      {/*  On mobile/tablet, display:none removes it from grid flow.            */}
+      {/*  The fixed panel above is a sibling, so display:none here has NO      */}
+      {/*  effect on the panel's visibility.                                    */}
+      <aside className="sidebar-placeholder" />
+    </>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Styles
-// ─────────────────────────────────────────────────────────────────────────────
 const styles: Record<string, React.CSSProperties> = {
   wsRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    cursor: 'pointer',
-    borderRadius: 8,
-    minWidth: 0,
+    display: 'flex', alignItems: 'center',
+    gap: 10, cursor: 'pointer', borderRadius: 8, minWidth: 0,
   },
   wsAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
-    background: 'var(--tint-2)',
-    border: '1px solid var(--border)',
-    display: 'grid',
-    placeItems: 'center',
-    fontWeight: 700,
-    fontSize: 14,
-    color: 'var(--text-2)',
-    flexShrink: 0,
+    width: 28, height: 28, borderRadius: 7,
+    background: 'var(--tint-2)', border: '1px solid var(--border)',
+    display: 'grid', placeItems: 'center',
+    fontWeight: 700, fontSize: 14, color: 'var(--text-2)', flexShrink: 0,
   },
-  wsMeta: {
-    display: 'flex',
-    flexDirection: 'column',
-    lineHeight: 1.15,
-  },
-  wsName: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: 'var(--text-1)',
-  },
-  wsPlan: {
-    fontSize: 11,
-    color: 'var(--text-3)',
-  },
-  iconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    background: 'transparent',
-    border: '1px solid var(--border)',
-    color: 'var(--text-2)',
-    display: 'grid',
-    placeItems: 'center',
-    cursor: 'pointer',
-    flexShrink: 0,
-    transition: 'all 0.15s',
-  },
+  wsMeta: { display: 'flex', flexDirection: 'column', lineHeight: 1.15 },
+  wsName: { fontSize: 13, fontWeight: 600, color: 'var(--text-1)' },
+  wsPlan: { fontSize: 11, color: 'var(--text-3)' },
   sectionLabel: {
-    fontSize: 10.5,
-    textTransform: 'uppercase',
-    letterSpacing: '0.16em',
-    color: 'var(--text-4)',
-    padding: '14px 12px 6px',
-    margin: 0,
+    fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.16em',
+    color: 'var(--text-4)', padding: '14px 12px 6px', margin: 0,
   },
   sectionDivider: {
-    height: 1,
-    background: 'var(--border)',
-    margin: '14px 14px 8px',
-    opacity: 0.6,
+    height: 1, background: 'var(--border)', margin: '14px 14px 8px', opacity: 0.6,
   },
   navBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 11,
-    borderRadius: 10,
-    fontSize: 14,
-    fontWeight: 500,
-    cursor: 'pointer',
-    textAlign: 'left',
+    display: 'flex', alignItems: 'center', gap: 11,
+    borderRadius: 10, fontSize: 14, fontWeight: 500,
+    cursor: 'pointer', textAlign: 'left',
     transition: 'background 0.15s, color 0.15s, border-color 0.15s',
-    position: 'relative',
-    marginBottom: 2,
+    position: 'relative', marginBottom: 2,
   },
   accentBar: {
-    position: 'absolute',
-    left: -14,
-    top: '50%',
+    position: 'absolute', left: -14, top: '50%',
     transform: 'translateY(-50%)',
-    width: 3,
-    height: 18,
-    background: 'var(--grad-brand)',
-    borderRadius: '0 3px 3px 0',
+    width: 3, height: 18,
+    background: 'var(--grad-brand)', borderRadius: '0 3px 3px 0',
   },
   badge: {
-    marginLeft: 'auto',
-    fontSize: 10,
-    padding: '2px 7px',
-    borderRadius: 99,
-    background: 'rgba(0, 113, 227, 0.12)',
-    color: 'var(--blue)',
-    fontWeight: 600,
-    letterSpacing: '0.04em',
-  },
-  upgradeCard: {
-    padding: 12,
-    border: '1px solid var(--border-strong)',
-    borderRadius: 'var(--radius)',
-    background: 'rgba(0, 113, 227, 0.08)',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  upgradeTitle: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: 'var(--text-1)',
-    margin: 0,
-    position: 'relative',
-  },
-  upgradeSub: {
-    fontSize: 11.5,
-    color: 'var(--text-3)',
-    margin: '4px 0 10px',
-    position: 'relative',
-  },
-  upgradeCta: {
-    position: 'relative',
-    fontSize: 12,
-    fontWeight: 600,
-    padding: '7px 12px',
-    borderRadius: 8,
-    background: 'var(--tint-4)',
-    border: '1px solid var(--border-strong)',
-    color: 'var(--text-1)',
-    cursor: 'pointer',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 5,
+    marginLeft: 'auto', fontSize: 10, padding: '2px 7px', borderRadius: 99,
+    background: 'rgba(0, 113, 227, 0.12)', color: 'var(--blue)',
+    fontWeight: 600, letterSpacing: '0.04em',
   },
 };
