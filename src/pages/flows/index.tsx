@@ -7,6 +7,7 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { listAgents, type Agent } from '../../api/agents';
 import { listConnections, APP_CATALOGUE, type AppConnection } from '../../api/connections';
 import {
@@ -83,6 +84,12 @@ const WEBHOOK_TEMPLATE = {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function FlowsPage() {
   const { addToast } = useApp();
+  const isMobile = useMediaQuery('(max-width: 640px)');
+  const isTablet = useMediaQuery('(max-width: 1024px)');
+  // Panel closed by default on mobile; open on tablet+desktop
+  const [panelOpen, setPanelOpen] = useState(() =>
+    typeof window !== 'undefined' ? !window.matchMedia('(max-width: 640px)').matches : true
+  );
 
   const [agents,      setAgents]      = useState<Agent[]>([]);
   const [connections, setConnections] = useState<AppConnection[]>([]);
@@ -110,6 +117,8 @@ export default function FlowsPage() {
   const [saving,   setSaving]   = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
+  const scrollWrapperRef = useRef<HTMLDivElement>(null);
+  const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
 
   // ── Load ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -124,6 +133,16 @@ export default function FlowsPage() {
       }
     }).catch(console.warn);
   }, []);
+
+  // Prevent canvas-pan scroll while dragging a node — needs non-passive listener
+  useEffect(() => {
+    if (!isMobile) return;
+    const el = scrollWrapperRef.current;
+    if (!el) return;
+    const block = (e: TouchEvent) => { if (dragNode.current) e.preventDefault(); };
+    el.addEventListener('touchmove', block, { passive: false });
+    return () => el.removeEventListener('touchmove', block);
+  }, [isMobile]);
 
   // ── Drag from panel ─────────────────────────────────────────────────────────
   function onPanelDragStart(e: React.DragEvent, payload: Omit<FlowNode,'id'|'x'|'y'>) {
@@ -178,38 +197,58 @@ export default function FlowsPage() {
     setPreviewLine(null);
   }
 
+  // ── Canvas touch handlers (mobile node drag) ─────────────────────────────────
+  function onCanvasTouchStart(e: React.TouchEvent) {
+    if (!isMobile || e.touches.length !== 1) return;
+    if ((e.target as HTMLElement).closest('[data-handle]')) return;
+    if (connectingFrom) return;
+    const touch = e.touches[0];
+    const rect  = canvasRef.current!.getBoundingClientRect();
+    const cx = touch.clientX - rect.left;
+    const cy = touch.clientY - rect.top;
+    const hit = nodes.find(n =>
+      cx >= n.x && cx <= n.x + NODE_W && cy >= n.y && cy <= n.y + NODE_H
+    );
+    if (hit) dragNode.current = { id: hit.id, ox: cx - hit.x, oy: cy - hit.y };
+  }
+
+  function onCanvasTouchMove(e: React.TouchEvent) {
+    if (!dragNode.current || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const rect  = canvasRef.current!.getBoundingClientRect();
+    const cx = touch.clientX - rect.left;
+    const cy = touch.clientY - rect.top;
+    const { id, ox, oy } = dragNode.current;
+    setNodes(prev => prev.map(n =>
+      n.id === id ? { ...n, x: Math.max(0, cx - ox), y: Math.max(0, cy - oy) } : n
+    ));
+  }
+
+  function onCanvasTouchEnd() { dragNode.current = null; }
+
   // ── Edge drawing ─────────────────────────────────────────────────────────────
   function startDrawEdge(e: React.MouseEvent, sourceId: string) {
     e.stopPropagation();
     drawEdge.current = { sourceId };
   }
 
-  function finishDrawEdge(e: React.MouseEvent, targetId: string) {
-    e.stopPropagation();
-    if (!drawEdge.current || drawEdge.current.sourceId === targetId) return;
-
-    const srcId = drawEdge.current.sourceId;
-    const src   = nodes.find(n => n.id === srcId);
-    const tgt   = nodes.find(n => n.id === targetId);
+  function tryConnect(srcId: string, targetId: string) {
+    if (srcId === targetId) return;
+    const src = nodes.find(n => n.id === srcId);
+    const tgt = nodes.find(n => n.id === targetId);
     if (!src || !tgt) return;
-
-    // ── Connection rules ──────────────────────────────────────────────────────
-    // app nodes can never be a source
-    if (src.type === 'app') return;
-    // agent → agent: not allowed
-    if (src.type === 'agent' && tgt.type === 'agent') return;
-    // webhook → webhook: not allowed
+    if (src.type === 'app') return; // apps can never be a source
     if (src.type === 'webhook' && tgt.type === 'webhook') return;
-    // duplicate edge: not allowed
     if (edges.find(ed => ed.source === srcId && ed.target === targetId)) return;
-
-    // Determine trigger type:
-    //   webhook → agent  : 'webhook_to_agent' (passes payload to agent)
-    //   anything → app   : 'escalation' as default (user can change via click)
     const triggerType: FlowEdge['triggerType'] =
       (src.type === 'webhook' && tgt.type === 'agent') ? 'webhook_to_agent' : 'escalation';
-
     setEdges(prev => [...prev, { id: uid(), source: srcId, target: targetId, triggerType }]);
+  }
+
+  function finishDrawEdge(e: React.MouseEvent, targetId: string) {
+    e.stopPropagation();
+    if (!drawEdge.current) return;
+    tryConnect(drawEdge.current.sourceId, targetId);
     drawEdge.current = null;
     setPreviewLine(null);
   }
@@ -217,9 +256,15 @@ export default function FlowsPage() {
   // ── Node click → edit drawer ─────────────────────────────────────────────────
   function onNodeClick(e: React.MouseEvent, node: FlowNode) {
     e.stopPropagation();
-    // Don't open drawer while mid-drag
     if (dragNode.current) return;
+    // In connecting mode: tap any node body (not the source) to complete the connection
+    if (connectingFrom && connectingFrom !== node.id) {
+      tryConnect(connectingFrom, node.id);
+      setConnectingFrom(null);
+      return;
+    }
     setSelectedEdge(null);
+    setConnectingFrom(null);
     setEditNode(prev => prev?.id === node.id ? null : node);
   }
 
@@ -237,6 +282,19 @@ export default function FlowsPage() {
     setNodes(prev => prev.filter(n => n.id !== id));
     setEdges(prev => prev.filter(e => e.source !== id && e.target !== id));
     if (editNode?.id === id) setEditNode(null);
+  }
+
+  // ── Tap-to-add (mobile) — places node at next auto-position ─────────────────
+  function addNodeFromPanel(payload: Omit<FlowNode,'id'|'x'|'y'>) {
+    const x = 30;
+    const y = 30 + nodes.length * (NODE_H + 22);
+    const extra = payload.type === 'webhook'
+      ? { data: { ...payload.data, webhookId: uid(), webhookSecret: `whsec_${uid()}${uid()}` } }
+      : {};
+    const newNode: FlowNode = { ...payload, ...extra, id: uid(), x, y };
+    setNodes(prev => [...prev, newNode]);
+    setEditNode(newNode);
+    setPanelOpen(false);
   }
 
   // ── Load a workflow into the canvas ──────────────────────────────────────────
@@ -315,8 +373,50 @@ export default function FlowsPage() {
     <div style={{ display:'flex', height:'calc(100vh - 48px)',
       background:'var(--bg-0)', position:'relative', overflow:'hidden' }}>
 
+      {/* ── Mobile backdrop — closes panel on tap outside ── */}
+      {isMobile && panelOpen && (
+        <div
+          onClick={() => setPanelOpen(false)}
+          style={{
+            position: 'absolute', inset: 0,
+            background: 'rgba(0,0,0,0.5)', zIndex: 40,
+          }}
+        />
+      )}
+
       {/* ── Left panel ─────────────────────────────────────────────────────── */}
-      <div style={leftPanel}>
+      <div style={{
+        ...leftPanel,
+        // Tablet: narrower in-flow panel; hide when closed
+        ...(isTablet && !isMobile ? {
+          width: 190,
+          display: panelOpen ? 'flex' : 'none',
+        } : {}),
+        // Mobile: absolute overlay, slide-in via transform
+        ...(isMobile ? {
+          position: 'absolute',
+          top: 0, left: 0, bottom: 0,
+          width: 'min(280px, 85vw)' as any,
+          zIndex: 50,
+          transform: panelOpen ? 'translateX(0)' : 'translateX(-105%)',
+          transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
+          boxShadow: panelOpen ? '4px 0 24px rgba(0,0,0,0.5)' : 'none',
+        } : {}),
+      }}>
+        {/* Mobile panel header with close button */}
+        {isMobile && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+            padding:'10px 10px 0', flexShrink:0 }}>
+            <span style={{ fontSize:11, fontWeight:700, color:'var(--text-4)', letterSpacing:'0.08em' }}>
+              ADD TO CANVAS
+            </span>
+            <button onClick={() => setPanelOpen(false)}
+              style={{ background:'none', border:'none', color:'var(--text-3)',
+                cursor:'pointer', fontSize:18, lineHeight:1, padding:'2px 6px' }}>
+              ×
+            </button>
+          </div>
+        )}
         {/* Tabs */}
         <div style={{ display:'flex', borderBottom:'1px solid var(--border)', padding:'0 6px', flexShrink:0 }}>
           {(['agents','apps','webhooks'] as const).map(tab => (
@@ -339,12 +439,12 @@ export default function FlowsPage() {
                 const isChat = agent.call_direction === 'chat'
                   || CHAT_SLUGS.some(s => agent.use_case_slug?.includes(s));
                 const color  = isChat ? 'var(--purple-hi)' : 'var(--blue)';
+                const agentPayload = { type: 'agent' as const, data: { agentId: agent.id, agentName: agent.name, agentType: isChat ? 'chat' as const : 'voice' as const } };
                 return (
-                  <div key={agent.id} draggable
-                    onDragStart={e => onPanelDragStart(e, {
-                      type: 'agent',
-                      data: { agentId: agent.id, agentName: agent.name, agentType: isChat ? 'chat' : 'voice' },
-                    })}
+                  <div key={agent.id}
+                    draggable={!isMobile}
+                    onDragStart={!isMobile ? (e => onPanelDragStart(e, agentPayload)) : undefined}
+                    onClick={isMobile ? () => addNodeFromPanel(agentPayload) : undefined}
                     style={panelCard(color)}
                   >
                     <span style={{ fontSize:16 }}>{isChat ? '🤖' : '📞'}</span>
@@ -354,7 +454,7 @@ export default function FlowsPage() {
                       </div>
                       <span style={tagChip(color)}>{isChat ? 'chatbot' : 'voice'}</span>
                     </div>
-                    <span style={{ fontSize:10, color:'var(--text-4)' }}>⠿</span>
+                    <span style={{ fontSize:10, color:'var(--text-4)' }}>{isMobile ? '＋' : '⠿'}</span>
                   </div>
                 );
               })
@@ -363,12 +463,12 @@ export default function FlowsPage() {
           {/* ── Apps tab ── */}
           {leftTab === 'apps' && APP_CATALOGUE.map(app => {
             const conn = connections.find(c => c.app_type === app.type);
+            const appPayload = { type: 'app' as const, data: { appType: app.type, appLabel: app.label, appIcon: app.icon, connectionId: conn?.id } };
             return (
-              <div key={app.type} draggable
-                onDragStart={e => onPanelDragStart(e, {
-                  type: 'app',
-                  data: { appType: app.type, appLabel: app.label, appIcon: app.icon, connectionId: conn?.id },
-                })}
+              <div key={app.type}
+                draggable={!isMobile}
+                onDragStart={!isMobile ? (e => onPanelDragStart(e, appPayload)) : undefined}
+                onClick={isMobile ? () => addNodeFromPanel(appPayload) : undefined}
                 style={panelCard('var(--border)')}
               >
                 <span style={{ fontSize:16 }}>{app.icon}</span>
@@ -383,7 +483,7 @@ export default function FlowsPage() {
                   background: conn?.is_connected ? 'rgba(76,175,80,0.14)' : 'var(--tint-2)',
                   borderRadius:4, padding:'2px 5px',
                 }}>
-                  {conn?.is_connected ? '●' : '+'}
+                  {conn?.is_connected ? '●' : (isMobile ? '＋' : '+')}
                 </span>
               </div>
             );
@@ -393,11 +493,15 @@ export default function FlowsPage() {
           {leftTab === 'webhooks' && (
             <>
               <p style={{ fontSize:11.5, color:'var(--text-4)', padding:'4px 6px 10px', lineHeight:1.6 }}>
-                Drag an <strong style={{ color:'var(--teal)' }}>Inbound Webhook</strong> node onto the canvas.
-                Each drag creates a <strong style={{ color:'var(--text-2)' }}>new unique URL</strong> with its own secret — you can have as many webhook nodes as you need, one per external source.
+                {isMobile
+                  ? <>Tap to add an <strong style={{ color:'var(--teal)' }}>Inbound Webhook</strong> node. Each tap creates a new unique URL with its own secret.</>
+                  : <>Drag an <strong style={{ color:'var(--teal)' }}>Inbound Webhook</strong> node onto the canvas. Each drag creates a <strong style={{ color:'var(--text-2)' }}>new unique URL</strong> with its own secret.</>
+                }
               </p>
-              <div draggable
-                onDragStart={e => onPanelDragStart(e, WEBHOOK_TEMPLATE)}
+              <div
+                draggable={!isMobile}
+                onDragStart={!isMobile ? (e => onPanelDragStart(e, WEBHOOK_TEMPLATE)) : undefined}
+                onClick={isMobile ? () => addNodeFromPanel(WEBHOOK_TEMPLATE) : undefined}
                 style={panelCard('var(--teal)')}
               >
                 <span style={{ fontSize:16 }}>🪝</span>
@@ -405,7 +509,7 @@ export default function FlowsPage() {
                   <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)' }}>Inbound Webhook</div>
                   <div style={{ fontSize:10.5, color:'var(--text-4)' }}>External POST → trigger flow</div>
                 </div>
-                <span style={{ fontSize:10, color:'var(--text-4)' }}>⠿</span>
+                <span style={{ fontSize:10, color:'var(--text-4)' }}>{isMobile ? '＋' : '⠿'}</span>
               </div>
             </>
           )}
@@ -413,11 +517,22 @@ export default function FlowsPage() {
       </div>
 
       {/* ── Canvas area ────────────────────────────────────────────────────── */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden',
-        marginRight: editNode ? 340 : 0, transition:'margin-right 0.22s ease' }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative',
+        marginRight: (editNode && !isMobile) ? (isTablet ? 300 : 340) : 0,
+        transition:'margin-right 0.22s ease' }}>
 
         {/* Toolbar */}
-        <div style={toolbar}>
+        <div style={{ ...toolbar, gap: isMobile ? 6 : 10, padding: isMobile ? '8px 10px' : '10px 14px' }}>
+          {/* Panel toggle button — mobile + tablet */}
+          {(isMobile || isTablet) && (
+            <button
+              onClick={() => setPanelOpen(p => !p)}
+              title="Toggle panel"
+              style={{ ...ghostBtn, padding:'6px 9px', flexShrink:0, fontSize:16 }}
+            >
+              ☰
+            </button>
+          )}
           {/* Workflow switcher */}
           <div style={{ position:'relative', flexShrink:0 }}>
             <button onClick={() => setShowWfPicker(p => !p)} style={{
@@ -490,19 +605,42 @@ export default function FlowsPage() {
           </div>
 
           <input value={flowName} onChange={e => setFlowName(e.target.value)}
-            style={{ fontSize:14, fontWeight:600, color:'var(--text-1)', background:'transparent',
+            style={{ fontSize: isMobile ? 13 : 14, fontWeight:600, color:'var(--text-1)', background:'transparent',
               border:'none', outline:'none', padding:'4px 0', minWidth:0, flex:1 }}
             placeholder="Workflow name…"
           />
-          <span style={{ fontSize:11.5, color:'var(--text-4)', flexShrink:0 }}>
-            {nodes.length} nodes · {edges.length} edges
-          </span>
-          <button onClick={() => { setNodes([]); setEdges([]); setEditNode(null); }}
-            style={ghostBtn}>Clear</button>
-          <button onClick={saveWorkflow} disabled={saving} style={saveBtn}>
+          {!isMobile && (
+            <span style={{ fontSize:11.5, color:'var(--text-4)', flexShrink:0 }}>
+              {nodes.length} nodes · {edges.length} edges
+            </span>
+          )}
+          {!isMobile && (
+            <button onClick={() => { setNodes([]); setEdges([]); setEditNode(null); }}
+              style={ghostBtn}>Clear</button>
+          )}
+          <button onClick={saveWorkflow} disabled={saving} style={{
+            ...saveBtn,
+            padding: isMobile ? '6px 12px' : '7px 14px',
+            fontSize: isMobile ? 12 : 13,
+          }}>
             {saving ? 'Saving…' : '💾 Save'}
           </button>
         </div>
+
+        {/* Connecting mode banner — mobile only */}
+        {isMobile && connectingFrom && (
+          <div style={{
+            position: 'absolute', top: 48, left: 0, right: 0, zIndex: 30,
+            background: 'rgba(117,91,227,0.18)', borderBottom: '1px solid rgba(117,91,227,0.35)',
+            padding: '7px 12px', fontSize: 12, color: 'var(--purple-hi)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span>Tap ◉ left handle of a target node to connect</span>
+            <button onClick={() => setConnectingFrom(null)}
+              style={{ background:'none', border:'none', color:'var(--purple-hi)',
+                cursor:'pointer', fontSize:16, padding:'0 4px', opacity:0.7 }}>×</button>
+          </div>
+        )}
 
         {/* Empty state */}
         {nodes.length === 0 && (
@@ -510,19 +648,40 @@ export default function FlowsPage() {
             alignItems:'center', justifyContent:'center', pointerEvents:'none', zIndex:0 }}>
             <div style={{ fontSize:30, marginBottom:8, opacity:0.4 }}>⬡</div>
             <div style={{ fontSize:14, fontWeight:600, color:'var(--text-3)', marginBottom:4 }}>
-              Drag agents, apps or webhooks onto the canvas
+              {isMobile ? 'Tap items in the panel to add them' : 'Drag agents, apps or webhooks onto the canvas'}
             </div>
             <div style={{ fontSize:12, color:'var(--text-4)' }}>
-              Then drag the → handle on a source node to connect it to an action node
+              {isMobile ? 'Press ☰ to open the panel' : 'Then drag the → handle on a source node to connect it to an action node'}
             </div>
           </div>
         )}
 
         {/* Drop zone + nodes + SVG edges */}
-        <div ref={canvasRef} style={canvas}
+        {/* Scroll wrapper — allows panning on mobile */}
+        <div ref={scrollWrapperRef} style={{
+          flex: 1,
+          display: 'flex',
+          overflow: isMobile ? 'auto' : 'hidden',
+          WebkitOverflowScrolling: isMobile ? 'touch' as any : undefined,
+          position: 'relative',
+        }}>
+        <div ref={canvasRef} style={{
+            ...canvas,
+            ...(isMobile ? {
+              flex: 'none',
+              width: '100%',
+              height: '100%',
+              minWidth: 1000,
+              minHeight: 650,
+            } : {}),
+          }}
           onDrop={onCanvasDrop} onDragOver={e => e.preventDefault()}
           onMouseMove={onCanvasMouseMove} onMouseUp={onCanvasMouseUp}
-          onClick={() => { setSelectedEdge(null); setEditNode(null); setShowWfPicker(false); }}
+          onTouchStart={onCanvasTouchStart}
+          onTouchMove={onCanvasTouchMove}
+          onTouchEnd={onCanvasTouchEnd}
+          onTouchCancel={onCanvasTouchEnd}
+          onClick={() => { setSelectedEdge(null); setEditNode(null); setShowWfPicker(false); setConnectingFrom(null); }}
         >
           {/* SVG edge layer */}
           <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%',
@@ -638,16 +797,38 @@ export default function FlowsPage() {
 
                 {/* Right handle (source) */}
                 {isSource(node) && (
-                  <div style={handle('right', color)}
-                    onMouseDown={e => startDrawEdge(e, node.id)}
-                    title="Drag to connect to an action"/>
+                  <div
+                    data-handle="right"
+                    data-nodeid={node.id}
+                    style={handle('right', color, isMobile, connectingFrom === node.id)}
+                    onMouseDown={!isMobile ? (e => startDrawEdge(e, node.id)) : undefined}
+                    onClick={isMobile ? (e => {
+                      e.stopPropagation();
+                      setConnectingFrom(prev => prev === node.id ? null : node.id);
+                      setEditNode(null);
+                    }) : undefined}
+                    title={isMobile
+                      ? (connectingFrom === node.id ? 'Tap to cancel' : 'Tap to start connecting')
+                      : 'Drag to connect to an action'}
+                  />
                 )}
 
                 {/* Left handle (target) */}
                 {isTarget(node) && (
-                  <div style={handle('left', color)}
-                    onMouseUp={e => finishDrawEdge(e, node.id)}
-                    title="Drop connection here"/>
+                  <div
+                    data-handle="left"
+                    data-nodeid={node.id}
+                    style={handle('left', color, isMobile, isMobile && connectingFrom !== null && connectingFrom !== node.id)}
+                    onMouseUp={!isMobile ? (e => finishDrawEdge(e, node.id)) : undefined}
+                    onClick={isMobile ? (e => {
+                      e.stopPropagation();
+                      if (connectingFrom && connectingFrom !== node.id) {
+                        tryConnect(connectingFrom, node.id);
+                        setConnectingFrom(null);
+                      }
+                    }) : undefined}
+                    title={isMobile ? 'Tap to receive connection' : 'Drop connection here'}
+                  />
                 )}
               </div>
             );
@@ -665,19 +846,24 @@ export default function FlowsPage() {
             />
           )}
         </div>
+        </div>{/* scroll wrapper */}
 
-        {/* Legend */}
-        <div style={legend}>
-          <span style={{ fontSize:11, color:'var(--text-4)', marginRight:8 }}>Trigger type:</span>
-          {(['escalation','demo_booking','both','webhook_to_agent'] as const).map(t => (
-            <span key={t} style={{ fontSize:11, color:TINT[t], marginRight:10 }}>
-              ● {t.replace(/_/g,' ')}
-            </span>
-          ))}
-          <span style={{ fontSize:11, color:'var(--text-4)', marginLeft:'auto' }}>
-            Click any node to edit · → handle to connect
-          </span>
-        </div>
+        {/* Legend — hidden on mobile */}
+        {!isMobile && (
+          <div style={legend}>
+            <span style={{ fontSize:11, color:'var(--text-4)', marginRight:8 }}>Trigger type:</span>
+            {(['escalation','demo_booking','both','webhook_to_agent'] as const).map(t => (
+              <span key={t} style={{ fontSize:11, color:TINT[t], marginRight:10 }}>
+                ● {t.replace(/_/g,' ')}
+              </span>
+            ))}
+            {!isTablet && (
+              <span style={{ fontSize:11, color:'var(--text-4)', marginLeft:'auto' }}>
+                Click any node to edit · → handle to connect
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Edit drawer ─────────────────────────────────────────────────────── */}
@@ -750,13 +936,17 @@ function tagChip(color: string): React.CSSProperties {
   };
 }
 
-function handle(side: 'left'|'right', color: string): React.CSSProperties {
+function handle(side: 'left'|'right', color: string, mobile = false, active = false): React.CSSProperties {
+  const r = mobile ? 10 : HANDLE_R;
   return {
-    position: 'absolute', top: NODE_H/2 - HANDLE_R,
-    [side]: -HANDLE_R - 1,
-    width: HANDLE_R*2, height: HANDLE_R*2, borderRadius: '50%',
-    background: color, border: '2px solid var(--bg-0)',
+    position: 'absolute', top: NODE_H/2 - r,
+    [side]: -r - 1,
+    width: r*2, height: r*2, borderRadius: '50%',
+    background: active ? '#fff' : color,
+    border: `${mobile ? 3 : 2}px solid ${active ? color : 'var(--bg-0)'}`,
     cursor: side==='right' ? 'crosshair' : 'cell', zIndex: 3,
+    boxShadow: active ? `0 0 0 5px ${color}44` : 'none',
+    transition: 'background 0.15s, box-shadow 0.15s',
   };
 }
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
 import { Icon } from '../assets/icons';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import SignupPopup from './SignupPopup';
 import { redirectToSSO } from '../utils/sso';
 
@@ -17,9 +18,18 @@ const crumbMap = {
   marketing:  [{ t: 'Home' }, { t: 'Voice Agents' }, { t: 'Marketing',   current: true }],
 };
 
-export default function Topbar() {
+interface TopbarProps {
+  onMenuOpen?: () => void;
+}
+
+export default function Topbar({ onMenuOpen }: TopbarProps) {
   const { currentView, addToast, user, signOut } = useApp();
   const { theme, toggleTheme } = useTheme();
+
+  // Responsive breakpoints — drive visibility directly, no CSS class gymnastics
+  const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
+  const isSmallMobile    = useMediaQuery('(max-width: 640px)');
+
   const crumbs = crumbMap[currentView] ?? crumbMap.dashboard;
   const [showSignup,  setShowSignup]  = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -37,6 +47,7 @@ export default function Topbar() {
     display: 'grid', placeItems: 'center',
     cursor: 'pointer', position: 'relative',
     transition: 'all 0.15s',
+    flexShrink: 0,
   };
 
   // Close profile dropdown on outside click
@@ -68,10 +79,10 @@ export default function Topbar() {
         height: 48,
         width: '100%',
         boxSizing: 'border-box',
-        padding: '0 20px',
+        padding: isSmallMobile ? '0 12px' : '0 20px',
         display: 'flex',
         alignItems: 'center',
-        gap: 16,
+        gap: isSmallMobile ? 10 : 16,
         borderBottom: '1px solid var(--border)',
         background: 'var(--surface-solid)',
         position: 'sticky',
@@ -79,27 +90,67 @@ export default function Topbar() {
         zIndex: 10,
       }}
     >
-      {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--text-3)' }}>
-        {crumbs.map((c, i) => (
-          <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {i > 0 && <span style={{ color: 'var(--text-4)' }}>/</span>}
-            <span style={c.current ? { color: 'var(--text-1)', fontWeight: 500 } : {}}>{c.t}</span>
-          </span>
-        ))}
-      </div>
+      {/* Hamburger — only rendered on tablet/mobile */}
+      {isMobileOrTablet && (
+        <button
+          onClick={onMenuOpen}
+          aria-label="Open navigation menu"
+          style={{
+            width: 36, height: 36,
+            display: 'grid', placeItems: 'center',
+            borderRadius: 10,
+            border: '1px solid var(--border)',
+            background: 'transparent',
+            color: 'var(--text-2)',
+            cursor: 'pointer',
+            flexShrink: 0,
+            transition: 'background 0.15s, border-color 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--tint-2)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          <Icon name="menu" size={18} />
+        </button>
+      )}
+
+      {/* Breadcrumb — hidden on small mobile to save space */}
+      {!isSmallMobile && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontSize: 13,
+            color: 'var(--text-3)',
+            flexShrink: 0,
+          }}
+        >
+          {crumbs.map((c, i) => (
+            <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {i > 0 && <span style={{ color: 'var(--text-4)' }}>/</span>}
+              <span style={c.current ? { color: 'var(--text-1)', fontWeight: 500 } : {}}>
+                {c.t}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Search */}
       <div
         className="topbar-search"
         style={{
-          flex: 1, maxWidth: 520,
-          display: 'flex', alignItems: 'center', gap: 10,
+          flex: 1,
+          maxWidth: 520,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
           background: 'var(--input-bg)',
           border: '1px solid var(--border-strong)',
           borderRadius: 8,
           padding: '5px 12px',
           transition: 'border-color 0.15s',
+          minWidth: 0,
         }}
         onFocus={e => {
           e.currentTarget.style.borderColor = 'var(--border-accent)';
@@ -113,59 +164,68 @@ export default function Topbar() {
         <Icon name="search" size={14} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
         <input
           className="topbar-search-input"
-          placeholder="Search or ask AI…"
+          placeholder={isSmallMobile ? 'Search…' : 'Search or ask AI…'}
           style={{
-            flex: 1, background: 'transparent', border: 'none', outline: 'none',
-            color: 'var(--text-1)', fontSize: 14,
+            flex: 1,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            color: 'var(--text-1)',
+            fontSize: 14,
+            minWidth: 0,
           }}
         />
-        <span
-          style={{
-            fontFamily: "'Zalando Sans'",
-            fontSize: 10, padding: '3px 6px',
-            border: '1px solid var(--border-strong)', borderRadius: 5,
-            color: 'var(--text-3)', background: 'var(--tint-1)',
-          }}
-        >
-          ⌘ K
-        </span>
+        {/* ⌘K hint — desktop only */}
+        {!isMobileOrTablet && (
+          <span
+            style={{
+              fontFamily: "'Zalando Sans'",
+              fontSize: 10,
+              padding: '3px 6px',
+              border: '1px solid var(--border-strong)',
+              borderRadius: 5,
+              color: 'var(--text-3)',
+              background: 'var(--tint-1)',
+              flexShrink: 0,
+            }}
+          >
+            ⌘ K
+          </span>
+        )}
       </div>
 
       {/* Right actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-        {[
-          { icon: 'bell', tip: 'Notifications', dot: true },
-        ].map(({ icon, tip, dot }) => (
-          <button
-            key={icon}
-            className="tooltip-wrap"
-            data-tip={tip}
-            onClick={() => addToast(`${tip} — coming soon`, 'info')}
-            style={iconBtnStyle}
-          >
-            <Icon name={icon} size={16} />
-            {dot && (
-              <span
-                style={{
-                  position: 'absolute', top: 9, right: 10,
-                  width: 7, height: 7, borderRadius: '50%',
-                  background: 'var(--blue)',
-                  boxShadow: '0 0 10px var(--blue)',
-                }}
-              />
-            )}
-          </button>
-        ))}
-
+        {/* Notifications bell */}
         <button
           className="tooltip-wrap"
-          data-tip={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
-          onClick={toggleTheme}
-          aria-label="Toggle color theme"
+          data-tip="Notifications"
+          onClick={() => addToast('Notifications — coming soon', 'info')}
           style={iconBtnStyle}
         >
-          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} />
+          <Icon name="bell" size={16} />
+          <span
+            style={{
+              position: 'absolute', top: 9, right: 10,
+              width: 7, height: 7, borderRadius: '50%',
+              background: 'var(--blue)',
+              boxShadow: '0 0 10px var(--blue)',
+            }}
+          />
         </button>
+
+        {/* Theme toggle — hide on very small mobile to save space */}
+        {!isSmallMobile && (
+          <button
+            className="tooltip-wrap"
+            data-tip={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+            onClick={toggleTheme}
+            aria-label="Toggle color theme"
+            style={iconBtnStyle}
+          >
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} />
+          </button>
+        )}
 
         <button
           className="tooltip-wrap"
@@ -176,10 +236,9 @@ export default function Topbar() {
           <Icon name="help" size={16} />
         </button>
 
-        {/* Profile avatar (signed in) or Sign In button */}
+        {/* Profile avatar or Sign In */}
         {user ? (
           <div id="profile-dropdown-anchor" style={{ position: 'relative' }}>
-            {/* Avatar button */}
             <button
               onClick={() => setShowProfile(p => !p)}
               style={{
@@ -200,7 +259,6 @@ export default function Topbar() {
               {initials}
             </button>
 
-            {/* Dropdown panel */}
             {showProfile && (
               <div
                 style={{
@@ -263,7 +321,7 @@ export default function Topbar() {
                   </div>
                 </div>
 
-                {/* Role + company row */}
+                {/* Role + company */}
                 <div
                   style={{
                     padding: '12px 18px',
@@ -300,10 +358,7 @@ export default function Topbar() {
                 {/* Sign out */}
                 <div style={{ padding: '8px' }}>
                   <button
-                    onClick={() => {
-                      setShowProfile(false);
-                      signOut();
-                    }}
+                    onClick={() => { setShowProfile(false); signOut(); }}
                     style={{
                       width: '100%',
                       display: 'flex',

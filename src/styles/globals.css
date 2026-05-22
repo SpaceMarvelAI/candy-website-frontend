@@ -345,3 +345,165 @@ html.theme-transitioning *::after {
   --tint-3: rgba(0, 0, 0, 0.08);
   --tint-4: rgba(0, 0, 0, 0.11);
 }
+
+/* =========================================================
+   RESPONSIVE LAYOUT
+   Desktop (>1024px): unchanged.
+   Tablet (641–1024px): 2-col grids, drawer sidebar.
+   Mobile (≤640px): 1-col / 2-col grids, tighter padding.
+   ========================================================= */
+
+/* ── App layout grid ── */
+.app-layout {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  min-height: 100vh;
+}
+
+/* ── Sidebar placeholder ── */
+.sidebar-placeholder {
+  width: 56px;
+  flex-shrink: 0;
+}
+
+/* ── Main content padding ── */
+.main-content-pad {
+  padding: 32px 40px 60px;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Dashboard stat strip grid ── */
+.grid-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 36px;
+}
+
+/* ── Industry workspace category grid ── */
+.grid-categories {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 40px;
+}
+
+/* ── Dashboard bottom row: Activity + Quick Actions ── */
+.grid-bottom-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 20px;
+}
+
+/* ── Topbar hamburger — always hidden on desktop ── */
+.topbar-hamburger {
+  display: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  place-items: center;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.topbar-hamburger:hover {
+  background: var(--tint-2);
+  border-color: var(--border-strong);
+}
+
+/* ── Page title — responsive font size ── */
+.page-title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin-bottom: 12px;
+  color: var(--text-1);
+}
+
+/* ==========================================================
+   TABLET  ≤1024px
+   ========================================================== */
+@media (max-width: 1024px) {
+  .app-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-placeholder {
+    display: none;
+  }
+
+  .topbar-hamburger {
+    display: grid;
+  }
+
+  .main-content-pad {
+    padding: 24px 20px 48px;
+  }
+
+  .grid-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .grid-categories {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+
+  .grid-bottom-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-size: 28px;
+  }
+}
+
+/* ==========================================================
+   MOBILE  ≤640px
+   ========================================================== */
+@media (max-width: 640px) {
+  .main-content-pad {
+    padding: 16px 16px 40px;
+  }
+
+  .grid-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .grid-categories {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
+  /* Hide breadcrumb trail — page title in topbar provides enough context */
+  .topbar-crumbs {
+    display: none;
+  }
+
+  /* Hide ⌘K shortcut hint — irrelevant on touch devices */
+  .topbar-search-kbd {
+    display: none;
+  }
+
+  /* Tighten topbar padding on small screens */
+  .topbar-root {
+    padding: 0 12px;
+    gap: 10px;
+  }
+}

@@ -167,10 +167,7 @@ export default function ChatbotsPage() {
         }}>
           AI Platform · Chatbot Workspaces
         </div>
-        <h1 style={{
-          fontSize: 36, fontWeight: 700, letterSpacing: '-0.025em',
-          lineHeight: 1.1, marginBottom: 12, color: 'var(--text-1)',
-        }}>
+        <h1 className="page-title">
           Choose a chatbot use case
         </h1>
         <p style={{ color: 'var(--text-3)', fontSize: 15, maxWidth: 560 }}>
@@ -190,12 +187,7 @@ export default function ChatbotsPage() {
       </div>
 
       {/* Cards grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: 18,
-        marginBottom: 40,
-      }}>
+      <div className="grid-categories">
         {USE_CASES.map((uc, idx) => (
           <UseCaseCard
             key={uc.id}

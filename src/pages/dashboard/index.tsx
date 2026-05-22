@@ -1,8 +1,5 @@
-import HeroPrompt    from './HeroPrompt';
-import StatsStrip    from './StatsStrip';
-import CategoryGrid  from './CategoryGrid';
-import ActivityPanel from './ActivityPanel';
-import QuickActions  from './QuickActions';
+import StatsStrip   from './StatsStrip';
+import CategoryGrid from './CategoryGrid';
 
 export default function DashboardPage() {
   return (
@@ -17,12 +14,7 @@ export default function DashboardPage() {
         >
           Good morning, Hello
         </div>
-        <h1
-          style={{
-            fontSize: 36, fontWeight: 700, letterSpacing: '-0.025em',
-            lineHeight: 1.1, marginBottom: 12, color: 'var(--text-1)',
-          }}
-        >
+        <h1 className="page-title">
           Your meta workspace is ready.
         </h1>
         <p style={{ color: 'var(--text-3)', fontSize: 15, maxWidth: 560 }}>
@@ -30,15 +22,8 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <HeroPrompt />
       <StatsStrip />
       <CategoryGrid />
-
-      {/* Bottom row: Activity + Quick Actions */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 20 }}>
-        <ActivityPanel />
-        <QuickActions />
-      </div>
     </div>
   );
 }

@@ -1,4 +1,10 @@
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+
 export default function LiveStats({ counts }) {
+  const isMobile = useMediaQuery('(max-width: 640px)');
+  const isTablet = useMediaQuery('(max-width: 1024px)');
+  const cols     = isMobile ? 2 : isTablet ? 3 : 5;
+
   const stats = [
     { key: 'total',      label: 'Total contacts', val: counts.total,      sub: 'Imported from xlsx',    dotColor: 'var(--purple)' },
     { key: 'completed',  label: 'Completed',       val: counts.completed,  sub: `${Math.round(counts.completed / counts.total * 100)}% success rate`, dotColor: 'var(--green)', dotGlow: true },
@@ -8,7 +14,7 @@ export default function LiveStats({ counts }) {
   ];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 24 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: isMobile ? 10 : 14, marginBottom: 24 }}>
       {stats.map(s => (
         <div
           key={s.key}

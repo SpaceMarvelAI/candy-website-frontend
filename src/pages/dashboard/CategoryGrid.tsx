@@ -29,7 +29,8 @@ export default function CategoryGrid() {
       {/* Section head */}
       <div
         style={{
-          display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: 12,
           margin: '8px 0 18px',
         }}
       >
@@ -72,9 +73,7 @@ export default function CategoryGrid() {
       </div>
 
       {/* Grid */}
-      <div
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18, marginBottom: 40 }}
-      >
+      <div className="grid-categories">
         {categories.map((cat, idx) => (
           <CatCard
             key={cat.id}

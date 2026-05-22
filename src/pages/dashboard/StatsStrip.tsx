@@ -3,12 +3,7 @@ import { statsStrip } from '../../utils/mockData';
 
 export default function StatsStrip() {
   return (
-    <div
-      style={{
-        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: 16, marginBottom: 36,
-      }}
-    >
+    <div className="grid-stats">
       {statsStrip.map((s, i) => (
         <div
           key={i}

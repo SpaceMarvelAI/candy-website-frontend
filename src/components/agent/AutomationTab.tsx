@@ -334,8 +334,8 @@ export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: P
                             <span style={triggerBadge(cfg.trigger_type)}>{TRIGGER_LABELS[cfg.trigger_type]}</span>
                             {' · '}
                             <span style={{ fontFamily: 'inherit', fontSize: 10.5 }}>
-                              {cfg.webhook_url.replace(/^https?:\/\//, '').slice(0, 38)}
-                              {cfg.webhook_url.length > 45 ? '…' : ''}
+                              {(cfg.webhook_url ?? '').replace(/^https?:\/\//, '').slice(0, 38)}
+                              {(cfg.webhook_url?.length ?? 0) > 45 ? '…' : ''}
                             </span>
                           </div>
                         </div>

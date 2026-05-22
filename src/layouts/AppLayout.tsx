@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
@@ -9,30 +10,22 @@ export default function AppLayout({ children }) {
   const { pathname } = useLocation();
   const fullBleed = FULL_BLEED.some(p => pathname === p || pathname.startsWith(p + '/'));
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Close mobile drawer whenever the route changes
+  useEffect(() => { setSidebarOpen(false); }, [pathname]);
+
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '56px 1fr',
-        minHeight: '100vh',
-      }}
-    >
-      <Sidebar />
+    <div className="app-layout">
+      <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-        <Topbar />
+        <Topbar onMenuOpen={() => setSidebarOpen(true)} />
         {fullBleed ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {children}
           </div>
         ) : (
-          <main
-            style={{
-              padding: '32px 40px 60px',
-              maxWidth: 1440,
-              margin: '0 auto',
-              width: '100%',
-            }}
-          >
+          <main className="main-content-pad">
             {children}
           </main>
         )}

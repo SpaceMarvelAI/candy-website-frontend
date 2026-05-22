@@ -452,7 +452,8 @@ function RecordingsTable({
         <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>{emptyHint}</div>
       ) : (
         <>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
             <thead>
               <tr>
                 {['Agent', 'Captured', 'Duration', 'Size', 'Language', 'Transcript', ''].map((h, i) => (
@@ -593,12 +594,14 @@ function RecordingsTable({
               })}
             </tbody>
           </table>
+          </div>
 
           {/* Pagination bar */}
           {totalPages > 1 && (
             <div
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                flexWrap: 'wrap', gap: 8,
                 padding: '14px 22px', borderTop: '1px solid var(--border)',
               }}
             >
@@ -706,7 +709,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
         onClick={e => e.stopPropagation()}
         style={{
           position: 'fixed', top: 0, right: 0, bottom: 0,
-          width: 'min(540px, 46vw)',
+          width: 'min(540px, 92vw)',
           zIndex: 1001,
           background: '#18181f',
           borderLeft: '1px solid var(--border-strong)',
@@ -891,7 +894,8 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
           </span>
         )}
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 560 }}>
         <thead>
           <tr>
             {['Agent', 'Use case', 'Started', 'Messages', 'First message', ''].map((h, i) => (
@@ -967,12 +971,14 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
           })}
         </tbody>
       </table>
+      </div>
 
       {/* Pagination bar */}
       {totalPages > 1 && (
         <div
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            flexWrap: 'wrap', gap: 8,
             padding: '14px 22px', borderTop: '1px solid var(--border)',
           }}
         >
@@ -1084,7 +1090,8 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
         )}
       </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 480 }}>
         <thead>
           <tr>
             {['Name', 'Use case', 'Status', 'Direction', 'Created'].map(h => (
@@ -1131,12 +1138,14 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
           ))}
         </tbody>
       </table>
+      </div>
 
       {/* Pagination bar */}
       {totalPages > 1 && (
         <div
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            flexWrap: 'wrap', gap: 8,
             padding: '14px 22px', borderTop: '1px solid var(--border)',
           }}
         >
@@ -1270,11 +1279,11 @@ function AudioPlayerPopup({
     <div
       style={{
         position: 'fixed',
-        bottom: 28,
+        bottom: 20,
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 9999,
-        width: 380,
+        width: 'min(380px, 92vw)',
         background: 'rgba(18,18,26,0.96)',
         border: '1px solid var(--border-strong)',
         borderRadius: 'var(--radius-xl)',

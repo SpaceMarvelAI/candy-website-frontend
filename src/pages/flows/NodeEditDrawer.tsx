@@ -12,6 +12,7 @@ import type { AppConnection } from '../../api/connections';
 import { createConnection, testConnection, startOAuth, APP_CATALOGUE } from '../../api/connections';
 import { createEmbedInstall, listEmbedInstalls, type EmbedInstall } from '../../api/agents';
 import { useApp } from '../../context/AppContext';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import Icon from '../../assets/icons';
 
 const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8002';
@@ -810,6 +811,9 @@ interface Props {
 }
 
 export default function NodeEditDrawer({ node, connection, onClose, onUpdate, onConnectionSaved }: Props) {
+  const isMobile = useMediaQuery('(max-width: 640px)');
+  const isTablet = useMediaQuery('(max-width: 1024px)');
+
   const appMeta = APP_CATALOGUE.find(a => a.type === node.data.appType);
 
   const title = node.type === 'agent'   ? (node.data.agentName ?? 'Agent')
@@ -825,8 +829,23 @@ export default function NodeEditDrawer({ node, connection, onClose, onUpdate, on
     : node.type === 'webhook' ? 'Inbound trigger'
     : appMeta?.description ?? '';
 
+  // Responsive drawer styles — full-screen on mobile, narrower on tablet
+  const drawerStyle: React.CSSProperties = isMobile ? {
+    ...drawerSt,
+    left: 0,
+    right: 0,
+    width: '100%',
+    borderLeft: 'none',
+    borderTop: '1px solid var(--border)',
+    boxShadow: '0 -8px 32px rgba(0,0,0,0.55)',
+    padding: '16px 16px',
+  } : isTablet ? {
+    ...drawerSt,
+    width: 300,
+  } : drawerSt;
+
   return (
-    <div style={drawerSt} onClick={e => e.stopPropagation()}>
+    <div style={drawerStyle} onClick={e => e.stopPropagation()}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
         <span style={{ fontSize: 24 }}>{icon}</span>
