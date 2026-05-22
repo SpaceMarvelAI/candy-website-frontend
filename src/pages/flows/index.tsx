@@ -237,8 +237,7 @@ export default function FlowsPage() {
     const src = nodes.find(n => n.id === srcId);
     const tgt = nodes.find(n => n.id === targetId);
     if (!src || !tgt) return;
-    if (src.type === 'app') return;
-    if (src.type === 'agent' && tgt.type === 'agent') return;
+    if (src.type === 'app') return; // apps can never be a source
     if (src.type === 'webhook' && tgt.type === 'webhook') return;
     if (edges.find(ed => ed.source === srcId && ed.target === targetId)) return;
     const triggerType: FlowEdge['triggerType'] =
@@ -258,6 +257,12 @@ export default function FlowsPage() {
   function onNodeClick(e: React.MouseEvent, node: FlowNode) {
     e.stopPropagation();
     if (dragNode.current) return;
+    // In connecting mode: tap any node body (not the source) to complete the connection
+    if (connectingFrom && connectingFrom !== node.id) {
+      tryConnect(connectingFrom, node.id);
+      setConnectingFrom(null);
+      return;
+    }
     setSelectedEdge(null);
     setConnectingFrom(null);
     setEditNode(prev => prev?.id === node.id ? null : node);
