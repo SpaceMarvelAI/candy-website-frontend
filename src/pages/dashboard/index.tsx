@@ -1,8 +1,5 @@
-import HeroPrompt    from './HeroPrompt';
-import StatsStrip    from './StatsStrip';
-import CategoryGrid  from './CategoryGrid';
-import ActivityPanel from './ActivityPanel';
-import QuickActions  from './QuickActions';
+import StatsStrip   from './StatsStrip';
+import CategoryGrid from './CategoryGrid';
 
 export default function DashboardPage() {
   return (
@@ -25,15 +22,8 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <HeroPrompt />
       <StatsStrip />
       <CategoryGrid />
-
-      {/* Bottom row: Activity + Quick Actions — stacks on tablet/mobile */}
-      <div className="grid-bottom-row">
-        <ActivityPanel />
-        <QuickActions />
-      </div>
     </div>
   );
 }
