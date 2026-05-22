@@ -5,7 +5,6 @@ import AgentPicker from './AgentPicker';
 import KnowledgeBase from './KnowledgeBase';
 import PromptEditor from './PromptEditor';
 import ChatTestPanel from './ChatTestPanel';
-import AutomationTab from './AutomationTab';
 import EntryPointBanner from './EntryPointBanner';
 import { listAgents, createAgent, deleteAgent, type Agent } from '../../api/agents';
 import { getRequirements } from '../../api/requirements';
@@ -13,6 +12,7 @@ import { listKnowledge, type KnowledgeDoc } from '../../api/knowledge';
 import { publishAgent } from '../../api/agents';
 import { ApiError, getToken } from '../../api/client';
 import { useApp } from '../../context/AppContext';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 interface Props {
   slug: string;
@@ -37,6 +37,7 @@ export default function ChatbotWorkspace({
   slug, category, icon, tint = 'purple', defaultPrompt, presets,
 }: Props) {
   const { addToast } = useApp();
+  const isTabletOrMobile = useMediaQuery('(max-width: 1024px)');
 
   // ── Agent state ────────────────────────────────────────────────────────────
   const [agents, setAgents]         = useState<Agent[]>([]);
@@ -57,9 +58,8 @@ export default function ChatbotWorkspace({
   const [embedOpen,      setEmbedOpen]      = useState(false);
 
   // ── Tab panel state — each section opens independently ─────────────────────
-  const [kbOpen,   setKbOpen]   = useState(false);
-  const [autoOpen, setAutoOpen] = useState(false);
-  const [reqOpen,  setReqOpen]  = useState(false);
+  const [kbOpen,  setKbOpen]  = useState(false);
+  const [reqOpen, setReqOpen] = useState(false);
 
   const agent   = agents.find(a => a.id === selectedId) ?? null;
   const status  = statusOverride || agent?.agent_flow_status || null;
@@ -264,7 +264,11 @@ export default function ChatbotWorkspace({
       )}
 
       {/* Main 2-column layout */}
-      <div style={mainGrid}>
+      <div style={{
+        ...mainGrid,
+        gridTemplateColumns: isTabletOrMobile ? '1fr' : '1fr 420px',
+        minHeight: isTabletOrMobile ? 'auto' : 'calc(100vh - 234px)',
+      }}>
 
         {/* ── Left column: Chat — stretches with grid row, min = viewport height ── */}
         <div style={{ height: '100%', minHeight: 300 }}>
@@ -293,17 +297,6 @@ export default function ChatbotWorkspace({
               docs={docs}
               refreshDocs={refreshDocs}
             />
-          </AccordionItem>
-
-          {/* Automations accordion item */}
-          <AccordionItem
-            open={autoOpen}
-            onToggle={() => setAutoOpen(o => !o)}
-            label="Automations"
-            icon="🔌"
-            color={color}
-          >
-            <AutomationTab agentId={agent?.id ?? null} agentSlug={slug} tint={tint} />
           </AccordionItem>
 
           {/* Requirements accordion item */}

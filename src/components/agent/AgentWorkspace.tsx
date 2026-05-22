@@ -17,6 +17,7 @@ import { useAgent } from '../../hooks/useAgent';
 import { publishAgent } from '../../api/agents';
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 interface Props {
   slug: string;
@@ -38,6 +39,7 @@ const tintColor: Record<string, string> = {
 
 export default function AgentWorkspace({ slug, category, icon, tint = 'purple', defaultPrompt, presets }: Props) {
   const { addToast } = useApp();
+  const isTabletOrMobile = useMediaQuery('(max-width: 1024px)');
   const {
     agents, agent, selectAgent, createNewAgent, removeAgent, reloadAgents,
     loading, error,
@@ -159,7 +161,11 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
       </div>
 
       {/* ── Main 2-column grid ── */}
-      <div style={mainGrid}>
+      <div style={{
+        ...mainGrid,
+        gridTemplateColumns: isTabletOrMobile ? '1fr' : '1fr 420px',
+        minHeight: isTabletOrMobile ? 'auto' : 'calc(100vh - 274px)',
+      }}>
 
         {/* Left: Test panel */}
         <div style={{ height: '100%', minHeight: 300 }}>

@@ -157,7 +157,7 @@ export default function AgentPicker({
           <h3 style={sectionTitle}>{category} agents</h3>
           <span style={pill}>{agents.length}</span>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {onReload && (
             <button
               onClick={handleRefresh}
@@ -415,6 +415,7 @@ const section = {
 };
 const sectionHeader = {
   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  flexWrap: 'wrap' as const, gap: 8,
   marginBottom: 12,
 };
 const sectionTitle = { fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)', margin: 0 };
