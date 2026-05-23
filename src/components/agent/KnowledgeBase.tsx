@@ -433,12 +433,18 @@ function DocViewerModal({
   tint: string;
   onClose: () => void;
 }) {
+  const ext = doc.filename.split('.').pop()?.toLowerCase() ?? '';
+  const isPDF    = ext === 'pdf';
+  const isImage  = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+    const signedUrl = doc.signed_url;
+
   return (
     <div
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
-        background: 'rgba(0,0,0,0.82)',
+        background: 'var(--surface-soft)',
+        backdropFilter: 'blur(6px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 24,
       }}
@@ -446,9 +452,9 @@ function DocViewerModal({
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: '100%', maxWidth: 680,
-          maxHeight: '80vh',
-          background: '#18181f',
+          width: '100%', maxWidth: isPDF ? 900 : 680,
+          maxHeight: '90vh',
+          background: 'var(--bg-1)',
           border: '1px solid var(--border-strong)',
           borderRadius: 14,
           display: 'flex', flexDirection: 'column',
@@ -481,6 +487,24 @@ function DocViewerModal({
               {doc.audience ? ` · ${doc.audience}` : ''}
             </div>
           </div>
+          {/* Download button — only shown when signed URL is available */}
+          {signedUrl && (
+            <a
+              href={signedUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 11px', borderRadius: 7, textDecoration: 'none',
+                background: `${tint}18`, border: `1px solid ${tint}44`,
+                color: tint, fontSize: 11.5, fontWeight: 600,
+                flexShrink: 0, whiteSpace: 'nowrap',
+              }}
+            >
+              ↓ Download
+            </a>
+          )}
           <button
             onClick={onClose}
             style={{
@@ -517,12 +541,29 @@ function DocViewerModal({
         )}
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px' }}>
+        <div style={{ flex: 1, overflow: isPDF && signedUrl ? 'hidden' : 'auto', padding: isPDF && signedUrl ? 0 : '18px 20px' }}>
           {loading ? (
             <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
-              Loading content…
+              Loading preview…
+            </div>
+          ) : isPDF && signedUrl ? (
+            /* PDF inline embed via signed URL */
+            <iframe
+              src={signedUrl}
+              title={doc.filename}
+              style={{ width: '100%', height: '100%', minHeight: 520, border: 'none', display: 'block' }}
+            />
+          ) : isImage && signedUrl ? (
+            /* Image preview */
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '18px 20px' }}>
+              <img
+                src={signedUrl}
+                alt={doc.filename}
+                style={{ maxWidth: '100%', height: 'auto', borderRadius: 8 }}
+              />
             </div>
           ) : doc.content_text ? (
+            /* Extracted text fallback */
             <pre style={{
               margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               fontSize: 12.5, lineHeight: 1.7, color: 'var(--text-1)',
@@ -530,6 +571,30 @@ function DocViewerModal({
             }}>
               {doc.content_text}
             </pre>
+          ) : signedUrl ? (
+            /* Non-previewable file type — show download CTA */
+            <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)', marginBottom: 6 }}>
+                Preview not available for .{ext} files
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 20 }}>
+                Download the file to view it in your local application.
+              </div>
+              <a
+                href={signedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '9px 18px', borderRadius: 9,
+                  background: `${tint}22`, border: `1px solid ${tint}55`,
+                  color: tint, fontSize: 13, fontWeight: 600, textDecoration: 'none',
+                }}
+              >
+                ↓ Download {doc.filename}
+              </a>
+            </div>
           ) : doc.summary ? (
             <>
               <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-4)', margin: '0 0 10px' }}>
