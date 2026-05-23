@@ -78,7 +78,11 @@ export function AppProvider({ children }) {
     apiLogout();
     // Wipe everything — both SSO session and any persisted login data
     try { sessionStorage.clear(); } catch {}
-    try { localStorage.removeItem('candy.token'); localStorage.removeItem('candy.user'); } catch {}
+    try {
+      localStorage.removeItem('candy.token');
+      localStorage.removeItem('candy.user');
+      localStorage.removeItem('dashboard_token');
+    } catch {}
     setUser(null);
     navigate('/', { replace: true });
   }, [navigate]);
