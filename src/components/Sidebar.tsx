@@ -72,6 +72,12 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
   async function handleNav(item: { path: string | null; label: string; ssoTarget?: string }) {
     if (item.ssoTarget) {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocalhost) {
+        window.location.href = item.ssoTarget;
+        return;
+      }
+
       const dashboardToken = localStorage.getItem('dashboard_token');
 
       if (dashboardToken) {
