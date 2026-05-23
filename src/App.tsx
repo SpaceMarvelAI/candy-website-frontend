@@ -35,6 +35,9 @@ const ChatbotBank    = lazy(() => import('./pages/chatbot-bank'));
 const ChatbotAppt    = lazy(() => import('./pages/chatbot-appt'));
 const ChatbotHR      = lazy(() => import('./pages/chatbot-hr'));
 
+const ConnectsPage     = lazy(() => import('./pages/connects'));
+const ComposioCallback = lazy(() => import('./pages/composio-callback'));
+
 // Voice agent workspaces
 const EcommerceAgent  = lazy(() => import('./pages/ecommerce'));
 const FinancialAgent  = lazy(() => import('./pages/financial'));
@@ -156,6 +159,9 @@ export default function App() {
           <Route path="/agents/healthcare" element={<ProtectedRoute><HealthcareAgent /></ProtectedRoute>} />
           <Route path="/agents/marketing"  element={<ProtectedRoute><MarketingAgent /></ProtectedRoute>} />
           <Route path="/agents/hr"         element={<ProtectedRoute><HRAgent /></ProtectedRoute>} />
+
+          <Route path="/connects"          element={<AppRoute><ConnectsPage /></AppRoute>} />
+          <Route path="/composio/callback" element={<Suspense fallback={null}><ComposioCallback /></Suspense>} />
 
           {/* Fallback — unknown paths go back to landing */}
           <Route path="*" element={<Navigate to="/" replace />} />

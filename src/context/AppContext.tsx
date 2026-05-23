@@ -24,6 +24,7 @@ const VIEW_TO_PATH: Record<string, string> = {
   chatbot_bank:   '/chatbots/bank',
   chatbot_appt:   '/chatbots/appt',
   chatbot_hr:     '/chatbots/hr',
+  connects:       '/connects',
 };
 
 const PATH_TO_VIEW: Record<string, string> = Object.fromEntries(

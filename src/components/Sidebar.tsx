@@ -27,6 +27,7 @@ const NAV_SECTIONS = [
       { id: 'voice',     label: 'Live Calls', icon: 'livecall', path: '/live' },
       { id: 'analytics', label: 'Analytics',  icon: 'chart',    path: '/analytics' },
       { id: 'flows',     label: 'Flows',      icon: 'flowsnav', path: '/flows' },
+      { id: 'connects',  label: 'Connects',   icon: 'plug',     path: '/connects' },
     ],
   },
 ];
@@ -38,6 +39,7 @@ const PATH_TO_NAV: [string, string][] = [
   ['/analytics', 'analytics'],
   ['/webhooks',  'webhooks'],
   ['/flows',     'flows'],
+  ['/connects',  'connects'],
 ];
 
 const SM_API = (import.meta as any).env?.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai';
