@@ -9,6 +9,7 @@
  *     • Agents — quick overview of every agent on the company.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
@@ -358,8 +359,9 @@ export default function LiveCallsPage() {
         <AgentsTable agents={agents} loading={loading} />
       )}
 
-      {selectedRec && (
-        <RecordingDetailModal rec={selectedRec} onClose={() => setSelectedRec(null)} onDownload={downloadRec} />
+      {selectedRec && createPortal(
+        <RecordingDetailModal rec={selectedRec} onClose={() => setSelectedRec(null)} onDownload={downloadRec} />,
+        document.body,
       )}
 
       {playerRec && createPortal(
@@ -678,7 +680,6 @@ function RecordingsTable({
 // ── Recording detail modal ────────────────────────────────────────────────────
 function parseTranscript(raw: string): { role: 'user' | 'agent'; text: string }[] {
   const turns: { role: 'user' | 'agent'; text: string }[] = [];
-  // Split on "User:" or "Agent:" markers (case-insensitive)
   const parts = raw.split(/(?=(?:User|Agent):\s)/i);
   for (const part of parts) {
     const m = part.match(/^(User|Agent):\s*([\s\S]*)/i);
@@ -691,64 +692,124 @@ function parseTranscript(raw: string): { role: 'user' | 'agent'; text: string }[
 }
 
 function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow; onClose: () => void; onDownload: (r: RecordingRow) => void }) {
+  const isMobile = useMediaQuery('(max-width: 640px)');
+  const isTablet = useMediaQuery('(max-width: 1024px)');
   const turns = rec.transcript ? parseTranscript(rec.transcript) : [];
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    };
+  }, []);
+
+  const panelStyle: React.CSSProperties = isMobile ? {
+    position: 'fixed',
+    left: 0, right: 0, bottom: 0,
+    height: '88vh',
+    width: '100%',
+    borderRadius: '20px 20px 0 0',
+    animation: 'sheetSlideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both',
+  } : isTablet ? {
+    position: 'fixed',
+    bottom: 20,
+    left: '5vw', right: '5vw',
+    height: 'min(640px, calc(100vh - 88px))',
+    width: '90vw',
+    borderRadius: 18,
+    animation: 'transcriptPopIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both',
+  } : {
+    position: 'fixed',
+    bottom: 20,
+    right: 20,
+    height: 'min(640px, calc(100vh - 88px))',
+    width: 'min(calc(70vw - 60px), calc(100vw - 40px))',
+    borderRadius: 18,
+    animation: 'transcriptPopIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both',
+  };
 
   return (
     <>
-      {/* Dim overlay — clicking closes the drawer */}
+      <style>{`
+        @keyframes transcriptPopIn {
+          from { opacity: 0; transform: translateY(16px) scale(0.98); }
+          to   { opacity: 1; transform: translateY(0)    scale(1); }
+        }
+        @keyframes sheetSlideUp {
+          from { opacity: 0; transform: translateY(40px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes bubbleDrop {
+          from { opacity: 0; transform: translateY(-8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+
+      {/* Backdrop */}
       <div
         onClick={onClose}
         style={{
           position: 'fixed', inset: 0, zIndex: 1000,
-          background: 'rgba(0,0,0,0.50)',
+          background: isMobile ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.28)',
+          backdropFilter: 'blur(3px)',
         }}
       />
 
-      {/* Right-side drawer — full viewport height */}
+      {/* Panel */}
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          position: 'fixed', top: 0, right: 0, bottom: 0,
-          width: 'min(540px, 92vw)',
+          ...panelStyle,
           zIndex: 1001,
-          background: '#18181f',
-          borderLeft: '1px solid var(--border-strong)',
+          background: 'var(--surface-solid)',
+          border: '1px solid var(--border-strong)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
-          boxShadow: '-16px 0 56px rgba(0,0,0,0.6)',
+          boxShadow: '0 20px 56px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)',
         }}
       >
+        {/* Drag handle — mobile only */}
+        {isMobile && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px', flexShrink: 0 }}>
+            <div style={{ width: 36, height: 4, borderRadius: 99, background: 'var(--border-strong)' }} />
+          </div>
+        )}
+
         {/* Header */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '16px 20px', borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: isMobile ? '8px 14px 12px' : '13px 14px',
+          borderBottom: '1px solid var(--border)',
           flexShrink: 0,
+          background: 'var(--surface)',
         }}>
           <div style={{
-            width: 36, height: 36, borderRadius: 9,
+            width: 32, height: 32, borderRadius: 9,
             background: 'rgba(117,91,227,0.15)',
             display: 'grid', placeItems: 'center', flexShrink: 0,
           }}>
-            <Icon name="mic" size={16} style={{ color: 'var(--purple-hi)' }} />
+            <Icon name="mic" size={14} style={{ color: 'var(--purple-hi)' }} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {rec.agent_name || 'Recording'}
             </div>
-            <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 1 }}>
+            <div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 1 }}>
               {formatTime(rec.created_at)}
               {rec.duration_ms ? ` · ${formatDuration(rec.duration_ms)}` : ''}
               {rec.language_code ? ` · ${rec.language_code.toUpperCase()}` : ''}
               {rec.size_bytes ? ` · ${formatSize(rec.size_bytes)}` : ''}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
             {rec.signed_url && (
               <button
                 onClick={() => onDownload(rec)}
                 title="Download recording"
                 style={{
-                  width: 30, height: 30, borderRadius: 8,
+                  width: 28, height: 28, borderRadius: 7,
                   background: 'transparent', border: '1px solid var(--border)',
                   color: 'var(--text-2)', display: 'grid', placeItems: 'center',
                   cursor: 'pointer', transition: 'all 0.15s',
@@ -756,19 +817,19 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(24,218,252,0.1)'; e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-2)'; }}
               >
-                <Icon name="export" size={13} />
+                <Icon name="export" size={12} />
               </button>
             )}
             <button
               onClick={onClose}
               style={{
-                width: 30, height: 30, borderRadius: 8,
+                width: 28, height: 28, borderRadius: 7,
                 background: 'transparent', border: '1px solid var(--border)',
                 color: 'var(--text-2)', display: 'grid', placeItems: 'center',
-                cursor: 'pointer', flexShrink: 0,
+                cursor: 'pointer',
               }}
             >
-              <Icon name="x" size={13} />
+              <Icon name="x" size={12} />
             </button>
           </div>
         </div>
@@ -776,53 +837,76 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
         {/* Audio player */}
         {rec.signed_url ? (
           <div style={{
-            padding: '14px 20px', borderBottom: '1px solid var(--border)',
-            flexShrink: 0, background: 'rgba(117,91,227,0.06)',
+            padding: '10px 14px',
+            borderBottom: '1px solid var(--border)',
+            flexShrink: 0,
+            background: 'rgba(117,91,227,0.05)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-4)', marginBottom: 8 }}>
+            <div style={{ fontSize: 9.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-4)', marginBottom: 5 }}>
               Recording
             </div>
             <audio
               controls
               src={rec.signed_url}
-              style={{ width: '100%', height: 36, accentColor: 'var(--purple-hi)' }}
+              style={{ width: '100%', height: 32, accentColor: 'var(--purple-hi)' }}
             />
           </div>
         ) : (
           <div style={{
-            padding: '10px 20px', borderBottom: '1px solid var(--border)',
-            flexShrink: 0, background: 'rgba(0,0,0,0.2)',
+            padding: '8px 14px', borderBottom: '1px solid var(--border)',
+            flexShrink: 0, background: 'var(--tint-2)',
           }}>
-            <span style={{ fontSize: 12, color: 'var(--text-4)' }}>
-              No playback URL — audio stored locally on the backend.
-            </span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-4)' }}>No playback URL — audio stored locally.</span>
           </div>
         )}
 
-        {/* Transcript */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Transcript label */}
+        <div style={{
+          padding: '8px 14px 6px',
+          flexShrink: 0,
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <span style={{ fontSize: 9.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-4)' }}>
+            Transcript
+          </span>
+          {turns.length > 0 && (
+            <span style={{
+              fontSize: 9.5, padding: '1px 6px', borderRadius: 99,
+              background: 'var(--tint-3)', color: 'var(--text-3)', fontWeight: 600,
+            }}>
+              {turns.length} turns
+            </span>
+          )}
+        </div>
+
+        {/* Chat bubbles */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {turns.length === 0 ? (
             <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
-              No transcript available for this recording.
+              No transcript available.
             </div>
           ) : (
             turns.map((turn, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: turn.role === 'user' ? 'flex-end' : 'flex-start' }}>
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  justifyContent: turn.role === 'user' ? 'flex-end' : 'flex-start',
+                  animation: 'bubbleDrop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both',
+                  animationDelay: `${Math.min(i * 0.08, 0.8)}s`,
+                }}
+              >
                 <div style={{
-                  maxWidth: '72%',
-                  padding: '10px 14px',
+                  maxWidth: '80%',
+                  padding: '9px 12px',
                   borderRadius: turn.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                  background: turn.role === 'user'
-                    ? 'rgba(117,91,227,0.14)'
-                    : 'rgba(255,255,255,0.05)',
+                  background: turn.role === 'user' ? 'rgba(117,91,227,0.14)' : 'var(--tint-2)',
                   border: `1px solid ${turn.role === 'user' ? 'rgba(117,91,227,0.28)' : 'var(--border)'}`,
-                  fontSize: 13.5,
-                  lineHeight: 1.6,
-                  color: 'var(--text-1)',
+                  fontSize: 13, lineHeight: 1.55, color: 'var(--text-1)',
                 }}>
                   <div style={{
-                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-                    letterSpacing: '0.1em', marginBottom: 5,
+                    fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase',
+                    letterSpacing: '0.1em', marginBottom: 4,
                     color: turn.role === 'user' ? 'var(--purple-hi)' : 'var(--text-4)',
                   }}>
                     {turn.role === 'user' ? 'User' : (rec.agent_name || 'Agent')}
@@ -1284,10 +1368,10 @@ function AudioPlayerPopup({
         transform: 'translateX(-50%)',
         zIndex: 9999,
         width: 'min(380px, 92vw)',
-        background: 'rgba(18,18,26,0.96)',
+        background: 'var(--surface-elev)',
         border: '1px solid var(--border-strong)',
         borderRadius: 'var(--radius-xl)',
-        boxShadow: '0 12px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)',
+        boxShadow: '0 12px 48px rgba(0,0,0,0.4), 0 0 0 1px var(--border)',
         backdropFilter: 'blur(28px)',
         padding: '16px 18px 18px',
         display: 'flex', flexDirection: 'column', gap: 14,
