@@ -13,8 +13,10 @@ const NAV_SECTIONS = [
   {
     label: 'Products',
     items: [
-      { id: 'metaspace', label: 'Metaspace', icon: '', img: '/Metaspace.png', path: null },
-      { id: 'finixy',    label: 'Finixy',    icon: '', img: '/Finixy.svg',   path: null },
+      { id: 'metaspace', label: 'Metaspace', icon: '', img: '/Metaspace.png', path: null,
+        ssoTarget: 'https://meta.spacemarvel.ai' },
+      { id: 'finixy',    label: 'Finixy',    icon: '', img: '/Finixy.svg',   path: null,
+        ssoTarget: 'https://app.finixy.ai' },
     ],
   },
   {
@@ -25,6 +27,7 @@ const NAV_SECTIONS = [
       { id: 'voice',     label: 'Live Calls', icon: 'livecall', path: '/live' },
       { id: 'analytics', label: 'Analytics',  icon: 'chart',    path: '/analytics' },
       { id: 'flows',     label: 'Flows',      icon: 'flowsnav', path: '/flows' },
+      { id: 'connects',  label: 'Connects',   icon: 'plug',     path: '/connects' },
     ],
   },
 ];
@@ -36,7 +39,10 @@ const PATH_TO_NAV: [string, string][] = [
   ['/analytics', 'analytics'],
   ['/webhooks',  'webhooks'],
   ['/flows',     'flows'],
+  ['/connects',  'connects'],
 ];
+
+const SM_API = (import.meta as any).env?.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai';
 
 // ─────────────────────────────────────────────────────────────────────────────
 interface SidebarProps {
@@ -66,7 +72,43 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     return () => { document.body.style.overflow = ''; };
   }, [isMobileOrTablet, mobileOpen]);
 
-  function handleNav(item: { path: string | null; label: string }) {
+  async function handleNav(item: { path: string | null; label: string; ssoTarget?: string }) {
+    if (item.ssoTarget) {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocalhost) {
+        window.location.href = item.ssoTarget;
+        return;
+      }
+
+      const dashboardToken = localStorage.getItem('dashboard_token');
+
+      if (dashboardToken) {
+        try {
+          const res = await fetch(`${SM_API}/api/rbac/auth/sso/generate/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${dashboardToken}`,
+            },
+            body: JSON.stringify({ app_url: item.ssoTarget }),
+          });
+          const data = await res.json().catch(() => ({}));
+
+          if (data.sso_token) {
+            const cbUrl = new URL('/sso/callback', item.ssoTarget);
+            cbUrl.searchParams.set('token', data.sso_token);
+            cbUrl.searchParams.set('access_token', dashboardToken);
+            window.location.href = cbUrl.toString();
+            return;
+          }
+        } catch { /* fall through to login redirect */ }
+      }
+
+      // No token stored or generate failed — send through SpaceMarvel login
+      window.location.href = `https://spacemarvel.ai/login?redirect_uri=${encodeURIComponent(item.ssoTarget + '/sso/callback')}`;
+      return;
+    }
+
     if (item.path) {
       navigate(item.path);
       if (isMobileOrTablet) onClose?.();

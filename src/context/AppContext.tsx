@@ -24,6 +24,7 @@ const VIEW_TO_PATH: Record<string, string> = {
   chatbot_bank:   '/chatbots/bank',
   chatbot_appt:   '/chatbots/appt',
   chatbot_hr:     '/chatbots/hr',
+  connects:       '/connects',
 };
 
 const PATH_TO_VIEW: Record<string, string> = Object.fromEntries(
@@ -40,8 +41,10 @@ export function AppProvider({ children }) {
 
   // True while we are processing an incoming ?sso_token — suppresses the
   // signup popup so it doesn't flash before the SSO call resolves.
-  const hasSsoToken = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).has('sso_token');
+  const hasSsoToken = typeof window !== 'undefined' && (() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.has('sso_token') || p.has('token') || p.has('access_token');
+  })();
 
   const [user, setUser]                = useState<AuthUser | null>(initialUser);
   const [ssoLoading, setSsoLoading]    = useState(hasSsoToken);
@@ -78,7 +81,11 @@ export function AppProvider({ children }) {
     apiLogout();
     // Wipe everything — both SSO session and any persisted login data
     try { sessionStorage.clear(); } catch {}
-    try { localStorage.removeItem('candy.token'); localStorage.removeItem('candy.user'); } catch {}
+    try {
+      localStorage.removeItem('candy.token');
+      localStorage.removeItem('candy.user');
+      localStorage.removeItem('dashboard_token');
+    } catch {}
     setUser(null);
     navigate('/', { replace: true });
   }, [navigate]);
@@ -92,16 +99,25 @@ export function AppProvider({ children }) {
     return () => window.removeEventListener('candy:auth-expired', onAuthExpired);
   }, []);
 
-  // Intercept ?sso_token= on ANY page (SpaceMarvel may redirect to /dashboard)
+  // Intercept ?sso_token= / ?access_token= on ANY page (SpaceMarvel may redirect to /dashboard)
   useEffect(() => {
     if (ssoHandled.current) return;
-    const params = new URLSearchParams(window.location.search);
-    const token  = params.get('sso_token') || params.get('token');
-    if (!token) return;
+    const params      = new URLSearchParams(window.location.search);
+    const token       = params.get('sso_token') || params.get('token');
+    const accessToken = params.get('access_token');
+
+    if (!token && !accessToken) return;
 
     ssoHandled.current = true;
-    // Strip token from URL immediately so it can't be replayed
+    // Strip all auth params from URL immediately so they can't be replayed
     window.history.replaceState({}, '', window.location.pathname);
+
+    // Always persist the SpaceMarvel bearer — needed for Composio / cross-app SSO generate calls
+    if (accessToken) localStorage.setItem('dashboard_token', accessToken);
+
+    // No sso_token means this redirect only carried a fresh dashboard_token for an already-signed-in
+    // user (e.g. returning from Metaspace). Nothing more to do.
+    if (!token) { setSsoLoading(false); return; }
 
     ssoCallback(token)
       .then(({ user: u }) => {

@@ -23,6 +23,10 @@ export default function SSOCallbackPage() {
       return;
     }
 
+    // Save SpaceMarvel bearer — used to call SSO generate API for cross-app navigation
+    const dashboardToken = searchParams.get('access_token');
+    if (dashboardToken) localStorage.setItem('dashboard_token', dashboardToken);
+
     let cancelled = false;
 
     ssoCallback(token)

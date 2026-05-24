@@ -15,6 +15,7 @@ export interface KnowledgeDoc {
   size_bytes: number;
   indexed_at: string | null;
   created_at: string;
+  signed_url?: string; // presigned S3 URL — returned by list + detail endpoints
 }
 
 export interface UploadResult {
