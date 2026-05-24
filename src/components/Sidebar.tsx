@@ -74,12 +74,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
   async function handleNav(item: { path: string | null; label: string; ssoTarget?: string }) {
     if (item.ssoTarget) {
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (isLocalhost) {
-        window.location.href = item.ssoTarget;
-        return;
-      }
-
       const dashboardToken = localStorage.getItem('dashboard_token');
 
       if (dashboardToken) {
@@ -88,17 +82,20 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${dashboardToken}`,
+              Authorization: `Bearer ${dashboardToken}`,
             },
             body: JSON.stringify({ app_url: item.ssoTarget }),
           });
+          if (!res.ok) throw new Error(`SSO generate ${res.status}`);
           const data = await res.json().catch(() => ({}));
 
           if (data.sso_token) {
-            const cbUrl = new URL('/sso/callback', item.ssoTarget);
-            cbUrl.searchParams.set('token', data.sso_token);
-            cbUrl.searchParams.set('access_token', dashboardToken);
-            window.location.href = cbUrl.toString();
+            // Redirect to the target app root with ?sso_token — all apps handle this
+            // via their root-level SSOHandler, same pattern Finixy uses for outgoing nav.
+            const target = new URL(item.ssoTarget);
+            target.searchParams.set('sso_token', data.sso_token);
+            target.searchParams.set('access_token', dashboardToken);
+            window.location.href = target.toString();
             return;
           }
         } catch { /* fall through to login redirect */ }
