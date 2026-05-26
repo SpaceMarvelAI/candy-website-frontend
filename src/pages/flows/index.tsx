@@ -13,7 +13,7 @@ import { listConnections, type AppConnection } from '../../api/connections';
 import {
   getComposioApps, getComposioConnections,
   getAppAuthInfo, connectComposioApp, connectComposioAppWithCredentials,
-  appId as composioAppId, appLogo, connectedAppId, redirectUrl,
+  appId as composioAppId, appLogo, connectedAppId, redirectUrl, isActiveConnection,
   type ComposioApp, type AuthInfoField,
 } from '../../api/composio';
 import {
@@ -146,7 +146,7 @@ export default function FlowsPage() {
     Promise.all([getComposioApps(), getComposioConnections()])
       .then(([apps, conns]) => {
         setComposioApps(apps);
-        setComposioConns(new Set(conns.map(connectedAppId)));
+        setComposioConns(new Set(conns.filter(isActiveConnection).map(connectedAppId)));
       })
       .catch(console.warn)
       .finally(() => setAppsLoading(false));
@@ -409,7 +409,7 @@ export default function FlowsPage() {
         const closed = !popup || popup.closed;
         try {
           const conns = await getComposioConnections();
-          const ids   = new Set(conns.map(connectedAppId));
+          const ids   = new Set(conns.filter(isActiveConnection).map(connectedAppId));
           if (ids.has(id)) {
             // Only mark connected when the API actually confirms it
             setComposioConns(ids);

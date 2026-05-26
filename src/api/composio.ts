@@ -131,6 +131,12 @@ export function connectedAppId(c: ComposioConnection): string {
   return (c.app ?? c.appId ?? c.app_id ?? c.appName ?? c.app_name ?? '').toLowerCase();
 }
 
+/** Returns true only for genuinely live connections — excludes "initiated" / "pending" / "failed" */
+export function isActiveConnection(c: ComposioConnection): boolean {
+  if (!c.status) return true; // no status field → assume old API that only returns active rows
+  return c.status === 'connected' || c.status === 'active';
+}
+
 export function redirectUrl(r: ConnectResponse): string | undefined {
   return r.connect_url ?? r.redirectUrl ?? r.redirect_url ?? r.authUrl ?? r.auth_url;
 }
