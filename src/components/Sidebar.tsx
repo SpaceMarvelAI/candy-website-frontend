@@ -49,7 +49,11 @@ const PATH_TO_NAV: [string, string][] = [
   ['/connects',  'connectors'],
 ];
 
-const SM_API = (import.meta as any).env?.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai';
+const isLocal = typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const SM_API = isLocal
+  ? '/sm-api'
+  : ((import.meta as any).env?.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
 
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
@@ -305,7 +309,8 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       }
     }
 
-    window.location.href = `https://spacemarvel.ai/login?redirect_uri=${encodeURIComponent(item.ssoTarget + '/sso/callback')}`;
+    const candyCallback = window.location.origin + '/sso/callback';
+    window.location.href = `https://spacemarvel.ai/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 
   const panelExpanded = isMobileOrTablet ? true : expanded;
