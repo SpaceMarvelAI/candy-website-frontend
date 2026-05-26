@@ -98,6 +98,20 @@ export interface ConnectResponse {
   message?: string;
 }
 
+export interface AuthInfoField {
+  name: string;
+  label: string;
+  type: string; // "text" | "password" | "url"
+}
+
+export interface AuthInfo {
+  app: string;
+  auth_type: 'oauth' | 'api_key' | 'no_auth';
+  required_fields?: AuthInfoField[];
+  display_name?: string;
+  connect_flow?: string;
+}
+
 // ── Normalise helpers ─────────────────────────────────────────────────────────
 
 export function appId(a: ComposioApp): string {
@@ -115,6 +129,14 @@ export function appCategory(a: ComposioApp): string {
 
 export function connectedAppId(c: ComposioConnection): string {
   return (c.app ?? c.appId ?? c.app_id ?? c.appName ?? c.app_name ?? '').toLowerCase();
+}
+
+/** Returns true for live connections — only rejects known-inactive statuses */
+export function isActiveConnection(c: ComposioConnection): boolean {
+  if (!c.status) return true; // no status field → assume API only returns active rows
+  const s = c.status.toLowerCase();
+  // Block only statuses that explicitly mean "not yet connected" or "no longer connected"
+  return !['initiated', 'pending', 'failed', 'expired', 'revoked', 'error', 'disabled', 'inactive'].includes(s);
 }
 
 export function redirectUrl(r: ConnectResponse): string | undefined {
@@ -135,7 +157,12 @@ export async function getComposioConnections(): Promise<ComposioConnection[]> {
   return Array.isArray(res) ? res : (res as { connections: ComposioConnection[] }).connections ?? [];
 }
 
-/** POST /api/composio/connect — initiate connection for an app */
+/** GET /api/composio/apps/{app}/auth-info — returns auth_type before connecting */
+export async function getAppAuthInfo(appName: string): Promise<AuthInfo> {
+  return metaFetch<AuthInfo>(`/api/composio/apps/${encodeURIComponent(appName)}/auth-info`);
+}
+
+/** POST /api/composio/connect — OAuth / no-auth flow (no credentials) */
 export async function connectComposioApp(appName: string): Promise<ConnectResponse> {
   return metaFetch<ConnectResponse>('/api/composio/connect', {
     method: 'POST',
@@ -143,5 +170,16 @@ export async function connectComposioApp(appName: string): Promise<ConnectRespon
       app: appName,
       redirect_url: `${window.location.origin}/composio/callback`,
     }),
+  });
+}
+
+/** POST /api/composio/connect — API-key flow (with credentials) */
+export async function connectComposioAppWithCredentials(
+  appName: string,
+  credentials: Record<string, string>,
+): Promise<ConnectResponse> {
+  return metaFetch<ConnectResponse>('/api/composio/connect', {
+    method: 'POST',
+    body: JSON.stringify({ app: appName, credentials }),
   });
 }

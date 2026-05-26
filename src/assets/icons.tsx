@@ -163,6 +163,25 @@ const iconPaths = {
       <path d="M6.5 12C9 12 14 18 17.5 18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
     </>
   ),
+  book: (
+    <>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+    </>
+  ),
+  columns: (
+    <>
+      <rect x="3" y="3" width="7" height="18" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <rect x="14" y="3" width="7" height="18" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+    </>
+  ),
+  externallink: (
+    <>
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+      <polyline points="15 3 21 3 21 9" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <line x1="10" y1="14" x2="21" y2="3" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+    </>
+  ),
   voicebot: (
     <>
       <line x1="2"  y1="12" x2="2"  y2="12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>

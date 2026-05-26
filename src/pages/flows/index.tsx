@@ -9,13 +9,18 @@ import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { listAgents, type Agent } from '../../api/agents';
-import { listConnections, APP_CATALOGUE, type AppConnection } from '../../api/connections';
+import { listConnections, type AppConnection } from '../../api/connections';
+import {
+  getComposioApps, getComposioConnections,
+  getAppAuthInfo, connectComposioApp, connectComposioAppWithCredentials,
+  appId as composioAppId, appLogo, connectedAppId, redirectUrl, isActiveConnection,
+  type ComposioApp, type AuthInfoField,
+} from '../../api/composio';
 import {
   listWorkflows, createWorkflow, updateWorkflow, deleteWorkflow,
   type FlowNode, type FlowEdge, type WorkflowGraph, type Workflow,
 } from '../../api/workflows';
 import NodeEditDrawer from './NodeEditDrawer';
-import Icon from '../../assets/icons';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TINT: Record<string, string> = {
@@ -91,9 +96,20 @@ export default function FlowsPage() {
     typeof window !== 'undefined' ? !window.matchMedia('(max-width: 640px)').matches : true
   );
 
-  const [agents,      setAgents]      = useState<Agent[]>([]);
-  const [connections, setConnections] = useState<AppConnection[]>([]);
-  const [workflows,   setWorkflows]   = useState<Workflow[]>([]);
+  const [agents,        setAgents]        = useState<Agent[]>([]);
+  const [connections,   setConnections]   = useState<AppConnection[]>([]);
+  const [composioApps,  setComposioApps]  = useState<ComposioApp[]>([]);
+  const [composioConns, setComposioConns] = useState<Set<string>>(new Set());
+  const [appsLoading,    setAppsLoading]    = useState(false);
+  const [appSearch,      setAppSearch]      = useState('');
+  const [connectingAppId, setConnectingAppId] = useState<string | null>(null);
+  const appPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [hoveredAppId, setHoveredAppId] = useState<string | null>(null);
+  const [credModal, setCredModal] = useState<{
+    app: ComposioApp; fields: AuthInfoField[];
+  } | null>(null);
+  const [credValues, setCredValues] = useState<Record<string, string>>({});
+  const [workflows,     setWorkflows]     = useState<Workflow[]>([]);
   const [savedFlow,   setSavedFlow]   = useState<Workflow | null>(null);
   const [showWfPicker, setShowWfPicker] = useState(false);
 
@@ -124,6 +140,17 @@ export default function FlowsPage() {
   useEffect(() => {
     listAgents().then(setAgents).catch(console.warn);
     listConnections().then(setConnections).catch(console.warn);
+
+    // Load Composio apps + connections for the Apps panel
+    setAppsLoading(true);
+    Promise.all([getComposioApps(), getComposioConnections()])
+      .then(([apps, conns]) => {
+        setComposioApps(apps);
+        setComposioConns(new Set(conns.filter(isActiveConnection).map(connectedAppId)));
+      })
+      .catch(console.warn)
+      .finally(() => setAppsLoading(false));
+
     listWorkflows().then(ws => {
       setWorkflows(ws);
       if (ws.length > 0) {
@@ -132,6 +159,8 @@ export default function FlowsPage() {
         setNodes(w.graph.nodes); setEdges(w.graph.edges);
       }
     }).catch(console.warn);
+
+    return () => { if (appPollRef.current) clearInterval(appPollRef.current); };
   }, []);
 
   // Prevent canvas-pan scroll while dragging a node — needs non-passive listener
@@ -344,6 +373,94 @@ export default function FlowsPage() {
     finally { setSaving(false); }
   }
 
+  // ── Connect a Composio app from within the panel ────────────────────────────
+  async function handleConnectApp(app: ComposioApp) {
+    const id = composioAppId(app);
+    if (connectingAppId === id) return;
+    setConnectingAppId(id);
+    try {
+      // Step 1: find out what auth flow this app needs
+      const info = await getAppAuthInfo(id);
+
+      // Step 2a: no credentials needed — connect instantly
+      if (info.auth_type === 'no_auth') {
+        await connectComposioApp(id);
+        setComposioConns(prev => new Set([...prev, id]));
+        addToast(`${app.name} connected`, 'success');
+        setConnectingAppId(null);
+        return;
+      }
+
+      // Step 2b: API key — show credentials form
+      if (info.auth_type === 'api_key') {
+        const fields = info.required_fields ?? [{ name: 'api_key', label: 'API Key', type: 'password' }];
+        setCredValues(Object.fromEntries(fields.map(f => [f.name, ''])));
+        setCredModal({ app, fields });
+        setConnectingAppId(null);
+        return;
+      }
+
+      // Step 2c: OAuth — open popup and poll
+      const res = await connectComposioApp(id);
+      const url = redirectUrl(res);
+      if (!url) throw new Error('No redirect URL');
+      const popup = window.open(url, '_blank', 'width=640,height=720,noopener');
+      // Track when popup first closed so we give the backend a grace period
+      // to finish processing the OAuth callback before we give up.
+      let popupClosedAt: number | null = null;
+      const GRACE_MS = 10_000; // keep polling 10s after popup closes
+
+      appPollRef.current = setInterval(async () => {
+        const closed = !popup || popup.closed;
+        if (closed && popupClosedAt === null) popupClosedAt = Date.now();
+
+        try {
+          const conns = await getComposioConnections();
+          const ids   = new Set(conns.filter(isActiveConnection).map(connectedAppId));
+          if (ids.has(id)) {
+            setComposioConns(ids);
+            clearInterval(appPollRef.current!);
+            appPollRef.current = null;
+            setConnectingAppId(null);
+            addToast(`${app.name} connected`, 'success');
+          } else if (closed && popupClosedAt !== null && Date.now() - popupClosedAt > GRACE_MS) {
+            // Grace period expired with no confirmed connection — user likely cancelled
+            clearInterval(appPollRef.current!);
+            appPollRef.current = null;
+            setConnectingAppId(null);
+          }
+        } catch {
+          if (closed && popupClosedAt !== null && Date.now() - popupClosedAt > GRACE_MS) {
+            clearInterval(appPollRef.current!);
+            appPollRef.current = null;
+            setConnectingAppId(null);
+          }
+        }
+      }, 1500); // poll every 1.5s for faster feedback
+    } catch {
+      addToast(`Could not connect ${app.name}`, 'error');
+      setConnectingAppId(null);
+    }
+  }
+
+  // ── Submit API-key credentials from the modal ────────────────────────────────
+  async function handleCredSubmit() {
+    if (!credModal) return;
+    const id = composioAppId(credModal.app);
+    setConnectingAppId(id);
+    try {
+      await connectComposioAppWithCredentials(id, credValues);
+      setComposioConns(prev => new Set([...prev, id]));
+      addToast(`${credModal.app.name} connected`, 'success');
+      setCredModal(null);
+      setCredValues({});
+    } catch {
+      addToast(`Could not connect ${credModal.app.name}`, 'error');
+    } finally {
+      setConnectingAppId(null);
+    }
+  }
+
   // ── Node appearance ──────────────────────────────────────────────────────────
   function nodeColor(node: FlowNode) {
     if (node.type === 'agent')   return node.data.agentType === 'chat' ? 'var(--purple-hi)' : 'var(--blue)';
@@ -461,33 +578,117 @@ export default function FlowsPage() {
           )}
 
           {/* ── Apps tab ── */}
-          {leftTab === 'apps' && APP_CATALOGUE.map(app => {
-            const conn = connections.find(c => c.app_type === app.type);
-            const appPayload = { type: 'app' as const, data: { appType: app.type, appLabel: app.label, appIcon: app.icon, connectionId: conn?.id } };
-            return (
-              <div key={app.type}
-                draggable={!isMobile}
-                onDragStart={!isMobile ? (e => onPanelDragStart(e, appPayload)) : undefined}
-                onClick={isMobile ? () => addNodeFromPanel(appPayload) : undefined}
-                style={panelCard('var(--border)')}
-              >
-                <span style={{ fontSize:16 }}>{app.icon}</span>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)' }}>{app.label}</div>
-                  <div style={{ fontSize:10.5, color:'var(--text-4)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {app.description}
-                  </div>
-                </div>
-                <span style={{ fontSize:9, fontWeight:700, flexShrink:0,
-                  color: conn?.is_connected ? 'var(--green)' : 'var(--text-4)',
-                  background: conn?.is_connected ? 'rgba(76,175,80,0.14)' : 'var(--tint-2)',
-                  borderRadius:4, padding:'2px 5px',
-                }}>
-                  {conn?.is_connected ? '●' : (isMobile ? '＋' : '+')}
-                </span>
-              </div>
-            );
-          })}
+          {leftTab === 'apps' && (
+            <>
+              {/* Search */}
+              <input
+                value={appSearch}
+                onChange={e => setAppSearch(e.target.value)}
+                placeholder="Search apps…"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  padding: '6px 10px', marginBottom: 8, borderRadius: 8,
+                  fontSize: 12, background: 'var(--tint-2)',
+                  border: '1px solid var(--border)', color: 'var(--text-1)', outline: 'none',
+                }}
+              />
+
+              {appsLoading ? (
+                <p style={{ fontSize:12, color:'var(--text-4)', padding:'10px 6px' }}>Loading apps…</p>
+              ) : composioApps.length === 0 ? (
+                <p style={{ fontSize:12, color:'var(--text-4)', padding:'10px 6px' }}>
+                  No apps available — connect via the Connects page first.
+                </p>
+              ) : (
+                composioApps
+                  .filter(app => !appSearch || app.name.toLowerCase().includes(appSearch.toLowerCase()))
+                  .map((app: ComposioApp) => {
+                    const id           = composioAppId(app);
+                    const isConnected  = composioConns.has(id);
+                    const isConnecting = connectingAppId === id;
+                    const logo         = appLogo(app);
+                    const appPayload   = {
+                      type: 'app' as const,
+                      data: { appType: id, appLabel: app.name, appIcon: logo ?? '🔌' },
+                    };
+                    const isHovered = hoveredAppId === id;
+                    return (
+                      <div key={id}
+                        draggable={!isMobile && isConnected}
+                        onDragStart={(!isMobile && isConnected) ? (e => onPanelDragStart(e, appPayload)) : undefined}
+                        onClick={isMobile && isConnected ? () => addNodeFromPanel(appPayload) : undefined}
+                        onMouseEnter={() => setHoveredAppId(id)}
+                        onMouseLeave={() => setHoveredAppId(null)}
+                        style={{
+                          ...panelCard(isConnected ? 'var(--green)' : 'var(--border)'),
+                          cursor: isConnected ? (isMobile ? 'pointer' : 'grab') : 'default',
+                          opacity: isConnecting ? 0.7 : 1,
+                          alignItems: 'flex-start',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        {/* Top row: logo + name + status */}
+                        <div style={{ display:'flex', alignItems:'center', gap:8, width:'100%' }}>
+                          {logo ? (
+                            <img src={logo} alt={app.name}
+                              style={{ width:20, height:20, objectFit:'contain', borderRadius:4, flexShrink:0 }} />
+                          ) : (
+                            <span style={{ fontSize:16, flexShrink:0 }}>🔌</span>
+                          )}
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)', wordBreak:'break-word', lineHeight:1.3 }}>
+                              {app.name}
+                            </div>
+                          </div>
+                          {isConnected ? (
+                            <span style={{ fontSize:9, fontWeight:700, flexShrink:0,
+                              color:'var(--green)', background:'rgba(76,175,80,0.14)',
+                              borderRadius:4, padding:'2px 5px',
+                            }}>●</span>
+                          ) : (
+                            <button
+                              onClick={e => { e.stopPropagation(); handleConnectApp(app); }}
+                              disabled={isConnecting}
+                              style={{
+                                flexShrink:0, padding:'3px 8px', borderRadius:5,
+                                fontSize:9.5, fontWeight:600, cursor: isConnecting ? 'wait' : 'pointer',
+                                background: isConnecting ? 'var(--tint-2)' : 'rgba(0,113,227,0.12)',
+                                border: `1px solid ${isConnecting ? 'var(--border)' : 'rgba(0,113,227,0.3)'}`,
+                                color: isConnecting ? 'var(--text-4)' : 'var(--blue)',
+                                transition:'all 0.15s',
+                              }}
+                            >
+                              {isConnecting ? '…' : 'Connect'}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Description — animates in/out on hover */}
+                        {app.description && (
+                          <div style={{
+                            width: '100%',
+                            overflow: 'hidden',
+                            maxHeight: isHovered ? '120px' : '0px',
+                            opacity: isHovered ? 1 : 0,
+                            marginTop: isHovered ? 6 : 0,
+                            paddingTop: isHovered ? 6 : 0,
+                            borderTop: isHovered ? '1px solid var(--border)' : '1px solid transparent',
+                            fontSize: 11,
+                            color: 'var(--text-3)',
+                            lineHeight: 1.5,
+                            userSelect: 'none',
+                            pointerEvents: 'none',
+                            transition: 'max-height 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease, margin-top 0.28s ease, padding-top 0.28s ease',
+                          }}>
+                            {app.description}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+              )}
+            </>
+          )}
 
           {/* ── Webhooks tab ── */}
           {leftTab === 'webhooks' && (
@@ -748,11 +949,13 @@ export default function FlowsPage() {
 
           {/* Node cards */}
           {nodes.map(node => {
-            const color    = nodeColor(node);
-            const icon     = nodeIcon(node);
-            const label    = nodeLabel(node);
-            const isActive = editNode?.id === node.id;
-            const conn     = connections.find(c => c.app_type === node.data.appType);
+            const color      = nodeColor(node);
+            const icon       = nodeIcon(node);
+            const label      = nodeLabel(node);
+            const isActive   = editNode?.id === node.id;
+            const conn       = connections.find(c => c.app_type === node.data.appType);
+            const isConnected = conn?.is_connected || composioConns.has(node.data.appType ?? '');
+            const iconIsUrl  = typeof icon === 'string' && icon.startsWith('http');
 
             return (
               <div key={node.id} style={{ position:'absolute', left:node.x, top:node.y,
@@ -770,7 +973,12 @@ export default function FlowsPage() {
                   boxShadow: isActive ? `0 0 0 3px ${color}30, 0 4px 20px rgba(0,0,0,0.35)` : '0 3px 14px rgba(0,0,0,0.28)',
                   transition:'all 0.15s',
                 }}>
-                  <span style={{ fontSize:20 }}>{icon}</span>
+                  {iconIsUrl ? (
+                    <img src={icon} alt={label}
+                      style={{ width:22, height:22, objectFit:'contain', borderRadius:5, flexShrink:0 }} />
+                  ) : (
+                    <span style={{ fontSize:20 }}>{icon}</span>
+                  )}
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12, fontWeight:700, color:'var(--text-1)',
                       overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -780,8 +988,8 @@ export default function FlowsPage() {
                       <span style={tagChip(color)}>{node.data.agentType}</span>
                     )}
                     {node.type==='app' && (
-                      <span style={{ fontSize:9.5, color: conn?.is_connected ? 'var(--green)' : 'var(--text-4)' }}>
-                        {conn?.is_connected ? '● connected' : '○ click to connect'}
+                      <span style={{ fontSize:9.5, color: isConnected ? 'var(--green)' : 'var(--text-4)' }}>
+                        {isConnected ? '● connected' : '○ click to connect'}
                       </span>
                     )}
                     {node.type==='webhook' && (
@@ -881,6 +1089,63 @@ export default function FlowsPage() {
             });
           }}
         />
+      )}
+
+      {/* ── API-key credentials modal ────────────────────────────────────────── */}
+      {credModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 300,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => { setCredModal(null); setConnectingAppId(null); }}>
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 14, padding: '24px 28px', width: 'min(380px, 90vw)',
+            boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 4 }}>
+              Connect {credModal.app.name}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-4)', marginBottom: 18 }}>
+              Enter your credentials to connect this app.
+            </div>
+            {credModal.fields.map(field => (
+              <div key={field.name} style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600,
+                  color: 'var(--text-3)', marginBottom: 5 }}>
+                  {field.label}
+                </label>
+                <input
+                  type={field.type === 'password' ? 'password' : 'text'}
+                  value={credValues[field.name] ?? ''}
+                  onChange={e => setCredValues(prev => ({ ...prev, [field.name]: e.target.value }))}
+                  placeholder={field.label}
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    padding: '8px 12px', borderRadius: 8,
+                    background: 'var(--tint-2)', border: '1px solid var(--border)',
+                    color: 'var(--text-1)', fontSize: 13, outline: 'none',
+                  }}
+                />
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+              <button onClick={() => { setCredModal(null); setConnectingAppId(null); }}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)',
+                  background: 'transparent', color: 'var(--text-3)', fontSize: 13, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleCredSubmit}
+                disabled={connectingAppId === composioAppId(credModal.app)}
+                style={{ padding: '8px 18px', borderRadius: 8, border: 'none',
+                  background: 'var(--grad-brand)', color: '#fff', fontSize: 13,
+                  fontWeight: 600, cursor: 'pointer', opacity: connectingAppId ? 0.7 : 1 }}>
+                {connectingAppId ? 'Connecting…' : 'Connect'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

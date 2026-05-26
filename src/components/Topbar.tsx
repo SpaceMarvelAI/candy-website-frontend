@@ -1,10 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { useTheme } from '../hooks/useTheme';
 import { Icon } from '../assets/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import SignupPopup from './SignupPopup';
-import { redirectToSSO } from '../utils/sso';
 
 const crumbMap = {
   dashboard:  [{ t: 'Home' }, { t: 'Dashboard',     current: true }],
@@ -23,43 +20,13 @@ interface TopbarProps {
 }
 
 export default function Topbar({ onMenuOpen }: TopbarProps) {
-  const { currentView, addToast, user, signOut } = useApp();
-  const { theme, toggleTheme } = useTheme();
+  const { currentView } = useApp();
 
   // Responsive breakpoints — drive visibility directly, no CSS class gymnastics
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
   const isSmallMobile    = useMediaQuery('(max-width: 640px)');
 
   const crumbs = crumbMap[currentView] ?? crumbMap.dashboard;
-  const [showSignup,  setShowSignup]  = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-
-  const initials = user
-    ? (user.company_name || user.email?.split('@')[0] || 'U').slice(0, 2).toUpperCase()
-    : null;
-
-  const iconBtnStyle: React.CSSProperties = {
-    width: 32, height: 32,
-    background: 'transparent',
-    border: '1px solid var(--border)',
-    borderRadius: 10,
-    color: 'var(--text-2)',
-    display: 'grid', placeItems: 'center',
-    cursor: 'pointer', position: 'relative',
-    transition: 'all 0.15s',
-    flexShrink: 0,
-  };
-
-  // Close profile dropdown on outside click
-  useEffect(() => {
-    if (!showProfile) return;
-    const handler = (e: MouseEvent) => {
-      const el = document.getElementById('profile-dropdown-anchor');
-      if (el && !el.contains(e.target as Node)) setShowProfile(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showProfile]);
 
   // ⌘K shortcut
   useEffect(() => {
@@ -194,228 +161,6 @@ export default function Topbar({ onMenuOpen }: TopbarProps) {
         )}
       </div>
 
-      {/* Right actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-        {/* Notifications bell */}
-        <button
-          className="tooltip-wrap"
-          data-tip="Notifications"
-          onClick={() => addToast('Notifications — coming soon', 'info')}
-          style={iconBtnStyle}
-        >
-          <Icon name="bell" size={16} />
-          <span
-            style={{
-              position: 'absolute', top: 9, right: 10,
-              width: 7, height: 7, borderRadius: '50%',
-              background: 'var(--blue)',
-              boxShadow: '0 0 10px var(--blue)',
-            }}
-          />
-        </button>
-
-        {/* Theme toggle — hide on very small mobile to save space */}
-        {!isSmallMobile && (
-          <button
-            className="tooltip-wrap"
-            data-tip={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
-            onClick={toggleTheme}
-            aria-label="Toggle color theme"
-            style={iconBtnStyle}
-          >
-            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} />
-          </button>
-        )}
-
-        <button
-          className="tooltip-wrap"
-          data-tip="Help"
-          onClick={() => addToast('Help — coming soon', 'info')}
-          style={iconBtnStyle}
-        >
-          <Icon name="help" size={16} />
-        </button>
-
-        {/* Profile avatar or Sign In */}
-        {user ? (
-          <div id="profile-dropdown-anchor" style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowProfile(p => !p)}
-              style={{
-                width: 32, height: 32,
-                borderRadius: 8,
-                background: 'var(--grad-brand)',
-                display: 'grid', placeItems: 'center',
-                fontWeight: 700, fontSize: 13, color: '#fff',
-                border: showProfile
-                  ? '2px solid rgba(117,91,227,0.7)'
-                  : '1px solid var(--border-strong)',
-                flexShrink: 0,
-                boxShadow: '0 4px 16px -4px rgba(117,91,227,0.5)',
-                cursor: 'pointer',
-                transition: 'border 0.15s',
-              }}
-            >
-              {initials}
-            </button>
-
-            {showProfile && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 10px)',
-                  right: 0,
-                  width: 260,
-                  background: 'var(--card-bg-strong)',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 14,
-                  boxShadow: 'var(--shadow-card), 0 8px 40px rgba(0,0,0,0.35)',
-                  backdropFilter: 'blur(24px)',
-                  overflow: 'hidden',
-                  zIndex: 100,
-                  animation: 'fadeUp 0.18s ease-out',
-                }}
-              >
-                {/* Profile header */}
-                <div
-                  style={{
-                    padding: '18px 18px 14px',
-                    borderBottom: '1px solid var(--border)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 44, height: 44,
-                      borderRadius: 12,
-                      background: 'var(--grad-brand)',
-                      display: 'grid', placeItems: 'center',
-                      fontWeight: 700, fontSize: 16, color: '#fff',
-                      flexShrink: 0,
-                      boxShadow: '0 4px 14px -4px rgba(117,91,227,0.55)',
-                    }}
-                  >
-                    {initials}
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 14, fontWeight: 600,
-                        color: 'var(--text-1)',
-                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      }}
-                    >
-                      {user.company_name || user.email?.split('@')[0]}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12, color: 'var(--text-3)',
-                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        marginTop: 2,
-                      }}
-                    >
-                      {user.email}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Role + company */}
-                <div
-                  style={{
-                    padding: '12px 18px',
-                    borderBottom: '1px solid var(--border)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Role</span>
-                    <span
-                      style={{
-                        fontSize: 11, fontWeight: 600,
-                        padding: '2px 8px', borderRadius: 99,
-                        background: 'rgba(117,91,227,0.15)',
-                        color: 'var(--purple)',
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {user.role}
-                    </span>
-                  </div>
-                  {user.company_name && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Workspace</span>
-                      <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>
-                        {user.company_name}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Sign out */}
-                <div style={{ padding: '8px' }}>
-                  <button
-                    onClick={() => { setShowProfile(false); signOut(); }}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '10px 12px',
-                      borderRadius: 8,
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#ff8194',
-                      fontSize: 13,
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'background 0.15s',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,90,120,0.1)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <Icon name="arrowRight" size={14} style={{ transform: 'rotate(180deg)' }} />
-                    Sign out
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <button
-            onClick={redirectToSSO}
-            className="btn-primary-shimmer"
-            style={{
-              height: 32,
-              padding: '0 14px',
-              background: 'var(--grad-brand)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 10,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              boxShadow: '0 4px 20px -6px rgba(117,91,227,0.55)',
-              position: 'relative',
-              overflow: 'hidden',
-              letterSpacing: '0.01em',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <Icon name="arrowRight" size={13} />
-            Sign In
-          </button>
-        )}
-      </div>
-
-      {showSignup && <SignupPopup onClose={() => setShowSignup(false)} />}
     </header>
   );
 }
