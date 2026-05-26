@@ -1,22 +1,25 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import Icon from '../../assets/icons';
 import {
   getComposioApps,
   getComposioConnections,
+  getAppAuthInfo,
   connectComposioApp,
+  connectComposioAppWithCredentials,
   appId,
   appLogo,
   appCategory,
   connectedAppId,
   redirectUrl,
+  isActiveConnection,
   type ComposioApp,
+  type AuthInfoField,
 } from '../../api/composio';
 
 const PAGE_SIZE = 48;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function colorFromName(name: string): string {
   let h = 0;
@@ -75,8 +78,6 @@ function CardSkeleton() {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-
 export default function ConnectsPage() {
   const { addToast } = useApp();
   const isMobile = useMediaQuery('(max-width: 640px)');
@@ -84,14 +85,16 @@ export default function ConnectsPage() {
 
   const [hasToken, setHasToken] = useState(() => !!localStorage.getItem('dashboard_token'));
 
-  const [apps,        setApps]       = useState<ComposioApp[]>([]);
-  const [connIds,     setConnIds]    = useState<Set<string>>(new Set());
-  const [loading,     setLoading]    = useState(hasToken);
-  const [apiError,    setApiError]   = useState<string | null>(null);
-  const [search,      setSearch]     = useState('');
-  const [category,    setCategory]   = useState('All');
-  const [visibleCount,setVisibleCount]= useState(PAGE_SIZE);
-  const [connecting,  setConnecting] = useState<string | null>(null);
+  const [apps,          setApps]         = useState<ComposioApp[]>([]);
+  const [connIds,       setConnIds]      = useState<Set<string>>(new Set());
+  const [loading,       setLoading]      = useState(hasToken);
+  const [apiError,      setApiError]     = useState<string | null>(null);
+  const [search,        setSearch]       = useState('');
+  const [category,      setCategory]     = useState('All');
+  const [visibleCount,  setVisibleCount] = useState(PAGE_SIZE);
+  const [connectingId,  setConnectingId] = useState<string | null>(null);
+  const [credModal,     setCredModal]    = useState<{ app: ComposioApp; fields: AuthInfoField[] } | null>(null);
+  const [credValues,    setCredValues]   = useState<Record<string, string>>({});
 
   const initRef     = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -110,7 +113,7 @@ export default function ConnectsPage() {
         getComposioConnections(),
       ]);
       setApps(appsData);
-      setConnIds(new Set(connsData.map(connectedAppId)));
+      setConnIds(new Set(connsData.filter(isActiveConnection).map(connectedAppId)));
     } catch (e) {
       const msg = (e as Error).message;
       if (msg === 'COMPOSIO_UNAUTHORIZED') {
@@ -133,7 +136,6 @@ export default function ConnectsPage() {
 
   useEffect(() => () => stopPoll(), []);
 
-  // Intersection observer — reconnects on every render so sentinel is always watched
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
@@ -149,34 +151,78 @@ export default function ConnectsPage() {
 
   async function handleConnect(app: ComposioApp) {
     const id = appId(app);
-    setConnecting(id);
+    if (connectingId === id) return;
+    setConnectingId(id);
     try {
+      const info = await getAppAuthInfo(id);
+
+      if (info.auth_type === 'no_auth') {
+        await connectComposioApp(id);
+        setConnIds(prev => new Set([...prev, id]));
+        addToast(`${app.name} connected`, 'success');
+        setConnectingId(null);
+        return;
+      }
+
+      if (info.auth_type === 'api_key') {
+        const fields = info.required_fields ?? [{ name: 'api_key', label: 'API Key', type: 'password' }];
+        setCredValues(Object.fromEntries(fields.map(f => [f.name, ''])));
+        setCredModal({ app, fields });
+        setConnectingId(null);
+        return;
+      }
+
+      // OAuth — open popup and poll with grace period
       const res = await connectComposioApp(id);
       const url = redirectUrl(res);
-      if (!url) throw new Error('No redirect URL returned');
-
+      if (!url) throw new Error('No redirect URL');
       const popup = window.open(url, '_blank', 'width=640,height=720,noopener');
+      let popupClosedAt: number | null = null;
+      const GRACE_MS = 10_000;
 
       pollRef.current = setInterval(async () => {
         const closed = !popup || popup.closed;
+        if (closed && popupClosedAt === null) popupClosedAt = Date.now();
+
         try {
           const conns = await getComposioConnections();
-          const ids   = new Set(conns.map(connectedAppId));
-          const nowConnected = ids.has(id);
-          setConnIds(ids);
-          if (nowConnected || closed) {
+          const ids   = new Set(conns.filter(isActiveConnection).map(connectedAppId));
+          if (ids.has(id)) {
+            setConnIds(ids);
             stopPoll();
-            setConnecting(null);
-            if (nowConnected) addToast(`${app.name} connected`, 'success');
-            else              addToast('Connection window closed', 'info');
+            setConnectingId(null);
+            addToast(`${app.name} connected`, 'success');
+          } else if (closed && popupClosedAt !== null && Date.now() - popupClosedAt > GRACE_MS) {
+            stopPoll();
+            setConnectingId(null);
           }
         } catch {
-          if (closed) { stopPoll(); setConnecting(null); }
+          if (closed && popupClosedAt !== null && Date.now() - popupClosedAt > GRACE_MS) {
+            stopPoll();
+            setConnectingId(null);
+          }
         }
-      }, 2000);
+      }, 1500);
     } catch {
       addToast(`Failed to connect ${app.name}`, 'error');
-      setConnecting(null);
+      setConnectingId(null);
+    }
+  }
+
+  async function handleCredSubmit() {
+    if (!credModal) return;
+    const id = appId(credModal.app);
+    setConnectingId(id);
+    try {
+      await connectComposioAppWithCredentials(id, credValues);
+      setConnIds(prev => new Set([...prev, id]));
+      addToast(`${credModal.app.name} connected`, 'success');
+      setCredModal(null);
+      setCredValues({});
+    } catch {
+      addToast(`Could not connect ${credModal.app.name}`, 'error');
+    } finally {
+      setConnectingId(null);
     }
   }
 
@@ -345,7 +391,7 @@ export default function ConnectsPage() {
                 {visible.map(app => {
                   const id           = appId(app);
                   const isConnected  = connIds.has(id);
-                  const isConnecting = connecting === id;
+                  const isConnecting = connectingId === id;
 
                   return (
                     <div
@@ -361,7 +407,7 @@ export default function ConnectsPage() {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <AppIcon app={app} size={36} />
-                        <div style={{ minWidth: 0 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{
                             fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -372,49 +418,128 @@ export default function ConnectsPage() {
                             {appCategory(app)}
                           </div>
                         </div>
+                        {/* Connected dot — top-right of card header */}
+                        {isConnected && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, flexShrink: 0,
+                            color: 'var(--green)', background: 'rgba(76,175,80,0.14)',
+                            borderRadius: 4, padding: '2px 6px',
+                          }}>●</span>
+                        )}
                       </div>
 
-                      <button
-                        onClick={() => !isConnected && !isConnecting && handleConnect(app)}
-                        disabled={isConnected || isConnecting}
-                        style={{
-                          width: '100%', padding: '7px 12px',
-                          borderRadius: 8, fontSize: 12.5, fontWeight: 500,
-                          cursor: isConnected || isConnecting ? 'default' : 'pointer',
-                          border: isConnected
-                            ? '1px solid rgba(76,175,80,0.4)'
-                            : '1px solid var(--border)',
-                          background: isConnected ? 'rgba(76,175,80,0.1)' : 'var(--tint-2)',
-                          color: isConnected
-                            ? 'var(--green)'
-                            : isConnecting
-                            ? 'var(--text-4)'
-                            : 'var(--text-2)',
-                          transition: 'all 0.15s',
-                          display: 'flex', alignItems: 'center',
-                          justifyContent: 'center', gap: 6,
-                        }}
-                      >
-                        {isConnected ? (
-                          <><Icon name="check" size={12} /> Connected</>
-                        ) : isConnecting ? (
-                          'Connecting…'
-                        ) : (
-                          <><Icon name="plug" size={12} /> Connect</>
-                        )}
-                      </button>
+                      {/* Action button — only shown when not connected */}
+                      {!isConnected && (
+                        <button
+                          onClick={() => !isConnecting && handleConnect(app)}
+                          disabled={isConnecting}
+                          style={{
+                            width: '100%', padding: '7px 12px',
+                            borderRadius: 8, fontSize: 12.5, fontWeight: 500,
+                            cursor: isConnecting ? 'wait' : 'pointer',
+                            border: '1px solid var(--border)',
+                            background: isConnecting ? 'var(--tint-2)' : 'rgba(0,113,227,0.08)',
+                            color: isConnecting ? 'var(--text-4)' : 'var(--blue)',
+                            transition: 'all 0.15s',
+                            display: 'flex', alignItems: 'center',
+                            justifyContent: 'center', gap: 6,
+                          }}
+                        >
+                          {isConnecting ? (
+                            'Connecting…'
+                          ) : (
+                            <><Icon name="plug" size={12} /> Connect</>
+                          )}
+                        </button>
+                      )}
+
+                      {/* Connected state — just a status row, no button */}
+                      {isConnected && (
+                        <div style={{
+                          fontSize: 12, color: 'var(--green)',
+                          display: 'flex', alignItems: 'center', gap: 5,
+                        }}>
+                          <Icon name="check" size={12} /> Connected
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
 
-              {/* Scroll sentinel for infinite load */}
               {visible.length < filtered.length && (
                 <div ref={sentinelRef} style={{ height: 1, marginTop: 14 }} />
               )}
             </>
           )}
         </>
+      )}
+
+      {/* ── API-key credentials modal ── */}
+      {credModal && createPortal(
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 300,
+            background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onClick={() => { setCredModal(null); setConnectingId(null); }}
+        >
+          <div
+            style={{
+              background: 'var(--surface-solid)', border: '1px solid var(--border)',
+              borderRadius: 14, padding: '24px 28px', width: 'min(380px, 90vw)',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 4 }}>
+              Connect {credModal.app.name}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-4)', marginBottom: 18 }}>
+              Enter your credentials to connect this app.
+            </div>
+            {credModal.fields.map(field => (
+              <div key={field.name} style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600,
+                  color: 'var(--text-3)', marginBottom: 5 }}>
+                  {field.label}
+                </label>
+                <input
+                  type={field.type === 'password' ? 'password' : 'text'}
+                  value={credValues[field.name] ?? ''}
+                  onChange={e => setCredValues(prev => ({ ...prev, [field.name]: e.target.value }))}
+                  placeholder={field.label}
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    padding: '8px 12px', borderRadius: 8,
+                    background: 'var(--tint-2)', border: '1px solid var(--border)',
+                    color: 'var(--text-1)', fontSize: 13, outline: 'none',
+                  }}
+                />
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+              <button
+                onClick={() => { setCredModal(null); setConnectingId(null); }}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)',
+                  background: 'transparent', color: 'var(--text-3)', fontSize: 13, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCredSubmit}
+                disabled={!!connectingId}
+                style={{ padding: '8px 18px', borderRadius: 8, border: 'none',
+                  background: 'var(--grad-brand)', color: '#fff', fontSize: 13,
+                  fontWeight: 600, cursor: 'pointer', opacity: connectingId ? 0.7 : 1 }}
+              >
+                {connectingId ? 'Connecting…' : 'Connect'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
