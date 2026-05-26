@@ -16,7 +16,7 @@ const NAV_SECTIONS = [
     items: [
       { id: 'prompt-library',   label: 'Prompt Library',   icon: 'book', path: null },
       { id: 'workspace-agents', label: 'Workspace Agents', icon: 'team', path: null },
-      { id: 'connectors',       label: 'Connectors',       icon: 'flow', path: null },
+      { id: 'connectors',       label: 'Connectors',       icon: 'flow', path: '/connects' },
     ],
   },
   {
@@ -46,6 +46,7 @@ const PATH_TO_NAV: [string, string][] = [
   ['/live',      'voice'],
   ['/analytics', 'analytics'],
   ['/flows',     'flows'],
+  ['/connects',  'connectors'],
 ];
 
 const SM_API = (import.meta as any).env?.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai';
