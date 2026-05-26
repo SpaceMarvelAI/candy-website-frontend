@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
@@ -49,6 +50,168 @@ const PATH_TO_NAV: [string, string][] = [
 
 const SM_API = (import.meta as any).env?.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai';
 
+// ─── Profile popover ──────────────────────────────────────────────────────────
+function ProfileMenu({
+  anchorRect, panelWidth, onClose, onSignOut, navigate, addToast,
+  theme, setTheme,
+}: {
+  anchorRect: DOMRect; panelWidth: number;
+  onClose: () => void; onSignOut: () => void;
+  navigate: (p: string) => void; addToast: (m: string, k?: string) => void;
+  theme: string; setTheme: (t: 'light' | 'dark') => void;
+}) {
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
+    }
+    setTimeout(() => document.addEventListener('mousedown', handle), 0);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [onClose]);
+
+  // Position: sit just above the anchor, left-aligned with the panel
+  const menuWidth = 220;
+  const left = Math.min(panelWidth + 8, window.innerWidth - menuWidth - 8);
+  const bottom = window.innerHeight - anchorRect.top + 6;
+
+  const menuItem = (
+    label: string,
+    onClick: () => void,
+    opts: { icon?: string; chevron?: boolean; danger?: boolean; indent?: boolean; active?: boolean } = {}
+  ) => (
+    <button
+      onClick={onClick}
+      style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+        padding: opts.indent ? '7px 12px 7px 30px' : '8px 12px',
+        background: opts.active ? 'rgba(0,113,227,0.1)' : 'transparent',
+        border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
+        fontSize: opts.indent ? 12 : 13, fontWeight: opts.indent ? 400 : 500,
+        color: opts.danger ? '#f87171' : opts.active ? 'var(--blue)' : 'var(--text-1)',
+        transition: 'background 0.12s',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = opts.danger ? 'rgba(248,113,113,0.1)' : 'var(--tint-2)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = opts.active ? 'rgba(0,113,227,0.1)' : 'transparent'; }}
+    >
+      {opts.icon && <Icon name={opts.icon} size={14} />}
+      <span style={{ flex: 1 }}>{label}</span>
+      {opts.chevron && (
+        <span style={{ fontSize: 10, opacity: 0.5, transform: appearanceOpen && label.startsWith('A') ? 'rotate(180deg)' : helpOpen && label === 'Help' ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
+      )}
+      {opts.active && <span style={{ fontSize: 10, color: 'var(--blue)' }}>✓</span>}
+    </button>
+  );
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      style={{
+        position: 'fixed',
+        left,
+        bottom,
+        width: menuWidth,
+        background: 'var(--surface-solid)',
+        border: '1px solid var(--border)',
+        borderRadius: 12,
+        padding: '6px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+        zIndex: 200,
+        animation: 'menuFadeUp 0.15s ease',
+      }}
+    >
+      <style>{`@keyframes menuFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}`}</style>
+
+      {/* Upgrade plan */}
+      <button
+        onClick={() => { addToast('Upgrade plan — coming soon', 'info'); onClose(); }}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+          padding: '8px 12px', background: 'rgba(139,92,246,0.08)',
+          border: '1px solid rgba(139,92,246,0.2)', borderRadius: 8,
+          cursor: 'pointer', fontSize: 13, fontWeight: 600,
+          color: 'var(--purple-hi)', marginBottom: 4, transition: 'background 0.12s',
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.15)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.08)'; }}
+      >
+        <Icon name="zap" size={14} />
+        <span style={{ flex: 1 }}>Upgrade plan</span>
+      </button>
+
+      <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+
+      {/* Connectors */}
+      {menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
+
+      {/* Appearance */}
+      <button
+        onClick={() => setAppearanceOpen(p => !p)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+          padding: '8px 12px', background: 'transparent',
+          border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
+          fontSize: 13, fontWeight: 500, color: 'var(--text-1)', transition: 'background 0.12s',
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--tint-2)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+      >
+        <Icon name="sun" size={14} />
+        <span style={{ flex: 1 }}>Appearance</span>
+        <span style={{ fontSize: 10, opacity: 0.5, transition: 'transform 0.15s', display: 'inline-block', transform: appearanceOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+      </button>
+      {appearanceOpen && (
+        <div style={{ marginBottom: 2 }}>
+          {menuItem('Light theme',  () => { setTheme('light'); }, { indent: true, active: theme === 'light' })}
+          {menuItem('Dark theme',   () => { setTheme('dark');  }, { indent: true, active: theme === 'dark' })}
+          {menuItem('System theme', () => {
+            const sys = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            setTheme(sys);
+          }, { indent: true })}
+          {menuItem('Customize theme', () => { addToast('Custom theme — coming soon', 'info'); }, { indent: true })}
+        </div>
+      )}
+
+      {/* Settings */}
+      {menuItem('Settings', () => { addToast('Settings — coming soon', 'info'); onClose(); }, { icon: 'settings' })}
+
+      {/* Help */}
+      <button
+        onClick={() => setHelpOpen(p => !p)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+          padding: '8px 12px', background: 'transparent',
+          border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
+          fontSize: 13, fontWeight: 500, color: 'var(--text-1)', transition: 'background 0.12s',
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--tint-2)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+      >
+        <Icon name="help" size={14} />
+        <span style={{ flex: 1 }}>Help</span>
+        <span style={{ fontSize: 10, opacity: 0.5, transition: 'transform 0.15s', display: 'inline-block', transform: helpOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+      </button>
+      {helpOpen && (
+        <div style={{ marginBottom: 2 }}>
+          {menuItem('Report issue',       () => { addToast('Report issue — coming soon', 'info'); }, { indent: true })}
+          {menuItem('Terms & conditions', () => { window.open('https://spacemarvel.ai/terms', '_blank'); }, { indent: true })}
+          {menuItem('Privacy policy',     () => { window.open('https://spacemarvel.ai/privacy', '_blank'); }, { indent: true })}
+          {menuItem('Contact support',    () => { addToast('Contact support — coming soon', 'info'); }, { indent: true })}
+        </div>
+      )}
+
+      <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+
+      {/* Sign out */}
+      {menuItem('Sign out', () => { onClose(); onSignOut(); }, { icon: 'logout', danger: true })}
+    </div>,
+    document.body,
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 interface SidebarProps {
   mobileOpen?: boolean;
@@ -57,11 +220,15 @@ interface SidebarProps {
 
 export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const { user, addToast, signOut } = useApp();
-  const { theme }    = useTheme();
+  const { theme, setTheme } = useTheme();
   const navigate     = useNavigate();
   const location     = useLocation();
   const [expanded, setExpanded] = useState(false);
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
+
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   const imgFilter = theme === 'dark'
     ? 'brightness(0) invert(1)'
@@ -71,11 +238,20 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     location.pathname === prefix || location.pathname.startsWith(prefix + '/')
   )?.[1] ?? null;
 
-  // Lock body scroll while mobile drawer is open
   useEffect(() => {
     document.body.style.overflow = (isMobileOrTablet && mobileOpen) ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [isMobileOrTablet, mobileOpen]);
+
+  // Close profile menu on route change
+  useEffect(() => { setProfileMenuOpen(false); }, [location.pathname]);
+
+  function openProfileMenu() {
+    if (profileRef.current) {
+      setProfileAnchor(profileRef.current.getBoundingClientRect());
+      setProfileMenuOpen(true);
+    }
+  }
 
   async function handleNav(item: { path: string | null; label: string; ssoTarget?: string }) {
     if (!item.ssoTarget) {
@@ -143,7 +319,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
   const hasShadow = expanded || (isMobileOrTablet && mobileOpen);
 
-  // User display info
   const userName  = user?.full_name || user?.email?.split('@')[0] || 'User';
   const userEmail = user?.email || '';
   const initials  = userName.slice(0, 1).toUpperCase();
@@ -169,7 +344,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       {/* ── Fixed navigation panel ─────────────────────────────────────────── */}
       <div
         onMouseEnter={!isMobileOrTablet ? () => setExpanded(true)  : undefined}
-        onMouseLeave={!isMobileOrTablet ? () => setExpanded(false) : undefined}
+        onMouseLeave={!isMobileOrTablet ? () => { setExpanded(false); } : undefined}
         style={{
           position: 'fixed',
           top: 0, left: 0,
@@ -194,30 +369,25 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           flexShrink: 0,
           borderBottom: '1px solid var(--border)',
         }}>
-          {/* Logo + name */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 8,
-              background: 'var(--grad-brand)',
-              display: 'grid', placeItems: 'center', flexShrink: 0,
-            }}>
-              <Icon name="spark" size={14} />
-            </div>
+            <img
+              src="/favicon.svg"
+              alt="Candy"
+              style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: 'block' }}
+            />
             {panelExpanded && (
               <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', letterSpacing: '-0.01em' }}>
                 Candy
               </span>
             )}
           </div>
-          {/* Sidebar toggle — expanded only */}
           {panelExpanded && !isMobileOrTablet && (
             <button
               onClick={() => setExpanded(false)}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 color: 'var(--text-4)', padding: 4, borderRadius: 6,
-                display: 'grid', placeItems: 'center',
-                transition: 'color 0.15s',
+                display: 'grid', placeItems: 'center', transition: 'color 0.15s',
               }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-2)'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-4)'; }}
@@ -226,14 +396,11 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
               <Icon name="columns" size={15} />
             </button>
           )}
-          {/* Close button — mobile only */}
           {isMobileOrTablet && (
             <button
               onClick={onClose}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--text-3)', padding: 4, display: 'grid', placeItems: 'center',
-              }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-3)', padding: 4, display: 'grid', placeItems: 'center' }}
             >
               <Icon name="x" size={16} />
             </button>
@@ -244,7 +411,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '8px 0' }}>
           {NAV_SECTIONS.map((section, si) => (
             <div key={si} style={{ marginBottom: 4 }}>
-              {/* Section label */}
               {section.label && panelExpanded && (
                 <p style={styles.sectionLabel}>{section.label}</p>
               )}
@@ -255,7 +421,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                 <div style={styles.sectionDivider} />
               )}
 
-              {/* Items */}
               <div style={{ padding: panelExpanded ? '0 8px' : '0 4px' }}>
                 {section.items.map((item: any) => {
                   const isActive = activeId === item.id;
@@ -280,26 +445,16 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                       }}
                     >
                       {isActive && panelExpanded && <span style={styles.accentBar} />}
-
-                      {/* Icon */}
                       {item.img ? (
-                        <img
-                          src={item.img} alt={item.label}
-                          style={{ width: 18, height: 18, objectFit: 'contain', filter: imgFilter, flexShrink: 0 }}
-                        />
+                        <img src={item.img} alt={item.label}
+                          style={{ width: 18, height: 18, objectFit: 'contain', filter: imgFilter, flexShrink: 0 }} />
                       ) : (
                         <Icon name={item.icon} size={16} />
                       )}
-
-                      {/* Label + external arrow */}
                       {panelExpanded && (
                         <>
-                          <span style={{ flex: 1, whiteSpace: 'nowrap', textAlign: 'left' }}>
-                            {item.label}
-                          </span>
-                          {isExternal && (
-                            <Icon name="externallink" size={12} style={{ opacity: 0.45, flexShrink: 0 }} />
-                          )}
+                          <span style={{ flex: 1, whiteSpace: 'nowrap', textAlign: 'left' }}>{item.label}</span>
+                          {isExternal && <Icon name="externallink" size={12} style={{ opacity: 0.45, flexShrink: 0 }} />}
                         </>
                       )}
                     </button>
@@ -310,35 +465,36 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           ))}
         </div>
 
-        {/* ── User profile (bottom) ───────────────────────────────────────────── */}
-        <div style={{
-          borderTop: '1px solid var(--border)',
-          padding: panelExpanded ? '12px 12px' : '12px 0',
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: panelExpanded ? 'flex-start' : 'center',
-          gap: 10,
-          cursor: 'pointer',
-          transition: 'background 0.15s',
-        }}
-          onClick={panelExpanded ? signOut : undefined}
-          title={panelExpanded ? undefined : userEmail}
+        {/* ── User profile ────────────────────────────────────────────────────── */}
+        <div
+          ref={profileRef}
+          onClick={openProfileMenu}
+          title={!panelExpanded ? `${userName} · ${userEmail}` : undefined}
+          style={{
+            borderTop: '1px solid var(--border)',
+            padding: panelExpanded ? '12px 12px' : '12px 0',
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: panelExpanded ? 'flex-start' : 'center',
+            gap: 10,
+            cursor: 'pointer',
+            transition: 'background 0.15s',
+            background: profileMenuOpen ? 'var(--tint-2)' : 'transparent',
+          }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--tint-2)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+          onMouseLeave={e => { if (!profileMenuOpen) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
         >
-          {/* Avatar */}
           <div style={{
             width: 30, height: 30, borderRadius: '50%',
             background: 'var(--grad-brand)',
             display: 'grid', placeItems: 'center',
-            fontSize: 12, fontWeight: 700, color: '#fff',
-            flexShrink: 0,
+            fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0,
           }}>
             {initials}
           </div>
           {panelExpanded && (
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {userName}
@@ -349,8 +505,25 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
               </div>
             </div>
           )}
+          {panelExpanded && (
+            <Icon name="more" size={14} style={{ color: 'var(--text-4)', flexShrink: 0 }} />
+          )}
         </div>
       </div>
+
+      {/* ── Profile menu (portaled) ─────────────────────────────────────────── */}
+      {profileMenuOpen && profileAnchor && (
+        <ProfileMenu
+          anchorRect={profileAnchor}
+          panelWidth={panelWidth}
+          onClose={() => setProfileMenuOpen(false)}
+          onSignOut={signOut}
+          navigate={(p) => { navigate(p); setProfileMenuOpen(false); }}
+          addToast={addToast}
+          theme={theme}
+          setTheme={setTheme}
+        />
+      )}
 
       {/* ── Grid placeholder ────────────────────────────────────────────────── */}
       <aside className="sidebar-placeholder" />
