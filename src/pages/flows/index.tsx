@@ -405,28 +405,38 @@ export default function FlowsPage() {
       const url = redirectUrl(res);
       if (!url) throw new Error('No redirect URL');
       const popup = window.open(url, '_blank', 'width=640,height=720,noopener');
+      // Track when popup first closed so we give the backend a grace period
+      // to finish processing the OAuth callback before we give up.
+      let popupClosedAt: number | null = null;
+      const GRACE_MS = 10_000; // keep polling 10s after popup closes
+
       appPollRef.current = setInterval(async () => {
         const closed = !popup || popup.closed;
+        if (closed && popupClosedAt === null) popupClosedAt = Date.now();
+
         try {
           const conns = await getComposioConnections();
           const ids   = new Set(conns.filter(isActiveConnection).map(connectedAppId));
           if (ids.has(id)) {
-            // Only mark connected when the API actually confirms it
             setComposioConns(ids);
             clearInterval(appPollRef.current!);
             appPollRef.current = null;
             setConnectingAppId(null);
             addToast(`${app.name} connected`, 'success');
-          } else if (closed) {
-            // Popup closed without completing auth — stop polling, don't touch state
+          } else if (closed && popupClosedAt !== null && Date.now() - popupClosedAt > GRACE_MS) {
+            // Grace period expired with no confirmed connection — user likely cancelled
             clearInterval(appPollRef.current!);
             appPollRef.current = null;
             setConnectingAppId(null);
           }
         } catch {
-          if (closed) { clearInterval(appPollRef.current!); appPollRef.current = null; setConnectingAppId(null); }
+          if (closed && popupClosedAt !== null && Date.now() - popupClosedAt > GRACE_MS) {
+            clearInterval(appPollRef.current!);
+            appPollRef.current = null;
+            setConnectingAppId(null);
+          }
         }
-      }, 2000);
+      }, 1500); // poll every 1.5s for faster feedback
     } catch {
       addToast(`Could not connect ${app.name}`, 'error');
       setConnectingAppId(null);

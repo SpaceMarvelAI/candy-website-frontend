@@ -131,10 +131,12 @@ export function connectedAppId(c: ComposioConnection): string {
   return (c.app ?? c.appId ?? c.app_id ?? c.appName ?? c.app_name ?? '').toLowerCase();
 }
 
-/** Returns true only for genuinely live connections — excludes "initiated" / "pending" / "failed" */
+/** Returns true for live connections — only rejects known-inactive statuses */
 export function isActiveConnection(c: ComposioConnection): boolean {
-  if (!c.status) return true; // no status field → assume old API that only returns active rows
-  return c.status === 'connected' || c.status === 'active';
+  if (!c.status) return true; // no status field → assume API only returns active rows
+  const s = c.status.toLowerCase();
+  // Block only statuses that explicitly mean "not yet connected" or "no longer connected"
+  return !['initiated', 'pending', 'failed', 'expired', 'revoked', 'error', 'disabled', 'inactive'].includes(s);
 }
 
 export function redirectUrl(r: ConnectResponse): string | undefined {

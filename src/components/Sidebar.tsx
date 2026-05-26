@@ -11,12 +11,20 @@ const EXPANDED_W  = 220;
 
 const NAV_SECTIONS = [
   {
+    label: '',
+    items: [
+      { id: 'prompt-library',   label: 'Prompt Library',   icon: 'book', path: null },
+      { id: 'workspace-agents', label: 'Workspace Agents', icon: 'team', path: null },
+      { id: 'connectors',       label: 'Connectors',       icon: 'flow', path: null },
+    ],
+  },
+  {
     label: 'Products',
     items: [
-      { id: 'metaspace', label: 'Metaspace', icon: '', img: '/Metaspace.png', path: null,
-        ssoTarget: 'https://meta.spacemarvel.ai' },
-      { id: 'finixy',    label: 'Finixy',    icon: '', img: '/Finixy.svg',   path: null,
-        ssoTarget: 'https://app.finixy.ai' },
+      { id: 'metaspace', label: 'Meta Space', icon: '', img: '/Metaspace.png', path: null,
+        ssoTarget: 'https://meta.spacemarvel.ai', external: true },
+      { id: 'finixy',    label: 'Finixy',     icon: '', img: '/Finixy.svg',   path: null,
+        ssoTarget: 'https://app.finixy.ai',        external: true },
     ],
   },
   {
@@ -27,7 +35,6 @@ const NAV_SECTIONS = [
       { id: 'voice',     label: 'Live Calls', icon: 'livecall', path: '/live' },
       { id: 'analytics', label: 'Analytics',  icon: 'chart',    path: '/analytics' },
       { id: 'flows',     label: 'Flows',      icon: 'flowsnav', path: '/flows' },
-      { id: 'connects',  label: 'Connects',   icon: 'plug',     path: '/connects' },
     ],
   },
 ];
@@ -37,9 +44,7 @@ const PATH_TO_NAV: [string, string][] = [
   ['/chatbots',  'chatbots'],
   ['/live',      'voice'],
   ['/analytics', 'analytics'],
-  ['/webhooks',  'webhooks'],
   ['/flows',     'flows'],
-  ['/connects',  'connects'],
 ];
 
 const SM_API = (import.meta as any).env?.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai';
@@ -51,7 +56,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
-  const { addToast } = useApp();
+  const { user, addToast, signOut } = useApp();
   const { theme }    = useTheme();
   const navigate     = useNavigate();
   const location     = useLocation();
@@ -96,7 +101,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           body: JSON.stringify({ app_url: item.ssoTarget }),
         });
 
-        // Expired / revoked token — remove it so the next click goes straight to login
         if (res.status === 401 || res.status === 403) {
           localStorage.removeItem('dashboard_token');
           throw new Error(`token_expired:${res.status}`);
@@ -105,7 +109,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         if (!res.ok) throw new Error(`sso_generate_error:${res.status}`);
 
         const data = await res.json().catch(() => ({}));
-        // Accept either key name the API might return
         const ssoToken = data.sso_token || data.token;
 
         if (ssoToken) {
@@ -119,23 +122,18 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         throw new Error('no_sso_token_in_response');
       } catch (err: any) {
         const msg = String(err?.message || '');
-        // Only show a toast for unexpected failures — expired tokens silently
-        // re-route through login which is the correct recovery path.
         if (!msg.startsWith('token_expired')) {
           addToast(`Could not open ${item.label} — signing in via SpaceMarvel`, 'info');
         }
       }
     }
 
-    // No token, expired token, or generate failed — route through SpaceMarvel login
     window.location.href = `https://spacemarvel.ai/login?redirect_uri=${encodeURIComponent(item.ssoTarget + '/sso/callback')}`;
   }
 
-  // On mobile/tablet: always fully expanded; on desktop: hover-driven.
   const panelExpanded = isMobileOrTablet ? true : expanded;
   const panelWidth    = panelExpanded ? EXPANDED_W : COLLAPSED_W;
 
-  // Mobile: slide in/out via translateX. Desktop: width transition only.
   const panelTransform = isMobileOrTablet
     ? (mobileOpen ? 'translateX(0)' : `translateX(-${EXPANDED_W}px)`)
     : 'translateX(0)';
@@ -145,6 +143,11 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
   const hasShadow = expanded || (isMobileOrTablet && mobileOpen);
 
+  // User display info
+  const userName  = user?.full_name || user?.email?.split('@')[0] || 'User';
+  const userEmail = user?.email || '';
+  const initials  = userName.slice(0, 1).toUpperCase();
+
   return (
     <>
       {/* ── Backdrop (mobile/tablet only) ──────────────────────────────────── */}
@@ -152,8 +155,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         <div
           onClick={onClose}
           style={{
-            position: 'fixed',
-            inset: 0,
+            position: 'fixed', inset: 0,
             background: 'rgba(0, 0, 0, 0.55)',
             backdropFilter: 'blur(3px)',
             zIndex: 48,
@@ -165,130 +167,192 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       )}
 
       {/* ── Fixed navigation panel ─────────────────────────────────────────── */}
-      {/*  NOTE: This is intentionally a SIBLING of <aside>, NOT a child.       */}
-      {/*  The <aside> gets display:none on mobile; if the panel were inside it, */}
-      {/*  it would be hidden too — even with position:fixed.                   */}
       <div
         onMouseEnter={!isMobileOrTablet ? () => setExpanded(true)  : undefined}
         onMouseLeave={!isMobileOrTablet ? () => setExpanded(false) : undefined}
         style={{
           position: 'fixed',
-          top: 0,
-          left: 0,
+          top: 0, left: 0,
           height: '100vh',
           width: panelWidth,
           transform: panelTransform,
           transition: panelTransition,
           display: 'flex',
           flexDirection: 'column',
-          gap: 2,
-          padding: panelExpanded ? '14px 10px' : '14px 8px',
           background: 'var(--sidebar-bg)',
           borderRight: '1px solid var(--border)',
-          overflowY: 'auto',
           overflowX: 'hidden',
           boxShadow: hasShadow ? 'var(--shadow-rail)' : 'none',
           zIndex: 50,
         }}
       >
-        {/* Close button — mobile/tablet only */}
-        {isMobileOrTablet && (
-          <button
-            onClick={onClose}
-            aria-label="Close menu"
-            style={{
-              alignSelf: 'flex-end',
-              width: 30, height: 30,
-              borderRadius: 8,
-              background: 'var(--tint-2)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-2)',
-              display: 'grid', placeItems: 'center',
-              cursor: 'pointer',
-              marginBottom: 6,
-              flexShrink: 0,
-              transition: 'background 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--tint-4)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'var(--tint-2)'; }}
-          >
-            <Icon name="x" size={14} />
-          </button>
-        )}
-
-        {/* Workspace branding */}
-        <div style={{ ...styles.wsRow, marginBottom: 14, padding: '2px 2px' }}>
-          <div style={styles.wsAvatar}>
-            <Icon name="grid" size={13} />
-          </div>
-          {panelExpanded && (
-            <div style={styles.wsMeta as React.CSSProperties}>
-              <span style={styles.wsName}>SpaceMarvel</span>
-              <span style={styles.wsPlan}>Pro workspace</span>
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          justifyContent: panelExpanded ? 'space-between' : 'center',
+          padding: panelExpanded ? '16px 14px 14px' : '16px 0 14px',
+          flexShrink: 0,
+          borderBottom: '1px solid var(--border)',
+        }}>
+          {/* Logo + name */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 8,
+              background: 'var(--grad-brand)',
+              display: 'grid', placeItems: 'center', flexShrink: 0,
+            }}>
+              <Icon name="spark" size={14} />
             </div>
+            {panelExpanded && (
+              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', letterSpacing: '-0.01em' }}>
+                Candy
+              </span>
+            )}
+          </div>
+          {/* Sidebar toggle — expanded only */}
+          {panelExpanded && !isMobileOrTablet && (
+            <button
+              onClick={() => setExpanded(false)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-4)', padding: 4, borderRadius: 6,
+                display: 'grid', placeItems: 'center',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-2)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-4)'; }}
+              title="Collapse sidebar"
+            >
+              <Icon name="columns" size={15} />
+            </button>
+          )}
+          {/* Close button — mobile only */}
+          {isMobileOrTablet && (
+            <button
+              onClick={onClose}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-3)', padding: 4, display: 'grid', placeItems: 'center',
+              }}
+            >
+              <Icon name="x" size={16} />
+            </button>
           )}
         </div>
 
-        {/* Nav sections */}
-        {NAV_SECTIONS.map(section => (
-          <div key={section.label}>
-            {panelExpanded ? (
-              <p style={styles.sectionLabel}>{section.label}</p>
-            ) : (
-              <div style={styles.sectionDivider} />
-            )}
+        {/* ── Scrollable nav area ─────────────────────────────────────────────── */}
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '8px 0' }}>
+          {NAV_SECTIONS.map((section, si) => (
+            <div key={si} style={{ marginBottom: 4 }}>
+              {/* Section label */}
+              {section.label && panelExpanded && (
+                <p style={styles.sectionLabel}>{section.label}</p>
+              )}
+              {section.label && !panelExpanded && (
+                <div style={styles.sectionDivider} />
+              )}
+              {!section.label && si > 0 && (
+                <div style={styles.sectionDivider} />
+              )}
 
-            {section.items.map((item: any) => {
-              const isActive = activeId === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleNav(item)}
-                  className={!panelExpanded ? 'tooltip-wrap' : ''}
-                  data-tip={!panelExpanded ? item.label : undefined}
-                  style={{
-                    ...styles.navBtn,
-                    justifyContent: panelExpanded ? 'flex-start' : 'center',
-                    padding:        panelExpanded ? '8px 10px' : 0,
-                    width:          panelExpanded ? '100%' : 36,
-                    height:         panelExpanded ? 'auto' : 36,
-                    margin:         panelExpanded ? '0 0 2px 0' : '0 auto 4px',
-                    borderRadius:   panelExpanded ? 10 : 12,
-                    background:     isActive ? 'rgba(0, 113, 227, 0.15)' : 'transparent',
-                    border:         isActive ? '1px solid rgba(0, 113, 227, 0.25)' : '1px solid transparent',
-                    color:          isActive ? 'var(--text-1)' : 'var(--text-2)',
-                  }}
-                >
-                  {isActive && panelExpanded && <span style={styles.accentBar} />}
+              {/* Items */}
+              <div style={{ padding: panelExpanded ? '0 8px' : '0 4px' }}>
+                {section.items.map((item: any) => {
+                  const isActive = activeId === item.id;
+                  const isExternal = !!item.external;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleNav(item)}
+                      className={!panelExpanded ? 'tooltip-wrap' : ''}
+                      data-tip={!panelExpanded ? item.label : undefined}
+                      style={{
+                        ...styles.navBtn,
+                        justifyContent: panelExpanded ? 'flex-start' : 'center',
+                        padding:        panelExpanded ? '8px 10px' : 0,
+                        width:          panelExpanded ? '100%' : 36,
+                        height:         panelExpanded ? 'auto' : 36,
+                        margin:         panelExpanded ? '0 0 1px 0' : '0 auto 4px',
+                        borderRadius:   panelExpanded ? 9 : 10,
+                        background:     isActive ? 'rgba(0, 113, 227, 0.12)' : 'transparent',
+                        border:         isActive ? '1px solid rgba(0, 113, 227, 0.22)' : '1px solid transparent',
+                        color:          isActive ? 'var(--text-1)' : 'var(--text-2)',
+                      }}
+                    >
+                      {isActive && panelExpanded && <span style={styles.accentBar} />}
 
-                  {item.img ? (
-                    <img
-                      src={item.img}
-                      alt={item.label}
-                      style={{ width: 22, height: 22, objectFit: 'contain', filter: imgFilter, flexShrink: 0 }}
-                    />
-                  ) : (
-                    <Icon name={item.icon} size={16} />
-                  )}
+                      {/* Icon */}
+                      {item.img ? (
+                        <img
+                          src={item.img} alt={item.label}
+                          style={{ width: 18, height: 18, objectFit: 'contain', filter: imgFilter, flexShrink: 0 }}
+                        />
+                      ) : (
+                        <Icon name={item.icon} size={16} />
+                      )}
 
-                  {panelExpanded && (
-                    <>
-                      <span style={{ flex: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
-                      {item.badge && <span style={styles.badge}>{item.badge}</span>}
-                    </>
-                  )}
-                </button>
-              );
-            })}
+                      {/* Label + external arrow */}
+                      {panelExpanded && (
+                        <>
+                          <span style={{ flex: 1, whiteSpace: 'nowrap', textAlign: 'left' }}>
+                            {item.label}
+                          </span>
+                          {isExternal && (
+                            <Icon name="externallink" size={12} style={{ opacity: 0.45, flexShrink: 0 }} />
+                          )}
+                        </>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── User profile (bottom) ───────────────────────────────────────────── */}
+        <div style={{
+          borderTop: '1px solid var(--border)',
+          padding: panelExpanded ? '12px 12px' : '12px 0',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: panelExpanded ? 'flex-start' : 'center',
+          gap: 10,
+          cursor: 'pointer',
+          transition: 'background 0.15s',
+        }}
+          onClick={panelExpanded ? signOut : undefined}
+          title={panelExpanded ? undefined : userEmail}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--tint-2)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          {/* Avatar */}
+          <div style={{
+            width: 30, height: 30, borderRadius: '50%',
+            background: 'var(--grad-brand)',
+            display: 'grid', placeItems: 'center',
+            fontSize: 12, fontWeight: 700, color: '#fff',
+            flexShrink: 0,
+          }}>
+            {initials}
           </div>
-        ))}
+          {panelExpanded && (
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {userName}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-4)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {userEmail}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Grid placeholder ────────────────────────────────────────────────── */}
-      {/*  Reserves 56px in the desktop CSS grid.                               */}
-      {/*  On mobile/tablet, display:none removes it from grid flow.            */}
-      {/*  The fixed panel above is a sibling, so display:none here has NO      */}
-      {/*  effect on the panel's visibility.                                    */}
       <aside className="sidebar-placeholder" />
     </>
   );
@@ -296,42 +360,24 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 const styles: Record<string, React.CSSProperties> = {
-  wsRow: {
-    display: 'flex', alignItems: 'center',
-    gap: 10, cursor: 'pointer', borderRadius: 8, minWidth: 0,
-  },
-  wsAvatar: {
-    width: 28, height: 28, borderRadius: 7,
-    background: 'var(--tint-2)', border: '1px solid var(--border)',
-    display: 'grid', placeItems: 'center',
-    fontWeight: 700, fontSize: 14, color: 'var(--text-2)', flexShrink: 0,
-  },
-  wsMeta: { display: 'flex', flexDirection: 'column', lineHeight: 1.15 },
-  wsName: { fontSize: 13, fontWeight: 600, color: 'var(--text-1)' },
-  wsPlan: { fontSize: 11, color: 'var(--text-3)' },
   sectionLabel: {
     fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.16em',
-    color: 'var(--text-4)', padding: '14px 12px 6px', margin: 0,
+    color: 'var(--text-4)', padding: '10px 18px 4px', margin: 0,
   },
   sectionDivider: {
-    height: 1, background: 'var(--border)', margin: '14px 14px 8px', opacity: 0.6,
+    height: 1, background: 'var(--border)', margin: '8px 14px', opacity: 0.6,
   },
   navBtn: {
-    display: 'flex', alignItems: 'center', gap: 11,
-    borderRadius: 10, fontSize: 14, fontWeight: 500,
+    display: 'flex', alignItems: 'center', gap: 10,
+    borderRadius: 9, fontSize: 13.5, fontWeight: 500,
     cursor: 'pointer', textAlign: 'left',
     transition: 'background 0.15s, color 0.15s, border-color 0.15s',
-    position: 'relative', marginBottom: 2,
+    position: 'relative',
   },
   accentBar: {
-    position: 'absolute', left: -14, top: '50%',
+    position: 'absolute', left: -12, top: '50%',
     transform: 'translateY(-50%)',
-    width: 3, height: 18,
+    width: 3, height: 16,
     background: 'var(--grad-brand)', borderRadius: '0 3px 3px 0',
-  },
-  badge: {
-    marginLeft: 'auto', fontSize: 10, padding: '2px 7px', borderRadius: 99,
-    background: 'rgba(0, 113, 227, 0.12)', color: 'var(--blue)',
-    fontWeight: 600, letterSpacing: '0.04em',
   },
 };
