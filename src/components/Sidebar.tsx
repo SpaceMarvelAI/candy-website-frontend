@@ -73,45 +73,62 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   }, [isMobileOrTablet, mobileOpen]);
 
   async function handleNav(item: { path: string | null; label: string; ssoTarget?: string }) {
-    if (item.ssoTarget) {
-      const dashboardToken = localStorage.getItem('dashboard_token');
-
-      if (dashboardToken) {
-        try {
-          const res = await fetch(`${SM_API}/api/rbac/auth/sso/generate/`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${dashboardToken}`,
-            },
-            body: JSON.stringify({ app_url: item.ssoTarget }),
-          });
-          if (!res.ok) throw new Error(`SSO generate ${res.status}`);
-          const data = await res.json().catch(() => ({}));
-
-          if (data.sso_token) {
-            // Redirect to the target app root with ?sso_token — all apps handle this
-            // via their root-level SSOHandler, same pattern Finixy uses for outgoing nav.
-            const target = new URL(item.ssoTarget);
-            target.searchParams.set('sso_token', data.sso_token);
-            target.searchParams.set('access_token', dashboardToken);
-            window.location.href = target.toString();
-            return;
-          }
-        } catch { /* fall through to login redirect */ }
+    if (!item.ssoTarget) {
+      if (item.path) {
+        navigate(item.path);
+        if (isMobileOrTablet) onClose?.();
+      } else {
+        addToast(`"${item.label}" — coming soon`, 'info');
       }
-
-      // No token stored or generate failed — send through SpaceMarvel login
-      window.location.href = `https://spacemarvel.ai/login?redirect_uri=${encodeURIComponent(item.ssoTarget + '/sso/callback')}`;
       return;
     }
 
-    if (item.path) {
-      navigate(item.path);
-      if (isMobileOrTablet) onClose?.();
-    } else {
-      addToast(`"${item.label}" — coming soon`, 'info');
+    const dashboardToken = localStorage.getItem('dashboard_token');
+
+    if (dashboardToken) {
+      try {
+        const res = await fetch(`${SM_API}/api/rbac/auth/sso/generate/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${dashboardToken}`,
+          },
+          body: JSON.stringify({ app_url: item.ssoTarget }),
+        });
+
+        // Expired / revoked token — remove it so the next click goes straight to login
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem('dashboard_token');
+          throw new Error(`token_expired:${res.status}`);
+        }
+
+        if (!res.ok) throw new Error(`sso_generate_error:${res.status}`);
+
+        const data = await res.json().catch(() => ({}));
+        // Accept either key name the API might return
+        const ssoToken = data.sso_token || data.token;
+
+        if (ssoToken) {
+          const target = new URL(item.ssoTarget);
+          target.searchParams.set('sso_token', ssoToken);
+          target.searchParams.set('access_token', dashboardToken);
+          window.location.href = target.toString();
+          return;
+        }
+
+        throw new Error('no_sso_token_in_response');
+      } catch (err: any) {
+        const msg = String(err?.message || '');
+        // Only show a toast for unexpected failures — expired tokens silently
+        // re-route through login which is the correct recovery path.
+        if (!msg.startsWith('token_expired')) {
+          addToast(`Could not open ${item.label} — signing in via SpaceMarvel`, 'info');
+        }
+      }
     }
+
+    // No token, expired token, or generate failed — route through SpaceMarvel login
+    window.location.href = `https://spacemarvel.ai/login?redirect_uri=${encodeURIComponent(item.ssoTarget + '/sso/callback')}`;
   }
 
   // On mobile/tablet: always fully expanded; on desktop: hover-driven.

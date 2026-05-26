@@ -103,7 +103,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (ssoHandled.current) return;
     const params      = new URLSearchParams(window.location.search);
-    const token       = params.get('sso_token') || params.get('token');
+    const token       = params.get('token') ?? params.get('sso_token') ?? params.get('access_token') ?? null;
     const accessToken = params.get('access_token');
 
     if (!token && !accessToken) return;
@@ -115,8 +115,7 @@ export function AppProvider({ children }) {
     // Always persist the SpaceMarvel bearer — needed for Composio / cross-app SSO generate calls
     if (accessToken) localStorage.setItem('dashboard_token', accessToken);
 
-    // No sso_token means this redirect only carried a fresh dashboard_token for an already-signed-in
-    // user (e.g. returning from Metaspace). Nothing more to do.
+    // No exchange token — redirect only carried a fresh dashboard_token for an already-signed-in user.
     if (!token) { setSsoLoading(false); return; }
 
     ssoCallback(token)
