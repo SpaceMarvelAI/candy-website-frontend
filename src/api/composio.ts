@@ -168,7 +168,7 @@ export async function connectComposioApp(appName: string): Promise<ConnectRespon
     method: 'POST',
     body: JSON.stringify({
       app: appName,
-      redirect_url: `${window.location.origin}/composio/callback`,
+      redirect_url: `${window.location.origin}/#/composio/callback`,
     }),
   });
 }

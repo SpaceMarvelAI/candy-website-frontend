@@ -309,7 +309,9 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       }
     }
 
-    const candyCallback = window.location.origin + '/sso/callback';
+    // Save intent so SSO callback can redirect there immediately after login
+    localStorage.setItem('candy:sso_intent', item.ssoTarget);
+    const candyCallback = window.location.origin + '/#/sso/callback';
     window.location.href = `https://spacemarvel.ai/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 

@@ -30,10 +30,43 @@ export default function SSOCallbackPage() {
     let cancelled = false;
 
     ssoCallback(token)
-      .then(({ user }) => {
+      .then(async ({ user }) => {
         if (cancelled) return;
+
+        // If user was trying to open Metaspace/Finixy before being redirected to login,
+        // use the fresh dashboard_token to generate an SSO token and go there directly.
+        const ssoIntent = localStorage.getItem('candy:sso_intent');
+        if (ssoIntent && dashboardToken) {
+          localStorage.removeItem('candy:sso_intent');
+          try {
+            const res = await fetch(
+              'https://dashboard-api.spacemarvel.ai/api/rbac/auth/sso/generate/',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${dashboardToken}`,
+                },
+                body: JSON.stringify({ app_url: ssoIntent }),
+              }
+            );
+            if (res.ok) {
+              const data = await res.json().catch(() => ({}));
+              const ssoToken = data.sso_token || data.token;
+              if (ssoToken) {
+                signedIn(user);
+                const target = new URL(ssoIntent);
+                target.searchParams.set('sso_token', ssoToken);
+                target.searchParams.set('access_token', dashboardToken);
+                window.location.href = target.toString();
+                return;
+              }
+            }
+          } catch { /* fall through to dashboard */ }
+        }
+
         // Clear the token from the URL so it can't be reused via browser history
-        window.history.replaceState({}, '', '/dashboard');
+        window.history.replaceState({}, '', '/#/dashboard');
         signedIn(user);
       })
       .catch((err: any) => {
