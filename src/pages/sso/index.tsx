@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ssoCallback } from '../../api/auth';
+import { ssoCallback, logout } from '../../api/auth';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
 
@@ -9,7 +9,7 @@ type Status = 'loading' | 'error';
 export default function SSOCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate       = useNavigate();
-  const { signedIn }   = useApp();
+  const { signedIn } = useApp();
   const [status, setStatus] = useState<Status>('loading');
   const [errMsg, setErrMsg] = useState('');
 
@@ -22,6 +22,12 @@ export default function SSOCallbackPage() {
       setStatus('error');
       return;
     }
+
+    // Wipe any previous session before writing new credentials — prevents
+    // stale tokens from a different account leaking into the new session.
+    logout();
+    localStorage.removeItem('dashboard_token');
+    localStorage.removeItem('candy:sso_intent');
 
     // Save SpaceMarvel bearer — used to call SSO generate API for cross-app navigation
     const dashboardToken = searchParams.get('access_token');
