@@ -25,9 +25,10 @@ export default function SSOCallbackPage() {
 
     // Wipe any previous session before writing new credentials — prevents
     // stale tokens from a different account leaking into the new session.
+    // NOTE: candy:sso_intent is NOT cleared here — it is read and removed
+    // inside the .then() callback below after the redirect is processed.
     logout();
     localStorage.removeItem('dashboard_token');
-    localStorage.removeItem('candy:sso_intent');
 
     // Save SpaceMarvel bearer — used to call SSO generate API for cross-app navigation
     const dashboardToken = searchParams.get('access_token');

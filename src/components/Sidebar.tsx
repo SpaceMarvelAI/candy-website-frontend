@@ -307,17 +307,15 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         }
 
         throw new Error('no_sso_token_in_response');
-      } catch (err: any) {
-        const msg = String(err?.message || '');
-        if (!msg.startsWith('token_expired')) {
-          addToast(`Could not open ${item.label} — signing in via SpaceMarvel`, 'info');
-        }
+      } catch {
+        // Fall through silently — the redirect below will take the user to
+        // SpaceMarvel login and back, which handles every failure case.
       }
     }
 
     // Save intent so SSO callback can redirect there immediately after login
     localStorage.setItem('candy:sso_intent', item.ssoTarget);
-    const candyCallback = window.location.origin + '/#/sso/callback';
+    const candyCallback = window.location.origin + '/sso/callback';
     window.location.href = `https://spacemarvel.ai/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 
