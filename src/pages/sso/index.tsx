@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ssoCallback, logout } from '../../api/auth';
+import { ssoCallback } from '../../api/auth';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
 
@@ -14,7 +14,6 @@ export default function SSOCallbackPage() {
   const [errMsg, setErrMsg] = useState('');
 
   useEffect(() => {
-    // SpaceMarvel sends the token as ?sso_token=; backend expects ?token=
     const token = searchParams.get('sso_token') || searchParams.get('token');
 
     if (!token) {
@@ -23,46 +22,47 @@ export default function SSOCallbackPage() {
       return;
     }
 
-    // Wipe any previous session before writing new credentials — prevents
-    // stale tokens from a different account leaking into the new session.
-    // NOTE: candy:sso_intent is NOT cleared here — it is read and removed
-    // inside the .then() callback below after the redirect is processed.
-    logout();
-    localStorage.removeItem('dashboard_token');
-
-    // Save SpaceMarvel bearer — used to call SSO generate API for cross-app navigation
+    // Read these BEFORE any storage wipe — they survive even if validation fails.
     const dashboardToken = searchParams.get('access_token');
-    if (dashboardToken) localStorage.setItem('dashboard_token', dashboardToken);
+    const pendingIntent  = localStorage.getItem('candy:sso_intent');
 
     let cancelled = false;
 
+    // Validate the token first. Only clear storage on success — if the token
+    // is invalid the existing session is left completely untouched.
     ssoCallback(token)
       .then(async ({ user }) => {
         if (cancelled) return;
 
-        // If user was trying to open Metaspace/Finixy before being redirected to login,
-        // use the fresh dashboard_token to generate an SSO token and go there directly.
-        const ssoIntent = localStorage.getItem('candy:sso_intent');
-        if (ssoIntent && dashboardToken) {
-          localStorage.removeItem('candy:sso_intent');
+        // ssoCallback already wrote candy.token + candy.user to localStorage
+        // during validation — capture them before the wipe so they can be restored.
+        const candyToken = localStorage.getItem('candy.token');
+
+        // Token is valid — wipe ALL previous session data now.
+        localStorage.clear();
+        sessionStorage.clear();
+
+        // Restore the newly validated candy session and the new SpaceMarvel bearer.
+        if (candyToken) localStorage.setItem('candy.token', candyToken);
+        localStorage.setItem('candy.user', JSON.stringify(user));
+        if (dashboardToken) localStorage.setItem('dashboard_token', dashboardToken);
+
+        // If the user was trying to reach Metaspace/Finixy before being sent
+        // to login, generate an SSO token for that app and redirect there.
+        if (pendingIntent && dashboardToken) {
           try {
-            const res = await fetch(
-              'https://dashboard-api.spacemarvel.ai/api/rbac/auth/sso/generate/',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${dashboardToken}`,
-                },
-                body: JSON.stringify({ app_url: ssoIntent }),
-              }
-            );
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const smApi   = isLocal ? '/sm-api' : 'https://dashboard-api.spacemarvel.ai';
+            const res = await fetch(`${smApi}/api/rbac/auth/sso/generate/`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${dashboardToken}` },
+              body: JSON.stringify({ app_url: pendingIntent }),
+            });
             if (res.ok) {
-              const data = await res.json().catch(() => ({}));
+              const data     = await res.json().catch(() => ({}));
               const ssoToken = data.sso_token || data.token;
               if (ssoToken) {
-                signedIn(user);
-                const target = new URL(ssoIntent);
+                const target = new URL(pendingIntent);
                 target.searchParams.set('sso_token', ssoToken);
                 target.searchParams.set('access_token', dashboardToken);
                 window.location.href = target.toString();
@@ -72,12 +72,11 @@ export default function SSOCallbackPage() {
           } catch { /* fall through to dashboard */ }
         }
 
-        // Clear the token from the URL so it can't be reused via browser history
-        window.history.replaceState({}, '', '/#/dashboard');
         signedIn(user);
       })
       .catch((err: any) => {
         if (cancelled) return;
+        // Token invalid — do NOT clear storage, do NOT sign in.
         const msg = err?.detail
           ? (typeof err.detail === 'string' ? err.detail : err.detail?.detail)
           : err?.message;
