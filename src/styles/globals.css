@@ -355,14 +355,13 @@ html.theme-transitioning *::after {
 
 /* ── App layout grid ── */
 .app-layout {
-  display: grid;
-  grid-template-columns: 56px 1fr;
+  display: flex;
   min-height: 100vh;
 }
 
-/* ── Sidebar placeholder ── */
+/* ── Sidebar placeholder — width driven by Sidebar inline styles so it
+   tracks the expand/collapse animation without JS in AppLayout ── */
 .sidebar-placeholder {
-  width: 56px;
   flex-shrink: 0;
 }
 
@@ -431,13 +430,7 @@ html.theme-transitioning *::after {
    TABLET  ≤1024px
    ========================================================== */
 @media (max-width: 1024px) {
-  .app-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar-placeholder {
-    display: none;
-  }
+  /* aside width is 0 via inline style on mobile — no column override needed */
 
   .topbar-hamburger {
     display: grid;
