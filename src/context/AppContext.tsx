@@ -112,6 +112,10 @@ export function AppProvider({ children }) {
     // Strip all auth params from URL immediately so they can't be replayed
     window.history.replaceState({}, '', window.location.pathname);
 
+    // Wipe previous session before writing new credentials
+    apiLogout();
+    localStorage.removeItem('dashboard_token');
+
     // Always persist the SpaceMarvel bearer — needed for Composio / cross-app SSO generate calls
     if (accessToken) localStorage.setItem('dashboard_token', accessToken);
 

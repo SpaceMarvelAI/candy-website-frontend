@@ -192,6 +192,14 @@ const iconPaths = {
       <line x1="22" y1="12" x2="22" y2="12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
     </>
   ),
+  // GoSidebarExpand — GitHub Octicons sidebar-expand-24 (chevron points left → click to expand)
+  'sidebar-expand': (
+    <path fill="currentColor" d="M3.75 2h16.5c.966 0 1.75.784 1.75 1.75v16.5A1.75 1.75 0 0 1 20.25 22H3.75A1.75 1.75 0 0 1 2 20.25V3.75C2 2.784 2.784 2 3.75 2ZM3.5 3.75v16.5c0 .138.112.25.25.25H15v-17H3.75a.25.25 0 0 0-.25.25ZM16.5 20.5h3.75a.25.25 0 0 0 .25-.25V3.75a.25.25 0 0 0-.25-.25H16.5ZM11.28 7.97a.75.75 0 0 1 0 1.06l-1.97 1.97 1.97 1.97a.749.749 0 1 1-1.06 1.06L7.72 11.53a.749.749 0 0 1 0-1.06l2.5-2.5a.75.75 0 0 1 1.06 0Z"/>
+  ),
+  // GoSidebarCollapse — GitHub Octicons sidebar-collapse-24 (chevron points right → click to collapse)
+  'sidebar-collapse': (
+    <path fill="currentColor" d="M3.75 2h16.5c.966 0 1.75.784 1.75 1.75v16.5A1.75 1.75 0 0 1 20.25 22H3.75A1.75 1.75 0 0 1 2 20.25V3.75C2 2.784 2.784 2 3.75 2ZM3.5 3.75v16.5c0 .138.112.25.25.25H15v-17H3.75a.25.25 0 0 0-.25.25ZM16.5 20.5h3.75a.25.25 0 0 0 .25-.25V3.75a.25.25 0 0 0-.25-.25H16.5ZM8.22 8.03a.75.75 0 0 1 1.06 0l2.5 2.5a.749.749 0 0 1 0 1.06l-2.5 2.5a.749.749 0 1 1-1.06-1.06l1.97-1.97-1.97-1.97a.75.75 0 0 1 0-1.06Z"/>
+  ),
 };
 
 export function Icon({ name, size = 16, className = '', style = {} }) {

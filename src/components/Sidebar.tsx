@@ -8,7 +8,8 @@ import Icon from '../assets/icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
 const COLLAPSED_W = 56;
-const EXPANDED_W  = 220;
+const EXPANDED_W  = 256;
+const MOBILE_W    = 288;
 
 const NAV_SECTIONS = [
   {
@@ -22,9 +23,9 @@ const NAV_SECTIONS = [
   {
     label: 'Products',
     items: [
-      { id: 'metaspace', label: 'Meta Space', icon: '', img: '/Metaspace.png', path: null,
+      { id: 'metaspace', label: 'Meta Space', icon: '', img: '/Metaspace.svg',   path: null,
         ssoTarget: 'https://meta.spacemarvel.ai', external: true },
-      { id: 'finixy',    label: 'Finixy',     icon: '', img: '/Finixy.svg',   path: null,
+      { id: 'finixy',    label: 'Finixy',     icon: '', img: '/FinixyLogo.svg', path: null,
         ssoTarget: 'https://app.finixy.ai',        external: true },
     ],
   },
@@ -65,37 +66,53 @@ function ProfileMenu({
   navigate: (p: string) => void; addToast: (m: string, k?: string) => void;
   theme: string; setTheme: (t: 'light' | 'dark') => void;
 }) {
-  const [appearanceOpen, setAppearanceOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
+  const [subMenuY, setSubMenuY] = useState(0);
 
-  // Close on outside click
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
-    }
-    setTimeout(() => document.addEventListener('mousedown', handle), 0);
-    return () => document.removeEventListener('mousedown', handle);
-  }, [onClose]);
-
-  // Position: sit just above the anchor, left-aligned with the panel
-  const menuWidth = 220;
-  const left = Math.min(panelWidth + 8, window.innerWidth - menuWidth - 8);
+  const menuWidth   = 220;
+  const flyoutWidth = 190;
+  const left   = 8;
   const bottom = window.innerHeight - anchorRect.top + 6;
+  const flyoutLeft = panelWidth + 6;
+
+  function toggleSub(name: 'appearance' | 'help', e: React.MouseEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setSubMenuY(rect.top);
+    setSubMenu(s => s === name ? null : name);
+  }
+
+  const subBtn = (label: string, icon: string, name: 'appearance' | 'help') => (
+    <button
+      onClick={e => toggleSub(name, e)}
+      style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+        padding: '8px 12px',
+        background: subMenu === name ? 'var(--tint-2)' : 'transparent',
+        border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
+        fontSize: 13, fontWeight: 500, color: 'var(--text-1)', transition: 'background 0.12s',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--tint-2)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = subMenu === name ? 'var(--tint-2)' : 'transparent'; }}
+    >
+      <Icon name={icon} size={14} />
+      <span style={{ flex: 1 }}>{label}</span>
+      <span style={{ fontSize: 10, opacity: 0.4 }}>›</span>
+    </button>
+  );
 
   const menuItem = (
     label: string,
     onClick: () => void,
-    opts: { icon?: string; chevron?: boolean; danger?: boolean; indent?: boolean; active?: boolean } = {}
+    opts: { icon?: string; danger?: boolean; active?: boolean } = {}
   ) => (
     <button
       onClick={onClick}
       style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-        padding: opts.indent ? '7px 12px 7px 30px' : '8px 12px',
+        padding: '8px 12px',
         background: opts.active ? 'rgba(0,113,227,0.1)' : 'transparent',
         border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-        fontSize: opts.indent ? 12 : 13, fontWeight: opts.indent ? 400 : 500,
+        fontSize: 13, fontWeight: 500,
         color: opts.danger ? '#f87171' : opts.active ? 'var(--blue)' : 'var(--text-1)',
         transition: 'background 0.12s',
       }}
@@ -104,115 +121,101 @@ function ProfileMenu({
     >
       {opts.icon && <Icon name={opts.icon} size={14} />}
       <span style={{ flex: 1 }}>{label}</span>
-      {opts.chevron && (
-        <span style={{ fontSize: 10, opacity: 0.5, transform: appearanceOpen && label.startsWith('A') ? 'rotate(180deg)' : helpOpen && label === 'Help' ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
-      )}
       {opts.active && <span style={{ fontSize: 10, color: 'var(--blue)' }}>✓</span>}
     </button>
   );
 
+  // Clamp so the flyout never bleeds below the viewport (4 items ≈ 160px + padding)
+  const safeFlyoutTop = Math.min(subMenuY, window.innerHeight - 172 - 12);
+
+  const flyoutStyle: React.CSSProperties = {
+    position: 'fixed',
+    left: flyoutLeft,
+    top: safeFlyoutTop,
+    width: flyoutWidth,
+    background: 'var(--surface-solid)',
+    border: '1px solid var(--border)',
+    borderRadius: 12,
+    padding: '6px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+    zIndex: 201,
+    animation: 'menuFadeIn 0.12s ease',
+  };
+
   return createPortal(
-    <div
-      ref={menuRef}
-      style={{
-        position: 'fixed',
-        left,
-        bottom,
-        width: menuWidth,
+    <>
+      <style>{`
+        @keyframes menuFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes menuFadeIn{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:translateX(0)}}
+      `}</style>
+
+      {/* Backdrop — captures outside clicks without DOM event hacks */}
+      <div
+        style={{ position: 'fixed', inset: 0, zIndex: 198 }}
+        onClick={onClose}
+      />
+
+      {/* ── Main menu ── */}
+      <div style={{
+        position: 'fixed', left, bottom, width: menuWidth,
         background: 'var(--surface-solid)',
         border: '1px solid var(--border)',
-        borderRadius: 12,
-        padding: '6px',
+        borderRadius: 12, padding: '6px',
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-        zIndex: 200,
-        animation: 'menuFadeUp 0.15s ease',
-      }}
-    >
-      <style>{`@keyframes menuFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}`}</style>
+        zIndex: 200, animation: 'menuFadeUp 0.15s ease',
+      }}>
+        {/* Upgrade plan */}
+        <button
+          onClick={() => { addToast('Upgrade plan — coming soon', 'info'); onClose(); }}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+            padding: '8px 12px', background: 'rgba(139,92,246,0.08)',
+            border: '1px solid rgba(139,92,246,0.2)', borderRadius: 8,
+            cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            color: 'var(--purple-hi)', marginBottom: 4, transition: 'background 0.12s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.15)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.08)'; }}
+        >
+          <Icon name="zap" size={14} />
+          <span style={{ flex: 1 }}>Upgrade plan</span>
+        </button>
 
-      {/* Upgrade plan */}
-      <button
-        onClick={() => { addToast('Upgrade plan — coming soon', 'info'); onClose(); }}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-          padding: '8px 12px', background: 'rgba(139,92,246,0.08)',
-          border: '1px solid rgba(139,92,246,0.2)', borderRadius: 8,
-          cursor: 'pointer', fontSize: 13, fontWeight: 600,
-          color: 'var(--purple-hi)', marginBottom: 4, transition: 'background 0.12s',
-        }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.15)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.08)'; }}
-      >
-        <Icon name="zap" size={14} />
-        <span style={{ flex: 1 }}>Upgrade plan</span>
-      </button>
+        <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
 
-      <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+        {menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
+        {subBtn('Appearance', 'sun',  'appearance')}
+        {menuItem('Settings',  () => { addToast('Settings — coming soon', 'info'); onClose(); }, { icon: 'settings' })}
+        {subBtn('Help', 'help', 'help')}
 
-      {/* Connectors */}
-      {menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
+        <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
 
-      {/* Appearance */}
-      <button
-        onClick={() => setAppearanceOpen(p => !p)}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-          padding: '8px 12px', background: 'transparent',
-          border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-          fontSize: 13, fontWeight: 500, color: 'var(--text-1)', transition: 'background 0.12s',
-        }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--tint-2)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-      >
-        <Icon name="sun" size={14} />
-        <span style={{ flex: 1 }}>Appearance</span>
-        <span style={{ fontSize: 10, opacity: 0.5, transition: 'transform 0.15s', display: 'inline-block', transform: appearanceOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
-      </button>
-      {appearanceOpen && (
-        <div style={{ marginBottom: 2 }}>
-          {menuItem('Light theme',  () => { setTheme('light'); }, { indent: true, active: theme === 'light' })}
-          {menuItem('Dark theme',   () => { setTheme('dark');  }, { indent: true, active: theme === 'dark' })}
+        {menuItem('Sign out', () => { onClose(); onSignOut(); }, { icon: 'logout', danger: true })}
+      </div>
+
+      {/* ── Appearance flyout ── */}
+      {subMenu === 'appearance' && (
+        <div style={flyoutStyle}>
+          {menuItem('Light theme',  () => setTheme('light'), { active: theme === 'light' })}
+          {menuItem('Dark theme',   () => setTheme('dark'),  { active: theme === 'dark'  })}
           {menuItem('System theme', () => {
             const sys = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
             setTheme(sys);
-          }, { indent: true })}
-          {menuItem('Customize theme', () => { addToast('Custom theme — coming soon', 'info'); }, { indent: true })}
+          })}
+          {menuItem('Customize theme', () => addToast('Custom theme — coming soon', 'info'))}
         </div>
       )}
 
-      {/* Settings */}
-      {menuItem('Settings', () => { addToast('Settings — coming soon', 'info'); onClose(); }, { icon: 'settings' })}
-
-      {/* Help */}
-      <button
-        onClick={() => setHelpOpen(p => !p)}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-          padding: '8px 12px', background: 'transparent',
-          border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-          fontSize: 13, fontWeight: 500, color: 'var(--text-1)', transition: 'background 0.12s',
-        }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--tint-2)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-      >
-        <Icon name="help" size={14} />
-        <span style={{ flex: 1 }}>Help</span>
-        <span style={{ fontSize: 10, opacity: 0.5, transition: 'transform 0.15s', display: 'inline-block', transform: helpOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
-      </button>
-      {helpOpen && (
-        <div style={{ marginBottom: 2 }}>
-          {menuItem('Report issue',       () => { addToast('Report issue — coming soon', 'info'); }, { indent: true })}
-          {menuItem('Terms & conditions', () => { window.open('https://spacemarvel.ai/terms', '_blank'); }, { indent: true })}
-          {menuItem('Privacy policy',     () => { window.open('https://spacemarvel.ai/privacy', '_blank'); }, { indent: true })}
-          {menuItem('Contact support',    () => { addToast('Contact support — coming soon', 'info'); }, { indent: true })}
+      {/* ── Help flyout ── */}
+      {subMenu === 'help' && (
+        <div style={flyoutStyle}>
+          {menuItem('Report issue',       () => addToast('Report issue — coming soon', 'info'))}
+          {menuItem('Terms & conditions', () => window.open('https://spacemarvel.ai/terms', '_blank'))}
+          {menuItem('Privacy policy',     () => window.open('https://spacemarvel.ai/privacy', '_blank'))}
+          {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
         </div>
       )}
-
-      <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
-
-      {/* Sign out */}
-      {menuItem('Sign out', () => { onClose(); onSignOut(); }, { icon: 'logout', danger: true })}
-    </div>,
+    </>,
     document.body,
   );
 }
@@ -228,16 +231,16 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const { theme, setTheme } = useTheme();
   const navigate     = useNavigate();
   const location     = useLocation();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
+  const [headerHovered, setHeaderHovered] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
-  const imgFilter = theme === 'dark'
-    ? 'brightness(0) invert(1)'
-    : 'brightness(0)';
+  const isDark    = theme === 'dark';
+  const imgFilter = isDark ? 'brightness(2)' : 'invert(1)';
 
   const activeId = PATH_TO_NAV.find(([prefix]) =>
     location.pathname === prefix || location.pathname.startsWith(prefix + '/')
@@ -250,6 +253,9 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
   // Close profile menu on route change
   useEffect(() => { setProfileMenuOpen(false); }, [location.pathname]);
+
+  // Reset hover state when sidebar collapses so Candy icon shows immediately
+  useEffect(() => { setHeaderHovered(false); }, [expanded]);
 
   function openProfileMenu() {
     if (profileRef.current) {
@@ -301,25 +307,23 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         }
 
         throw new Error('no_sso_token_in_response');
-      } catch (err: any) {
-        const msg = String(err?.message || '');
-        if (!msg.startsWith('token_expired')) {
-          addToast(`Could not open ${item.label} — signing in via SpaceMarvel`, 'info');
-        }
+      } catch {
+        // Fall through silently — the redirect below will take the user to
+        // SpaceMarvel login and back, which handles every failure case.
       }
     }
 
     // Save intent so SSO callback can redirect there immediately after login
     localStorage.setItem('candy:sso_intent', item.ssoTarget);
-    const candyCallback = window.location.origin + '/#/sso/callback';
+    const candyCallback = window.location.origin + '/sso/callback';
     window.location.href = `https://spacemarvel.ai/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 
   const panelExpanded = isMobileOrTablet ? true : expanded;
-  const panelWidth    = panelExpanded ? EXPANDED_W : COLLAPSED_W;
+  const panelWidth    = isMobileOrTablet ? MOBILE_W : (panelExpanded ? EXPANDED_W : COLLAPSED_W);
 
   const panelTransform = isMobileOrTablet
-    ? (mobileOpen ? 'translateX(0)' : `translateX(-${EXPANDED_W}px)`)
+    ? (mobileOpen ? 'translateX(0)' : `translateX(-${MOBILE_W}px)`)
     : 'translateX(0)';
   const panelTransition = isMobileOrTablet
     ? 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -351,8 +355,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
       {/* ── Fixed navigation panel ─────────────────────────────────────────── */}
       <div
-        onMouseEnter={!isMobileOrTablet ? () => setExpanded(true)  : undefined}
-        onMouseLeave={!isMobileOrTablet ? () => { setExpanded(false); } : undefined}
         style={{
           position: 'fixed',
           top: 0, left: 0,
@@ -373,45 +375,69 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         <div style={{
           display: 'flex', alignItems: 'center',
           justifyContent: panelExpanded ? 'space-between' : 'center',
-          padding: panelExpanded ? '16px 14px 14px' : '16px 0 14px',
+          height: 48,
+          padding: panelExpanded ? '0 14px' : '0',
           flexShrink: 0,
+          boxSizing: 'border-box',
           borderBottom: '1px solid var(--border)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-            <img
-              src="/favicon.svg"
-              alt="Candy"
-              style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: 'block' }}
-            />
-            {panelExpanded && (
-              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', letterSpacing: '-0.01em' }}>
-                Candy
-              </span>
-            )}
-          </div>
-          {panelExpanded && !isMobileOrTablet && (
+          {/* Collapsed desktop: candy favicon by default, expand icon on hover */}
+          {!panelExpanded && !isMobileOrTablet ? (
             <button
-              onClick={() => setExpanded(false)}
+              onClick={() => setExpanded(true)}
+              title="Expand sidebar"
+              onMouseEnter={() => setHeaderHovered(true)}
+              onMouseLeave={() => setHeaderHovered(false)}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--text-4)', padding: 4, borderRadius: 6,
-                display: 'grid', placeItems: 'center', transition: 'color 0.15s',
+                color: 'var(--text-1)', padding: 4, borderRadius: 6,
+                display: 'grid', placeItems: 'center',
               }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-2)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-4)'; }}
-              title="Collapse sidebar"
             >
-              <Icon name="columns" size={15} />
+              {headerHovered
+                ? <Icon name="sidebar-collapse" size={20} />
+                : <img src="/Candy.svg" alt="Candy" style={{ width: 22, height: 22, borderRadius: 6, display: 'block', filter: imgFilter }} />
+              }
             </button>
-          )}
-          {isMobileOrTablet && (
-            <button
-              onClick={onClose}
-              style={{ background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--text-3)', padding: 4, display: 'grid', placeItems: 'center' }}
-            >
-              <Icon name="x" size={16} />
-            </button>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                <img
+                  src="/Candy.svg"
+                  alt="Candy"
+                  style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: 'block', filter: imgFilter }}
+                />
+                {panelExpanded && (
+                  <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', letterSpacing: '-0.01em' }}>
+                    Candy
+                  </span>
+                )}
+              </div>
+              {panelExpanded && !isMobileOrTablet && (
+                <button
+                  onClick={() => setExpanded(false)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--text-4)', padding: 4, borderRadius: 6,
+                    display: 'grid', placeItems: 'center', transition: 'color 0.15s',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-2)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-4)'; }}
+                  title="Collapse sidebar"
+                >
+                  <Icon name="sidebar-expand" size={20} />
+                </button>
+              )}
+              {isMobileOrTablet && (
+                <button
+                  onClick={onClose}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--text-3)', padding: 4, display: 'grid', placeItems: 'center' }}
+                >
+                  <Icon name="x" size={16} />
+                </button>
+              )}
+            </>
           )}
         </div>
 
@@ -442,11 +468,11 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                       style={{
                         ...styles.navBtn,
                         justifyContent: panelExpanded ? 'flex-start' : 'center',
-                        padding:        panelExpanded ? '8px 10px' : 0,
-                        width:          panelExpanded ? '100%' : 36,
+                        padding:        panelExpanded ? '8px 12px' : 0,
+                        width:          '100%',
                         height:         panelExpanded ? 'auto' : 36,
-                        margin:         panelExpanded ? '0 0 1px 0' : '0 auto 4px',
-                        borderRadius:   panelExpanded ? 9 : 10,
+                        margin:         '0 0 2px 0',
+                        borderRadius:   12,
                         background:     isActive ? 'rgba(0, 113, 227, 0.12)' : 'transparent',
                         border:         isActive ? '1px solid rgba(0, 113, 227, 0.22)' : '1px solid transparent',
                         color:          isActive ? 'var(--text-1)' : 'var(--text-2)',
@@ -455,14 +481,14 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                       {isActive && panelExpanded && <span style={styles.accentBar} />}
                       {item.img ? (
                         <img src={item.img} alt={item.label}
-                          style={{ width: 18, height: 18, objectFit: 'contain', filter: imgFilter, flexShrink: 0 }} />
+                          style={{ width: 20, height: 20, objectFit: 'contain', filter: imgFilter, flexShrink: 0 }} />
                       ) : (
                         <Icon name={item.icon} size={16} />
                       )}
                       {panelExpanded && (
                         <>
                           <span style={{ flex: 1, whiteSpace: 'nowrap', textAlign: 'left' }}>{item.label}</span>
-                          {isExternal && <Icon name="externallink" size={12} style={{ opacity: 0.45, flexShrink: 0 }} />}
+                          {isExternal && <Icon name="externallink" size={14} style={{ opacity: 0.50, flexShrink: 0 }} />}
                         </>
                       )}
                     </button>
@@ -533,8 +559,14 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         />
       )}
 
-      {/* ── Grid placeholder ────────────────────────────────────────────────── */}
-      <aside className="sidebar-placeholder" />
+      {/* ── Flex placeholder — mirrors the panel width so the content area shifts ── */}
+      <aside
+        className="sidebar-placeholder"
+        style={{
+          width: isMobileOrTablet ? 0 : panelWidth,
+          transition: isMobileOrTablet ? 'none' : panelTransition,
+        }}
+      />
     </>
   );
 }
@@ -549,8 +581,8 @@ const styles: Record<string, React.CSSProperties> = {
     height: 1, background: 'var(--border)', margin: '8px 14px', opacity: 0.6,
   },
   navBtn: {
-    display: 'flex', alignItems: 'center', gap: 10,
-    borderRadius: 9, fontSize: 13.5, fontWeight: 500,
+    display: 'flex', alignItems: 'center', gap: 12,
+    borderRadius: 12, fontSize: 13.5, fontWeight: 500,
     cursor: 'pointer', textAlign: 'left',
     transition: 'background 0.15s, color 0.15s, border-color 0.15s',
     position: 'relative',
