@@ -1,13 +1,26 @@
 import { API_BASE, getToken, ApiError } from './client';
 
-/** Build the WebSocket URL for /v1/stt/stream, swapping http(s) → ws(s). */
+/**
+ * Build the STT WebSocket URL.
+ *
+ * language='multi' → /v1/stt/stream-whisper
+ *   Whisper large-v3 on GPU. Handles Hinglish + mid-sentence code-switching
+ *   natively. language=None auto-detects per utterance.
+ *
+ * language='hi'/'ta'/'te'/etc → /v1/stt/stream (Deepgram nova-2, single-lang)
+ *   Used after language is confirmed for best single-language accuracy.
+ */
 export function streamUrl(language: string = 'multi'): string {
-  const ws = API_BASE.replace(/^http/, 'ws');
-  const qs = new URLSearchParams({ language });
+  const ws  = API_BASE.replace(/^http/, 'ws');
   const tok = getToken();
-  if (tok) qs.set('token', tok);   // server doesn't require auth, but we
-                                   // include the token in case it's wrapped
-                                   // behind require_any later.
+
+  if (language === 'multi' || language === 'auto' || language === '') {
+    const qs = tok ? `?token=${encodeURIComponent(tok)}` : '';
+    return `${ws}/v1/stt/stream-whisper${qs}`;
+  }
+
+  const qs = new URLSearchParams({ language });
+  if (tok) qs.set('token', tok);
   return `${ws}/v1/stt/stream?${qs.toString()}`;
 }
 
