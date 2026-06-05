@@ -62,6 +62,7 @@ export default function SSOCallbackPage() {
               const data     = await res.json().catch(() => ({}));
               const ssoToken = data.sso_token || data.token;
               if (ssoToken) {
+                signedIn(user);   // update React state before leaving the tab
                 const target = new URL(pendingIntent);
                 target.searchParams.set('sso_token', ssoToken);
                 target.searchParams.set('access_token', dashboardToken);
@@ -72,6 +73,7 @@ export default function SSOCallbackPage() {
           } catch { /* fall through to dashboard */ }
         }
 
+        window.history.replaceState({}, '', '/#/dashboard');
         signedIn(user);
       })
       .catch((err: any) => {
