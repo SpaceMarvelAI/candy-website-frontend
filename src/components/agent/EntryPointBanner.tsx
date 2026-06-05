@@ -30,8 +30,9 @@ const tintColor: Record<string, string> = {
 
 // ── types ─────────────────────────────────────────────────────────────────────
 interface InboundRoute {
-  phone_number: string;
-  friendly_name?: string;
+  id:             string;
+  twilio_number:  string;
+  is_active?:     boolean;
 }
 
 interface Props {
@@ -109,6 +110,13 @@ export default function EntryPointBanner({
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [requestingNumber, setRequestingNumber] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
+  const [numberInput, setNumberInput] = useState('');
+  const [assignError, setAssignError] = useState('');
+  // Outbound dial
+  const [dialNumber, setDialNumber] = useState('');
+  const [dialing, setDialing] = useState(false);
+  const [dialStatus, setDialStatus] = useState<'idle' | 'ringing' | 'error'>('idle');
+  const [dialError, setDialError] = useState('');
 
   const BASE_URL  = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8002';
   const hostedUrl = agentId
@@ -127,22 +135,56 @@ export default function EntryPointBanner({
       .finally(() => setLoadingRoutes(false));
   }, [agentId, isVoice]);
 
-  async function requestNumber() {
-    if (!agentId || requestingNumber) return;
+  async function assignVoBizNumber() {
+    const num = numberInput.trim();
+    if (!agentId || !num || requestingNumber) return;
+    setAssignError('');
     setRequestingNumber(true);
     try {
       await api(`/v1/agents/${agentId}/inbound-routes`, {
         method: 'POST',
-        body: JSON.stringify({ country_code: 'US' }),
+        body: { twilio_number: num },
       });
-      // Reload routes
       const r = await api<InboundRoute[]>(`/v1/agents/${agentId}/inbound-routes`);
       setRoutes(r);
-    } catch {
-      setRequestSent(true); // fallback: show "request sent" optimistically
+      setNumberInput('');
+    } catch (e: any) {
+      setAssignError(e?.detail || 'Failed to assign number');
     } finally {
       setRequestingNumber(false);
     }
+  }
+
+  async function dialOutbound() {
+    const num = dialNumber.trim();
+    if (!agentId || !num || dialing) return;
+    setDialing(true);
+    setDialError('');
+    setDialStatus('idle');
+    try {
+      await api('/v1/vobiz/dial', {
+        method: 'POST',
+        body: { to: num, agent_id: agentId },
+      });
+      setDialStatus('ringing');
+      setDialNumber('');
+      setTimeout(() => setDialStatus('idle'), 5000);
+    } catch (e: any) {
+      setDialStatus('error');
+      setDialError(e?.detail || e?.message || 'Dial failed');
+    } finally {
+      setDialing(false);
+    }
+  }
+
+  async function removeNumber(num: string) {
+    if (!agentId) return;
+    try {
+      const r = routes.find(r => r.twilio_number === num);
+      if (!r) return;
+      await api(`/v1/agents/${agentId}/inbound-routes/${(r as any).id}`, { method: 'DELETE' });
+      setRoutes(prev => prev.filter(x => x.twilio_number !== num));
+    } catch {}
   }
 
   if (!agentId) return null;
@@ -226,50 +268,98 @@ export default function EntryPointBanner({
       {/* Right: phone number or provision CTA */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {loadingRoutes ? (
-          <div style={{ fontSize: 12, color: 'var(--text-4)' }}>Loading number…</div>
+          <div style={{ fontSize: 12, color: 'var(--text-4)' }}>Loading…</div>
         ) : primaryRoute ? (
           <>
-            <EndpointRow label="Phone number" value={primaryRoute.phone_number} />
-            {primaryRoute.friendly_name && (
-              <EndpointRow label="Friendly name" value={primaryRoute.friendly_name} mono={false} />
-            )}
-            <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2 }}>
-              Route your Twilio number to Candy — see{' '}
-              <a href="/integration-guide" target="_blank" style={{ color }}>
-                integration guide ↗
-              </a>
+            {/* Assigned number + remove */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <EndpointRow label="VoBiz number" value={primaryRoute.twilio_number} />
+              <button
+                onClick={() => removeNumber(primaryRoute.twilio_number)}
+                style={{
+                  fontSize: 11, color: 'var(--text-4)', background: 'none',
+                  border: 'none', cursor: 'pointer', padding: '2px 6px',
+                  borderRadius: 4,
+                }}
+                title="Remove number"
+              >✕</button>
             </div>
+            <div style={{ fontSize: 11, color: 'var(--text-4)' }}>
+              Inbound: set Answer URL in VoBiz → <code style={{ fontSize: 10 }}>POST /v1/vobiz/answer</code>
+            </div>
+
+            {/* Outbound dial */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-3)', minWidth: 60 }}>Dial out</span>
+              <input
+                value={dialNumber}
+                onChange={e => setDialNumber(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && dialOutbound()}
+                placeholder="+91XXXXXXXXXX"
+                style={{
+                  flex: 1, minWidth: 150, padding: '5px 9px',
+                  borderRadius: 7, border: '1px solid var(--border)',
+                  background: 'var(--bg-1)', color: 'var(--text-1)',
+                  fontSize: 12.5, fontFamily: 'monospace',
+                }}
+              />
+              <button
+                onClick={dialOutbound}
+                disabled={dialing || !dialNumber.trim()}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '5px 13px', borderRadius: 8,
+                  border: `1px solid ${color}44`,
+                  background: dialStatus === 'ringing' ? 'rgba(76,175,80,0.15)' : `${color}12`,
+                  color: dialStatus === 'ringing' ? 'var(--green)' : color,
+                  fontSize: 12.5, fontWeight: 600,
+                  cursor: (dialing || !dialNumber.trim()) ? 'not-allowed' : 'pointer',
+                  opacity: (dialing || !dialNumber.trim()) ? 0.5 : 1,
+                  transition: 'all 0.2s',
+                }}
+              >
+                {dialing ? '📞 Dialling…' : dialStatus === 'ringing' ? '✓ Ringing' : '📞 Call'}
+              </button>
+            </div>
+            {dialStatus === 'error' && dialError && (
+              <div style={{ fontSize: 11, color: 'var(--red)' }}>{dialError}</div>
+            )}
           </>
-        ) : requestSent ? (
-          <div style={{ fontSize: 13, color: 'var(--green)' }}>
-            ✓ Number request submitted — your number will appear here shortly.
-          </div>
         ) : (
           <>
-            <div style={unpublishedNote}>
-              No phone number assigned yet.
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={unpublishedNote}>No VoBiz number assigned yet.</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <input
+                value={numberInput}
+                onChange={e => setNumberInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && assignVoBizNumber()}
+                placeholder="+91XXXXXXXXXX or +1XXXXXXXXXX"
+                style={{
+                  flex: 1, minWidth: 180, padding: '6px 10px',
+                  borderRadius: 7, border: '1px solid var(--border)',
+                  background: 'var(--bg-1)', color: 'var(--text-1)',
+                  fontSize: 12.5, fontFamily: 'monospace',
+                }}
+              />
               <button
-                onClick={requestNumber}
-                disabled={requestingNumber}
+                onClick={assignVoBizNumber}
+                disabled={requestingNumber || !numberInput.trim()}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6,
                   padding: '6px 14px', borderRadius: 8,
                   border: `1px solid ${color}44`,
-                  background: `${color}12`,
-                  color,
+                  background: `${color}12`, color,
                   fontSize: 12.5, fontWeight: 600,
-                  cursor: requestingNumber ? 'wait' : 'pointer',
-                  opacity: requestingNumber ? 0.6 : 1,
+                  cursor: (requestingNumber || !numberInput.trim()) ? 'not-allowed' : 'pointer',
+                  opacity: (requestingNumber || !numberInput.trim()) ? 0.5 : 1,
                 }}
               >
-                {requestingNumber ? 'Requesting…' : '+ Provision a US number'}
+                {requestingNumber ? 'Assigning…' : '+ Assign'}
               </button>
-              <span style={{ fontSize: 11, color: 'var(--text-4)' }}>
-                or bring your own Twilio number in settings
-              </span>
             </div>
+            {assignError && (
+              <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 2 }}>{assignError}</div>
+            )}
           </>
         )}
       </div>

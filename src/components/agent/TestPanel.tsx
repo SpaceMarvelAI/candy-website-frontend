@@ -763,9 +763,6 @@ export default function TestPanel({
           });
 
           if (voiceOut && sentence.trim().length > 0) {
-            // Language for TTS comes from the backend (active_language in onDone
-            // updates convLangRef). Client-side script detection is removed —
-            // the backend is the single source of truth for language switches.
             const primary  = convLangRef.current.split('-')[0] || 'en';
             const promise  = synthesize({ text: sentence, language_code: primary })
               .catch(err => {
@@ -1017,17 +1014,16 @@ export default function TestPanel({
         // the user to speak. No restart, no cycling.
         if (dgText.length === 0 && bhashiniChunksRef.current.length === 0) return;
 
-        // Gate on TTS: if the agent is speaking, don't send a turn. Echo
-        // cancellation removes most TTS bleed-through from the mic signal,
-        // but this gate is the safety net for anything that slips through.
+        // Barge-in: if the agent is speaking and the user interrupts, stop
+        // TTS immediately and process the user's speech.
         if (ttsPlayingRef.current) {
-          console.log('[TestPanel] speech_final during TTS playback — ignoring (barge-in not supported yet)');
-          bhashiniChunksRef.current = [];  // discard buffered audio
-          return;
+          console.log('[TestPanel] barge-in detected — stopping TTS');
+          ttsQueueRef.current?.cancel();
+          stopTts();
+          ttsPlayingRef.current = false;
+          setTtsPlaying(false);
         }
 
-        // faster-whisper via WebSocket handles ALL 99 languages including all
-        // Indic languages natively. No separate IndicWhisper REST call needed.
         bhashiniChunksRef.current = [];
         if (dgText.length === 0) return;
         send(dgText);

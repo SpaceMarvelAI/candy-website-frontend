@@ -1,13 +1,21 @@
 import { API_BASE, getToken, ApiError } from './client';
 
-/** Build the WebSocket URL for /v1/stt/stream, swapping http(s) → ws(s). */
+/**
+ * Build the STT WebSocket URL.
+ *
+ * Primary: /v1/stt/stream — Groq Whisper-large-v3 (cloud, no GPU needed).
+ *   Handles all Indian languages + Hinglish code-switching natively.
+ *   Server-side RMS VAD. Works on Mac, Windows, Linux.
+ *
+ * GPU-only fallback: /v1/stt/stream-whisper — local Whisper on EC2 GPU.
+ *   Only use when self-hosting on a GPU server.
+ */
 export function streamUrl(language: string = 'multi'): string {
-  const ws = API_BASE.replace(/^http/, 'ws');
-  const qs = new URLSearchParams({ language });
+  const ws  = API_BASE.replace(/^http/, 'ws');
   const tok = getToken();
-  if (tok) qs.set('token', tok);   // server doesn't require auth, but we
-                                   // include the token in case it's wrapped
-                                   // behind require_any later.
+  // All modes use Groq Whisper — language param is a hint only (multi = auto-detect)
+  const qs  = new URLSearchParams({ language });
+  if (tok) qs.set('token', tok);
   return `${ws}/v1/stt/stream?${qs.toString()}`;
 }
 
