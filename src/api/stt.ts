@@ -3,23 +3,18 @@ import { API_BASE, getToken, ApiError } from './client';
 /**
  * Build the STT WebSocket URL.
  *
- * language='multi' → /v1/stt/stream-whisper
- *   Whisper large-v3 on GPU. Handles Hinglish + mid-sentence code-switching
- *   natively. language=None auto-detects per utterance.
+ * Primary: /v1/stt/stream — Groq Whisper-large-v3 (cloud, no GPU needed).
+ *   Handles all Indian languages + Hinglish code-switching natively.
+ *   Server-side RMS VAD. Works on Mac, Windows, Linux.
  *
- * language='hi'/'ta'/'te'/etc → /v1/stt/stream (Deepgram nova-2, single-lang)
- *   Used after language is confirmed for best single-language accuracy.
+ * GPU-only fallback: /v1/stt/stream-whisper — local Whisper on EC2 GPU.
+ *   Only use when self-hosting on a GPU server.
  */
 export function streamUrl(language: string = 'multi'): string {
   const ws  = API_BASE.replace(/^http/, 'ws');
   const tok = getToken();
-
-  if (language === 'multi' || language === 'auto' || language === '') {
-    const qs = tok ? `?token=${encodeURIComponent(tok)}` : '';
-    return `${ws}/v1/stt/stream-whisper${qs}`;
-  }
-
-  const qs = new URLSearchParams({ language });
+  // All modes use Groq Whisper — language param is a hint only (multi = auto-detect)
+  const qs  = new URLSearchParams({ language });
   if (tok) qs.set('token', tok);
   return `${ws}/v1/stt/stream?${qs.toString()}`;
 }
