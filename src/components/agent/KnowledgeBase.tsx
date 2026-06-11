@@ -13,6 +13,7 @@ import Icon from '../../assets/icons';
 import { uploadKnowledgeFile, deleteKnowledge, crawlWebsite, getKnowledgeDoc, type KnowledgeDoc } from '../../api/knowledge';
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
+import { logger } from '../../utils/logger';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
@@ -58,11 +59,12 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
     if (loadingDoc) return;
     setViewingDoc(d as any);
     setLoadingDoc(true);
+    logger.debug('[KnowledgeBase] openDoc', { agentId, docId: d.id, filename: d.filename });
     try {
       const full = await getKnowledgeDoc(agentId!, d.id);
       setViewingDoc(full);
-    } catch {
-      // keep showing basic info from list
+    } catch (e) {
+      logger.warn('[KnowledgeBase] openDoc failed — showing partial info', { docId: d.id, error: e });
     } finally {
       setLoadingDoc(false);
     }
@@ -76,15 +78,18 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
     }
 
     const files = Array.from(list);
+    logger.info('[KnowledgeBase] addFiles start', { agentId, count: files.length, names: files.map(f => f.name) });
     setUploading(prev => [...prev, ...files.map(f => f.name)]);
 
     for (const f of files) {
+      const t0 = performance.now();
       try {
         await uploadKnowledgeFile(agentId, f);
+        logger.info('[KnowledgeBase] upload OK', { agentId, filename: f.name, size: f.size, elapsed: `${(performance.now() - t0).toFixed(1)} ms` });
         addToast(`Uploaded ${f.name}`, 'success');
       } catch (e) {
         const msg = e instanceof ApiError ? e.message : (e as Error).message;
-        console.error('[KB] upload failed', e);
+        logger.error('[KnowledgeBase] upload failed', { agentId, filename: f.name, error: e, message: msg });
         addToast(`Failed to upload ${f.name}: ${msg}`, 'error');
       } finally {
         setUploading(prev => prev.filter(n => n !== f.name));
@@ -95,8 +100,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
   }
 
   async function handleDelete(d: KnowledgeDoc, ev?: React.MouseEvent) {
-    // Always log so we can confirm the click is reaching React.
-    console.log('[KB] delete clicked', { agentId, docId: d.id, filename: d.filename });
+    logger.info('[KnowledgeBase] handleDelete', { agentId, docId: d.id, filename: d.filename });
     if (ev) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -108,13 +112,13 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
     if (deletingIds.has(d.id)) return;
     setDeletingIds(prev => new Set(prev).add(d.id));
     try {
-      console.log('[KB] sending DELETE', `/v1/agents/${agentId}/knowledge/${d.id}`);
       await deleteKnowledge(agentId, d.id);
+      logger.info('[KnowledgeBase] delete OK', { agentId, docId: d.id, filename: d.filename });
       addToast(`Removed ${d.filename}`, 'success');
       await refreshDocs();
     } catch (e) {
       const msg = e instanceof ApiError ? `${e.status}: ${e.message}` : (e as Error).message;
-      console.error('[KB] delete failed', e);
+      logger.error('[KnowledgeBase] delete failed', { agentId, docId: d.id, error: e, message: msg });
       addToast(`Could not remove ${d.filename}: ${msg}`, 'error');
     } finally {
       setDeletingIds(prev => {
@@ -134,11 +138,13 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
     if (!url) return;
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
     if (crawling) return;
-    // depth=1 → single page; depth=3 → up to ~50 pages (Firecrawl limit: depth*10 internally)
     const depth = crawlEntireSite ? 3 : 1;
+    logger.info('[KnowledgeBase] handleCrawl start', { agentId, url, depth, crawlEntireSite });
     setCrawling(true);
+    const t0 = performance.now();
     try {
       const res = await crawlWebsite(agentId, url, depth);
+      logger.info('[KnowledgeBase] crawl OK', { agentId, url, pages: res.pages_scraped, chars: res.char_count, elapsed: `${(performance.now() - t0).toFixed(1)} ms` });
       addToast(
         res.pages_scraped > 1
           ? `Crawled ${res.pages_scraped} pages from ${url} — indexing now`
@@ -149,7 +155,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
       await refreshDocs();
     } catch (e) {
       const msg = e instanceof ApiError ? `${e.status}: ${e.message}` : (e as Error).message;
-      console.error('[KB] crawl failed', e);
+      logger.error('[KnowledgeBase] crawl failed', { agentId, url, error: e, message: msg });
       addToast(`Crawl failed: ${msg}`, 'error');
     } finally {
       setCrawling(false);
@@ -160,6 +166,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
     if (!agentId || bulkDeleting) return;
     if (docs.length === 0) return;
     if (!window.confirm(`Delete all ${docs.length} files from this agent's knowledge base?`)) return;
+    logger.info('[KnowledgeBase] deleteAll start', { agentId, count: docs.length });
     setBulkDeleting(true);
     let ok = 0, fail = 0;
     for (const d of docs) {
@@ -167,10 +174,11 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
         await deleteKnowledge(agentId, d.id);
         ok++;
       } catch (e) {
-        console.error('[KB] bulk delete failed for', d.id, e);
+        logger.error('[KnowledgeBase] bulk delete failed for doc', { agentId, docId: d.id, error: e });
         fail++;
       }
     }
+    logger.info('[KnowledgeBase] deleteAll complete', { agentId, ok, fail });
     await refreshDocs();
     setBulkDeleting(false);
     addToast(fail === 0 ? `Removed all ${ok} files` : `Removed ${ok}, failed ${fail}`, fail === 0 ? 'success' : 'error');

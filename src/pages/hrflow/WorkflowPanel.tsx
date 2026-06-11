@@ -202,7 +202,9 @@ export default function WorkflowPanel() {
 }
 
 // Reusable card wrapper
-function WfCard({ title, titleIcon, badge, badgeLabel, editBtn, children }) {
+function WfCard({ title, titleIcon, badge, badgeLabel, editBtn, children }: {
+  title: string; titleIcon: string; badge?: string; badgeLabel?: string; editBtn?: boolean; children?: any;
+}) {
   return (
     <div
       style={{

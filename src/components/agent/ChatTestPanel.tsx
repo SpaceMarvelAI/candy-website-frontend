@@ -13,6 +13,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api/client';
+import { logger } from '../../utils/logger';
 
 const tintColor: Record<string, string> = {
   purple: 'var(--purple-hi)',
@@ -117,18 +118,21 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
 
   async function startSession() {
     if (!agentId || starting) return;
+    logger.info('[ChatTestPanel] startSession', { agentId });
     setStarting(true);
     setError(null);
+    const t0 = performance.now();
     try {
       const res = await api<{ demo_session_id: string; session_id?: string }>(
         `/v1/agents/${agentId}/demo`,
         { method: 'POST' },
       );
       const sid = res.demo_session_id ?? res.session_id ?? null;
+      logger.info('[ChatTestPanel] session started', { agentId, sessionId: sid, elapsed: `${(performance.now() - t0).toFixed(1)} ms` });
+      if (!sid) logger.warn('[ChatTestPanel] startSession: no session ID in response', { res });
       setSessionId(sid);
       setActive(true);
 
-      // Animate the welcome message
       const welcome = "Hi! I'm ready to help. What can I assist you with today?";
       const welcomeId = nextId();
       setMessages([{ id: welcomeId, role: 'agent', text: '', streaming: true }]);
@@ -136,6 +140,7 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
         setTimeout(() => inputRef.current?.focus(), 50);
       });
     } catch (e: any) {
+      logger.error('[ChatTestPanel] startSession failed', { agentId, error: e, message: e?.message, stack: e?.stack });
       setError(e?.message || 'Failed to start session');
     } finally {
       setStarting(false);
@@ -147,26 +152,29 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
     if (!text || !sessionId || !agentId) return;
     if (busy) return;
 
+    logger.info('[ChatTestPanel] sendMessage', { agentId, sessionId, textLength: text.length });
     const userMsg: Message = { id: nextId(), role: 'user', text };
     setMessages(m => [...m, userMsg]);
     setInput('');
     setBusy(true);
 
-    // Immediately add a streaming placeholder for the agent reply
     const agentMsgId = nextId();
     setMessages(m => [...m, { id: agentMsgId, role: 'agent', text: '', streaming: true }]);
 
+    const t0 = performance.now();
     try {
       const res = await api<{ agent_response?: string; final_answer?: string }>(
         `/v1/agents/${agentId}/demo/${sessionId}/turn`,
         { method: 'POST', body: { utterance: text } },
       );
       const reply = res.agent_response || res.final_answer || '…';
+      logger.info('[ChatTestPanel] turn OK', { agentId, sessionId, elapsed: `${(performance.now() - t0).toFixed(1)} ms`, replyLength: reply.length });
       setBusy(false);
       animateMessage(reply, setMessages, () => {
         setTimeout(() => inputRef.current?.focus(), 50);
       });
     } catch (e: any) {
+      logger.error('[ChatTestPanel] sendMessage failed', { agentId, sessionId, error: e, message: e?.message, stack: e?.stack });
       setBusy(false);
       const errText = `Sorry, something went wrong: ${e?.message || 'Unknown error'}`;
       setMessages(m => {
