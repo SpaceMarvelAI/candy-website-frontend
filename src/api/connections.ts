@@ -94,16 +94,16 @@ export interface AppMeta {
 }
 
 export const APP_CATALOGUE: AppMeta[] = [
-  { type: 'jira',          label: 'Jira',          icon: '🎫', authScheme: 'oauth2',       description: 'Create issues & link tickets',    color: '#0052CC' },
-  { type: 'asana',         label: 'Asana',          icon: '📋', authScheme: 'oauth2',       description: 'Create tasks in projects',         color: '#F06A6A' },
-  { type: 'slack',         label: 'Slack',          icon: '💬', authScheme: 'oauth2',       description: 'Post messages to channels',        color: '#4A154B' },
-  { type: 'linear',        label: 'Linear',         icon: '🔷', authScheme: 'api_key',      description: 'Create & update Linear issues',    color: '#5E6AD2' },
-  { type: 'notion',        label: 'Notion',         icon: '🗒️', authScheme: 'oauth2',       description: 'Add rows to databases',            color: '#000000' },
-  { type: 'github',        label: 'GitHub Issues',  icon: '🐙', authScheme: 'api_key',      description: 'Open issues on any repo',          color: '#24292F' },
-  { type: 'zoho_desk',     label: 'Zoho Desk',      icon: '🎯', authScheme: 'api_key',      description: 'Create support tickets',           color: '#E42527' },
-  { type: 'zoho_crm',      label: 'Zoho CRM',       icon: '📊', authScheme: 'api_key',      description: 'Log leads & contacts',             color: '#E42527' },
-  { type: 'calendly',      label: 'Calendly',       icon: '📅', authScheme: 'none',         description: 'Share booking links with customers', color: '#006BFF' },
-  { type: 'gmail',         label: 'Gmail',          icon: '✉️', authScheme: 'oauth2',       description: 'Send emails from your Google account', color: '#EA4335' },
-  { type: 'google_sheets', label: 'Google Sheets',  icon: '🟢', authScheme: 'oauth2',       description: 'Log data rows to a spreadsheet',    color: '#0F9D58' },
-  { type: 'custom_webhook',label: 'Custom Endpoint',icon: '🔗', authScheme: 'none',         description: 'POST to any HTTPS URL',            color: '#7B5BE3' },
+  { type: 'jira',          label: 'Jira',          icon: 'list',     authScheme: 'oauth2',       description: 'Create issues & link tickets',    color: '#0052CC' },
+  { type: 'asana',         label: 'Asana',          icon: 'check',    authScheme: 'oauth2',       description: 'Create tasks in projects',         color: '#F06A6A' },
+  { type: 'slack',         label: 'Slack',          icon: 'chat',     authScheme: 'oauth2',       description: 'Post messages to channels',        color: '#4A154B' },
+  { type: 'linear',        label: 'Linear',         icon: 'zap',      authScheme: 'api_key',      description: 'Create & update Linear issues',    color: '#5E6AD2' },
+  { type: 'notion',        label: 'Notion',         icon: 'book',     authScheme: 'oauth2',       description: 'Add rows to databases',            color: '#000000' },
+  { type: 'github',        label: 'GitHub Issues',  icon: 'code',     authScheme: 'api_key',      description: 'Open issues on any repo',          color: '#24292F' },
+  { type: 'zoho_desk',     label: 'Zoho Desk',      icon: 'help',     authScheme: 'api_key',      description: 'Create support tickets',           color: '#E42527' },
+  { type: 'zoho_crm',      label: 'Zoho CRM',       icon: 'chart',    authScheme: 'api_key',      description: 'Log leads & contacts',             color: '#E42527' },
+  { type: 'calendly',      label: 'Calendly',       icon: 'calendar', authScheme: 'none',         description: 'Share booking links with customers', color: '#006BFF' },
+  { type: 'gmail',         label: 'Gmail',          icon: 'mail',     authScheme: 'oauth2',       description: 'Send emails from your Google account', color: '#EA4335' },
+  { type: 'google_sheets', label: 'Google Sheets',  icon: 'columns',  authScheme: 'oauth2',       description: 'Log data rows to a spreadsheet',    color: '#0F9D58' },
+  { type: 'custom_webhook',label: 'Custom Endpoint',icon: 'plug',     authScheme: 'none',         description: 'POST to any HTTPS URL',            color: '#7B5BE3' },
 ];

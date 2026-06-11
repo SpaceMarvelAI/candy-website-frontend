@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import Icon from '../../assets/icons';
 import AgentShell from './AgentShell';
 import EmbedModal from './EmbedModal';
 import AgentPicker from './AgentPicker';
@@ -320,8 +321,8 @@ export default function ChatbotWorkspace({
       )}
       {widgetUrl && (
         <div style={{ ...widgetBannerStyle, marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#4ade80' }}>
-            ✓ {category} chatbot published — hosted link ready
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#4ade80', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="check" size={13} /> {category} chatbot published — hosted link ready
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <code style={widgetCode}>{widgetUrl}</code>
@@ -358,7 +359,7 @@ export default function ChatbotWorkspace({
             open={kbOpen}
             onToggle={() => setKbOpen(o => !o)}
             label="Knowledge Base"
-            icon="📚"
+            icon="book"
             color={color}
           >
             <KnowledgeBase
@@ -374,7 +375,7 @@ export default function ChatbotWorkspace({
             open={reqOpen}
             onToggle={() => setReqOpen(o => !o)}
             label="Requirements"
-            icon="⚡"
+            icon="zap"
             color={color}
           >
             <PromptEditor
@@ -437,7 +438,7 @@ function AccordionItem({
           letterSpacing: '0.01em',
         }}
       >
-        <span style={{ fontSize: 15 }}>{icon}</span>
+        <span style={{ display: 'inline-flex', color }}><Icon name={icon} size={15} /></span>
         <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
         <svg
           width="12" height="12" viewBox="0 0 12 12" fill="none"

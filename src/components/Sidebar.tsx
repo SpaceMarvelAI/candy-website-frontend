@@ -121,7 +121,7 @@ function ProfileMenu({
     >
       {opts.icon && <Icon name={opts.icon} size={14} />}
       <span style={{ flex: 1 }}>{label}</span>
-      {opts.active && <span style={{ fontSize: 10, color: 'var(--blue)' }}>✓</span>}
+      {opts.active && <span style={{ display: 'inline-flex', color: 'var(--blue)' }}><Icon name="check" size={12} /></span>}
     </button>
   );
 

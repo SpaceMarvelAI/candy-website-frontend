@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import Icon from '../../assets/icons';
 
 export default function ComposioCallbackPage() {
   const params  = new URLSearchParams(window.location.search);
@@ -49,7 +50,7 @@ export default function ComposioCallbackPage() {
             color: success ? 'var(--green)' : 'var(--red)',
           }}
         >
-          {success ? '✓' : '✕'}
+          <Icon name={success ? 'check' : 'x'} size={26} />
         </div>
 
         <div>

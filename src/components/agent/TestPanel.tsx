@@ -836,7 +836,7 @@ export default function TestPanel({
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
       setTranscript(prev => [
         ...prev.filter(m => m.role !== 'typing'),
-        { role: 'agent', text: `⚠️  ${msg}` },
+        { role: 'agent', text: `Error: ${msg}` },
       ]);
     } finally {
       setBusy(false);
@@ -1927,10 +1927,6 @@ export default function TestPanel({
           // Language-switch system badge — shown as a centered pill between messages.
           if (m.role === 'lang_switch') {
             const label = m.lang ? (LANG_LABEL[m.lang] || m.lang.toUpperCase()) : '?';
-            const flag: Record<string, string> = {
-              hi: '🇮🇳', ta: '🇮🇳', te: '🇮🇳', kn: '🇮🇳', ml: '🇮🇳', bn: '🇮🇳',
-              es: '🇪🇸', fr: '🇫🇷', de: '🇩🇪', ja: '🇯🇵', ko: '🇰🇷', en: '🇬🇧',
-            };
             return (
               <div
                 key={i}
@@ -1951,7 +1947,7 @@ export default function TestPanel({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {flag[m.lang ?? ''] ?? '🌐'} Switched to {label}
+                  <Icon name="globe" size={11} /> Switched to {label}
                 </span>
                 <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>

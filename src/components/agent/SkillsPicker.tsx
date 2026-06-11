@@ -7,6 +7,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
+import Icon from '../../assets/icons';
 import {
   listSkills, getAgentSkills, attachSkill, detachSkill,
   type Skill, type SkillCategory,
@@ -14,14 +15,14 @@ import {
 
 // ── Category metadata (visual) ────────────────────────────────────────────────
 
-const CATEGORY_META: Record<SkillCategory, { emoji: string; color: string; label: string }> = {
-  verification:  { emoji: '🔐', color: 'var(--purple-hi)', label: 'Verification'  },
-  payment:       { emoji: '💳', color: 'var(--blue)',      label: 'Payment'       },
-  scheduling:    { emoji: '📅', color: 'var(--teal)',      label: 'Scheduling'    },
-  communication: { emoji: '📨', color: 'var(--green)',     label: 'Communication' },
-  analytics:     { emoji: '📊', color: 'var(--amber)',     label: 'Analytics'     },
-  escalation:    { emoji: '🚨', color: 'var(--pink)',      label: 'Escalation'    },
-  general:       { emoji: '⚙️', color: 'var(--text-3)',    label: 'General'       },
+const CATEGORY_META: Record<SkillCategory, { icon: string; color: string; label: string }> = {
+  verification:  { icon: 'lock',     color: 'var(--purple-hi)', label: 'Verification'  },
+  payment:       { icon: 'card',     color: 'var(--blue)',      label: 'Payment'       },
+  scheduling:    { icon: 'calendar', color: 'var(--teal)',      label: 'Scheduling'    },
+  communication: { icon: 'mail',     color: 'var(--green)',     label: 'Communication' },
+  analytics:     { icon: 'chart',    color: 'var(--amber)',     label: 'Analytics'     },
+  escalation:    { icon: 'alert',    color: 'var(--pink)',      label: 'Escalation'    },
+  general:       { icon: 'settings', color: 'var(--text-3)',    label: 'General'       },
 };
 
 // ── Fallback list shown while API loads (or if backend isn't wired yet) ────────
@@ -169,7 +170,7 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
         <FilterTab
           active={filter === 'all'}
           label="All"
-          emoji="✦"
+          icon="spark"
           color="var(--text-2)"
           onClick={() => setFilter('all')}
         />
@@ -180,7 +181,7 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
               key={cat}
               active={filter === cat}
               label={meta.label}
-              emoji={meta.emoji}
+              icon={meta.icon}
               color={meta.color}
               onClick={() => setFilter(cat)}
             />
@@ -190,11 +191,11 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
 
       {/* ── Skill grid ───────────────────────────────────────────────────────── */}
       {!agentId ? (
-        <EmptyState emoji="🧩" message="Pick an agent above to manage its skills." />
+        <EmptyState icon="layers" message="Pick an agent above to manage its skills." />
       ) : loading ? (
-        <EmptyState emoji="⏳" message="Loading skills…" />
+        <EmptyState icon="refresh" message="Loading skills…" />
       ) : visibleSkills.length === 0 ? (
-        <EmptyState emoji="🧩" message="No skills match this filter." />
+        <EmptyState icon="layers" message="No skills match this filter." />
       ) : (
         <div style={{
           display: 'grid',
@@ -259,7 +260,7 @@ function SkillCard({
   skill, meta, attached, busy, onToggle,
 }: {
   skill:    Skill;
-  meta:     { emoji: string; color: string; label: string };
+  meta:     { icon: string; color: string; label: string };
   attached: boolean;
   busy:     boolean;
   onToggle: () => void;
@@ -307,9 +308,9 @@ function SkillCard({
           background: `color-mix(in srgb, ${meta.color} 15%, transparent)`,
           border: `1px solid color-mix(in srgb, ${meta.color} 35%, transparent)`,
           display: 'grid', placeItems: 'center',
-          fontSize: 18,
+          fontSize: 18, color: meta.color,
         }}>
-          {meta.emoji}
+          <Icon name={meta.icon} size={18} />
         </div>
         <div style={{
           display: 'inline-flex', alignItems: 'center',
@@ -350,7 +351,7 @@ function SkillCard({
           fontSize: 10, color: 'var(--text-4)',
           display: 'flex', alignItems: 'center', gap: 4,
         }}>
-          <span>{skill.channel === 'voice' ? '🎙' : skill.channel === 'chat' ? '💬' : '🎙 💬'}</span>
+          <Icon name={skill.channel === 'chat' ? 'chat' : 'mic'} size={11} />
           <span style={{ textTransform: 'capitalize' }}>{skill.channel}</span>
         </div>
 
@@ -399,11 +400,11 @@ function SkillCard({
 // ── FilterTab ─────────────────────────────────────────────────────────────────
 
 function FilterTab({
-  active, label, emoji, color, onClick,
+  active, label, icon, color, onClick,
 }: {
   active: boolean;
   label:  string;
-  emoji:  string;
+  icon:   string;
   color:  string;
   onClick: () => void;
 }) {
@@ -421,7 +422,7 @@ function FilterTab({
         outline:    active ? `1px solid color-mix(in srgb, ${color} 35%, transparent)` : 'none',
       }}
     >
-      <span style={{ fontSize: 13 }}>{emoji}</span>
+      <Icon name={icon} size={13} />
       <span>{label}</span>
     </button>
   );
@@ -429,7 +430,7 @@ function FilterTab({
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
-function EmptyState({ emoji, message }: { emoji: string; message: string }) {
+function EmptyState({ icon, message }: { icon: string; message: string }) {
   return (
     <div style={{
       minHeight: 180,
@@ -437,7 +438,7 @@ function EmptyState({ emoji, message }: { emoji: string; message: string }) {
       alignItems: 'center', justifyContent: 'center',
       gap: 10, padding: 24,
     }}>
-      <div style={{ fontSize: 32 }}>{emoji}</div>
+      <div style={{ color: 'var(--text-3)' }}><Icon name={icon} size={32} /></div>
       <div style={{ fontSize: 13, color: 'var(--text-3)', textAlign: 'center', lineHeight: 1.5 }}>
         {message}
       </div>

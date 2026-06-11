@@ -535,8 +535,10 @@ function SessionsView({ data, loading }: { data: AnalyticsSession[]; loading: bo
                   <td style={TD_STYLE}><StatusPill status={s.status} /></td>
                   <td style={{ ...TD_STYLE, ...MONO }}>
                     {s.feedback_rating != null ? (
-                      <span style={{ color: s.feedback_rating >= 4 ? 'var(--green)' : s.feedback_rating <= 2 ? 'var(--red)' : 'var(--amber)' }}>
-                        {'★'.repeat(s.feedback_rating)}{'☆'.repeat(5 - s.feedback_rating)}
+                      <span style={{ color: s.feedback_rating >= 4 ? 'var(--green)' : s.feedback_rating <= 2 ? 'var(--red)' : 'var(--amber)', display: 'inline-flex', gap: 1 }}>
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <Icon key={i} name={i < (s.feedback_rating ?? 0) ? 'star' : 'starOutline'} size={12} />
+                        ))}
                       </span>
                     ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
                   </td>

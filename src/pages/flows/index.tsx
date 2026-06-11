@@ -8,6 +8,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import Icon from '../../assets/icons';
 import { listAgents, type Agent } from '../../api/agents';
 import { listConnections, type AppConnection } from '../../api/connections';
 import {
@@ -67,14 +68,17 @@ function TriggerPicker({ edge, x, y, onSelect, onDelete, onClose }: {
           background: edge.triggerType===t ? `${TINT[t]}22` : 'transparent',
           color: edge.triggerType===t ? TINT[t] : 'var(--text-2)',
           fontSize:12, fontWeight:600, textAlign:'left',
+          display:'flex', alignItems:'center', gap:6,
         }}>
-          {t==='escalation' ? '⚡ Escalation' : t==='demo_booking' ? '📅 Demo booked' : '🔀 Both'}
+          <Icon name={t==='escalation' ? 'zap' : t==='demo_booking' ? 'calendar' : 'shuffle'} size={13} />
+          {t==='escalation' ? 'Escalation' : t==='demo_booking' ? 'Demo booked' : 'Both'}
         </button>
       ))}
       <hr style={{ border:'none', borderTop:'1px solid var(--border)', margin:'4px 0' }}/>
       <button onClick={onDelete} style={{ padding:'5px 10px', borderRadius:6, border:'none',
-        cursor:'pointer', background:'transparent', color:'#ff8194', fontSize:12, fontWeight:600, textAlign:'left' }}>
-        🗑 Delete edge
+        cursor:'pointer', background:'transparent', color:'#ff8194', fontSize:12, fontWeight:600, textAlign:'left',
+        display:'flex', alignItems:'center', gap:6 }}>
+        <Icon name="trash" size={13} /> Delete edge
       </button>
     </div>
   );
@@ -83,7 +87,7 @@ function TriggerPicker({ edge, x, y, onSelect, onDelete, onClose }: {
 // ── Webhook node type definition (static) ─────────────────────────────────────
 const WEBHOOK_TEMPLATE = {
   type: 'webhook' as const,
-  data: { appType: 'inbound_webhook', appLabel: 'Inbound Webhook', appIcon: '🪝' },
+  data: { appType: 'inbound_webhook', appLabel: 'Inbound Webhook', appIcon: 'webhook' },
 };
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -469,9 +473,9 @@ export default function FlowsPage() {
   }
 
   function nodeIcon(node: FlowNode) {
-    if (node.type === 'agent')   return node.data.agentType === 'chat' ? '🤖' : '📞';
-    if (node.type === 'webhook') return '🪝';
-    return node.data.appIcon ?? '🔗';
+    if (node.type === 'agent')   return node.data.agentType === 'chat' ? 'bot' : 'phone';
+    if (node.type === 'webhook') return 'webhook';
+    return node.data.appIcon ?? 'plug';
   }
 
   function nodeLabel(node: FlowNode) {
@@ -537,8 +541,9 @@ export default function FlowsPage() {
         {/* Tabs */}
         <div style={{ display:'flex', borderBottom:'1px solid var(--border)', padding:'0 6px', flexShrink:0 }}>
           {(['agents','apps','webhooks'] as const).map(tab => (
-            <button key={tab} onClick={() => setLeftTab(tab)} style={leftTabBtn(leftTab===tab)}>
-              {tab==='agents' ? '🤖' : tab==='apps' ? '🔌' : '🪝'} {tab.charAt(0).toUpperCase()+tab.slice(1)}
+            <button key={tab} onClick={() => setLeftTab(tab)} style={{ ...leftTabBtn(leftTab===tab), display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+              <Icon name={tab==='agents' ? 'bot' : tab==='apps' ? 'plug' : 'webhook'} size={14} />
+              {tab.charAt(0).toUpperCase()+tab.slice(1)}
             </button>
           ))}
         </div>
@@ -564,7 +569,7 @@ export default function FlowsPage() {
                     onClick={isMobile ? () => addNodeFromPanel(agentPayload) : undefined}
                     style={panelCard(color)}
                   >
-                    <span style={{ fontSize:16 }}>{isChat ? '🤖' : '📞'}</span>
+                    <span style={{ display:'inline-flex', color, flexShrink:0 }}><Icon name={isChat ? 'bot' : 'phone'} size={16} /></span>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                         {agent.name}
@@ -609,7 +614,7 @@ export default function FlowsPage() {
                     const logo         = appLogo(app);
                     const appPayload   = {
                       type: 'app' as const,
-                      data: { appType: id, appLabel: app.name, appIcon: logo ?? '🔌' },
+                      data: { appType: id, appLabel: app.name, appIcon: logo ?? 'plug' },
                     };
                     const isHovered = hoveredAppId === id;
                     return (
@@ -633,7 +638,7 @@ export default function FlowsPage() {
                             <img src={logo} alt={app.name}
                               style={{ width:20, height:20, objectFit:'contain', borderRadius:4, flexShrink:0 }} />
                           ) : (
-                            <span style={{ fontSize:16, flexShrink:0 }}>🔌</span>
+                            <span style={{ display:'inline-flex', color:'var(--text-3)', flexShrink:0 }}><Icon name="plug" size={16} /></span>
                           )}
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)', wordBreak:'break-word', lineHeight:1.3 }}>
@@ -705,7 +710,7 @@ export default function FlowsPage() {
                 onClick={isMobile ? () => addNodeFromPanel(WEBHOOK_TEMPLATE) : undefined}
                 style={panelCard('var(--teal)')}
               >
-                <span style={{ fontSize:16 }}>🪝</span>
+                <span style={{ display:'inline-flex', color:'var(--teal)', flexShrink:0 }}><Icon name="webhook" size={16} /></span>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)' }}>Inbound Webhook</div>
                   <div style={{ fontSize:10.5, color:'var(--text-4)' }}>External POST → trigger flow</div>
@@ -729,9 +734,9 @@ export default function FlowsPage() {
             <button
               onClick={() => setPanelOpen(p => !p)}
               title="Toggle panel"
-              style={{ ...ghostBtn, padding:'6px 9px', flexShrink:0, fontSize:16 }}
+              style={{ ...ghostBtn, padding:'6px 9px', flexShrink:0, fontSize:16, display:'inline-flex', alignItems:'center' }}
             >
-              ☰
+              <Icon name="menu" size={16} />
             </button>
           )}
           {/* Workflow switcher */}
@@ -774,7 +779,7 @@ export default function FlowsPage() {
                     onMouseEnter={e => (e.currentTarget.style.background='var(--tint-2)')}
                     onMouseLeave={e => (e.currentTarget.style.background = savedFlow?.id===w.id ? 'var(--tint-2)' : 'transparent')}
                   >
-                    <span style={{ fontSize:13 }}>⬡</span>
+                    <span style={{ display:'inline-flex', color:'var(--text-3)' }}><Icon name="hexagon" size={13} /></span>
                     <div style={{ flex:1, minWidth:0 }} onClick={() => loadWorkflow(w)}>
                       <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)',
                         overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -823,8 +828,9 @@ export default function FlowsPage() {
             ...saveBtn,
             padding: isMobile ? '6px 12px' : '7px 14px',
             fontSize: isMobile ? 12 : 13,
+            display:'inline-flex', alignItems:'center', gap:6,
           }}>
-            {saving ? 'Saving…' : '💾 Save'}
+            {saving ? 'Saving…' : <><Icon name="save" size={14} /> Save</>}
           </button>
         </div>
 
@@ -847,12 +853,12 @@ export default function FlowsPage() {
         {nodes.length === 0 && (
           <div style={{ position:'absolute', inset:'56px 0 28px', display:'flex', flexDirection:'column',
             alignItems:'center', justifyContent:'center', pointerEvents:'none', zIndex:0 }}>
-            <div style={{ fontSize:30, marginBottom:8, opacity:0.4 }}>⬡</div>
+            <div style={{ marginBottom:8, opacity:0.4, color:'var(--text-3)' }}><Icon name="hexagon" size={30} /></div>
             <div style={{ fontSize:14, fontWeight:600, color:'var(--text-3)', marginBottom:4 }}>
               {isMobile ? 'Tap items in the panel to add them' : 'Drag agents, apps or webhooks onto the canvas'}
             </div>
             <div style={{ fontSize:12, color:'var(--text-4)' }}>
-              {isMobile ? 'Press ☰ to open the panel' : 'Then drag the → handle on a source node to connect it to an action node'}
+              {isMobile ? 'Press the menu button to open the panel' : 'Then drag the right-side handle on a source node to connect it to an action node'}
             </div>
           </div>
         )}
@@ -904,10 +910,10 @@ export default function FlowsPage() {
               const isW2A  = edge.triggerType === 'webhook_to_agent';
               // label text — for webhook→agent show agent id, else show trigger type
               const labelText = isW2A
-                ? `→ ${tgt.data.agentName ?? 'agent'}`
-                : edge.triggerType === 'escalation' ? '⚡ escalation'
-                : edge.triggerType === 'demo_booking' ? '📅 demo booked'
-                : '🔀 both';
+                ? `${tgt.data.agentName ?? 'agent'}`
+                : edge.triggerType === 'escalation' ? 'escalation'
+                : edge.triggerType === 'demo_booking' ? 'demo booked'
+                : 'both';
               const labelW = isW2A ? Math.min(120, (tgt.data.agentName?.length ?? 5) * 7 + 18) : 76;
 
               return (
@@ -977,7 +983,7 @@ export default function FlowsPage() {
                     <img src={icon} alt={label}
                       style={{ width:22, height:22, objectFit:'contain', borderRadius:5, flexShrink:0 }} />
                   ) : (
-                    <span style={{ fontSize:20 }}>{icon}</span>
+                    <span style={{ display:'inline-flex', color, flexShrink:0 }}><Icon name={icon} size={20} /></span>
                   )}
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12, fontWeight:700, color:'var(--text-1)',

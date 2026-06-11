@@ -582,7 +582,7 @@ function DocViewerModal({
           ) : signedUrl ? (
             /* Non-previewable file type — show download CTA */
             <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>
+              <div style={{ marginBottom: 12, color: 'var(--text-3)' }}><Icon name="file" size={32} /></div>
               <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)', marginBottom: 6 }}>
                 Preview not available for .{ext} files
               </div>

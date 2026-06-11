@@ -14,6 +14,7 @@
  */
 import React from 'react';
 import { logger } from '../utils/logger';
+import Icon from '../assets/icons';
 
 // ── Base ─────────────────────────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ export function GlobalErrorBoundary({ children }: { children: React.ReactNode })
 function GlobalCrashScreen() {
   return (
     <div style={fullPage}>
-      <div style={{ fontSize: 36 }}>⚠️</div>
+      <div style={{ color: '#ff8194' }}><Icon name="alert" size={36} /></div>
       <h2 style={{ margin: '12px 0 8px', fontSize: 20, color: '#ff8194', fontWeight: 700 }}>
         Application Error
       </h2>
@@ -124,7 +125,7 @@ export function RouteErrorBoundary({ children }: { children: React.ReactNode }) 
 function RouteErrorScreen() {
   return (
     <div style={midPage}>
-      <div style={{ fontSize: 28 }}>🚧</div>
+      <div style={{ color: '#ff8194' }}><Icon name="alert" size={28} /></div>
       <h3 style={{ margin: '10px 0 6px', fontSize: 16, color: '#ff8194', fontWeight: 700 }}>
         Page Error
       </h3>

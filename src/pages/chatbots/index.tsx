@@ -111,8 +111,9 @@ function UseCaseCard({ uc, onClick }) {
             border: '1px solid rgba(0, 113, 227, 0.30)',
             color: 'var(--purple-hi)',
             borderRadius: 99, marginLeft: 6, verticalAlign: 'middle',
+            display: 'inline-flex', alignItems: 'center', gap: 4,
           }}>
-            ⚡ Featured
+            <Icon name="zap" size={11} /> Featured
           </span>
         )}
       </div>

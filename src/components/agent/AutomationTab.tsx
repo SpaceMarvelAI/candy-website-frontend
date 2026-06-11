@@ -20,15 +20,15 @@ import { useApp } from '../../context/AppContext';
 // ── App catalogue ─────────────────────────────────────────────────────────────
 // These are shown in the left panel. app_type must match backend preset keys.
 const APP_CATALOGUE = [
-  { app_type: 'zoho_desk',     label: 'Zoho Desk',     emoji: '🎯', color: '#E53935', desc: 'Support tickets' },
-  { app_type: 'zoho_projects', label: 'Zoho Projects',  emoji: '📋', color: '#E53935', desc: 'Project tasks' },
-  { app_type: 'jira',          label: 'Jira',           emoji: '🔵', color: '#0052CC', desc: 'Issue tracker' },
-  { app_type: 'asana',         label: 'Asana',          emoji: '🟣', color: '#F06A6A', desc: 'Tasks & projects' },
-  { app_type: 'linear',        label: 'Linear',         emoji: '⚡', color: '#5E6AD2', desc: 'Issue tracking' },
-  { app_type: 'notion',        label: 'Notion',         emoji: '⬜', color: '#ffffff', desc: 'Databases' },
-  { app_type: 'github_issues', label: 'GitHub Issues',  emoji: '🐙', color: '#24292E', desc: 'Issue tracker' },
-  { app_type: 'calendly',      label: 'Calendly',       emoji: '📅', color: '#006BFF', desc: 'Demo booking' },
-  { app_type: 'custom_http',   label: 'Custom Webhook', emoji: '🔗', color: '#18DAFC', desc: 'Any HTTP endpoint' },
+  { app_type: 'zoho_desk',     label: 'Zoho Desk',     icon: 'help',     color: '#E53935', desc: 'Support tickets' },
+  { app_type: 'zoho_projects', label: 'Zoho Projects',  icon: 'list',     color: '#E53935', desc: 'Project tasks' },
+  { app_type: 'jira',          label: 'Jira',           icon: 'list',     color: '#0052CC', desc: 'Issue tracker' },
+  { app_type: 'asana',         label: 'Asana',          icon: 'check',    color: '#F06A6A', desc: 'Tasks & projects' },
+  { app_type: 'linear',        label: 'Linear',         icon: 'zap',      color: '#5E6AD2', desc: 'Issue tracking' },
+  { app_type: 'notion',        label: 'Notion',         icon: 'book',     color: '#888888', desc: 'Databases' },
+  { app_type: 'github_issues', label: 'GitHub Issues',  icon: 'code',     color: '#24292E', desc: 'Issue tracker' },
+  { app_type: 'calendly',      label: 'Calendly',       icon: 'calendar', color: '#006BFF', desc: 'Demo booking' },
+  { app_type: 'custom_http',   label: 'Custom Webhook', icon: 'plug',     color: '#18DAFC', desc: 'Any HTTP endpoint' },
 ];
 
 const TRIGGER_LABELS: Record<TriggerType, string> = {
@@ -192,7 +192,7 @@ export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: P
     setTestResult(null);
     try {
       const r = await testAutomation(editing.id, true);
-      setTestResult({ ok: r.success, msg: r.success ? `✓ ${r.status_code} — webhook reachable` : `✗ ${r.error ?? 'failed'}` });
+      setTestResult({ ok: r.success, msg: r.success ? `${r.status_code} — webhook reachable` : `${r.error ?? 'failed'}` });
     } catch (e: any) {
       setTestResult({ ok: false, msg: `Error: ${e?.message ?? e}` });
     } finally {
@@ -262,9 +262,9 @@ export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: P
                     background: app.color + '22',
                     border: `1px solid ${app.color}44`,
                     display: 'grid', placeItems: 'center',
-                    fontSize: 16, flexShrink: 0,
+                    fontSize: 16, flexShrink: 0, color: app.color,
                   }}>
-                    {app.emoji}
+                    <Icon name={app.icon} size={16} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-1)' }}>{app.label}</div>
@@ -293,7 +293,7 @@ export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: P
             <div style={emptyStyle}>Loading…</div>
           ) : configs.length === 0 ? (
             <div style={{ ...emptyStyle, flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontSize: 32 }}>🔌</div>
+              <div style={{ color: 'var(--text-3)' }}><Icon name="plug" size={32} /></div>
               <div style={{ fontSize: 13, color: 'var(--text-3)', textAlign: 'center' }}>
                 No automations yet.<br/>Click an app on the left to connect it.
               </div>
@@ -324,9 +324,9 @@ export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: P
                           background: (meta?.color ?? '#888') + '22',
                           border: `1px solid ${meta?.color ?? '#888'}44`,
                           display: 'grid', placeItems: 'center',
-                          fontSize: 18, flexShrink: 0,
+                          fontSize: 18, flexShrink: 0, color: meta?.color ?? '#888',
                         }}>
-                          {meta?.emoji ?? '🔗'}
+                          <Icon name={meta?.icon ?? 'plug'} size={18} />
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{cfg.display_name}</div>
@@ -386,9 +386,9 @@ export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: P
                 width: 36, height: 36, borderRadius: 9,
                 background: (appMeta?.color ?? '#888') + '22',
                 border: `1px solid ${appMeta?.color ?? '#888'}44`,
-                display: 'grid', placeItems: 'center', fontSize: 18,
+                display: 'grid', placeItems: 'center', fontSize: 18, color: appMeta?.color ?? '#888',
               }}>
-                {appMeta?.emoji ?? '🔗'}
+                <Icon name={appMeta?.icon ?? 'plug'} size={18} />
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>
@@ -489,7 +489,9 @@ export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: P
                   background: testResult.ok ? 'rgba(76,175,80,0.12)' : 'rgba(255,90,120,0.12)',
                   border: `1px solid ${testResult.ok ? 'rgba(76,175,80,0.4)' : 'rgba(255,90,120,0.4)'}`,
                   color: testResult.ok ? 'var(--green)' : '#ff8194',
+                  display: 'flex', alignItems: 'center', gap: 6,
                 }}>
+                  <Icon name={testResult.ok ? 'check' : 'x'} size={13} />
                   {testResult.msg}
                 </div>
               )}

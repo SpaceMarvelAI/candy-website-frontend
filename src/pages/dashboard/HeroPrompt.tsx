@@ -2,10 +2,10 @@ import { useState } from 'react';
 import Icon from '../../assets/icons';
 
 const chips = [
-  { emoji: '🧑‍💻', label: 'Screen candidates',    prompt: 'Screen candidates for a Senior Frontend role' },
-  { emoji: '💸', label: 'Collect payments',       prompt: 'Send payment reminders to overdue customers' },
-  { emoji: '🏥', label: 'Book appointments',      prompt: 'Book follow-up appointments for clinic' },
-  { emoji: '📦', label: 'Confirm deliveries',     prompt: 'Confirm deliveries for today\'s route' },
+  { icon: 'team',   label: 'Screen candidates',    prompt: 'Screen candidates for a Senior Frontend role' },
+  { icon: 'money',  label: 'Collect payments',     prompt: 'Send payment reminders to overdue customers' },
+  { icon: 'health', label: 'Book appointments',    prompt: 'Book follow-up appointments for clinic' },
+  { icon: 'box',    label: 'Confirm deliveries',   prompt: 'Confirm deliveries for today\'s route' },
 ];
 
 export default function HeroPrompt() {
@@ -107,7 +107,7 @@ export default function HeroPrompt() {
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,113,227,0.12)'; e.currentTarget.style.borderColor = 'var(--purple)'; e.currentTarget.style.color = 'var(--text-1)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'var(--tint-2)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-2)'; }}
           >
-            {chip.emoji} {chip.label}
+            <Icon name={chip.icon} size={14} /> {chip.label}
           </button>
         ))}
       </div>

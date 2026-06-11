@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api/client';
 import { logger } from '../../utils/logger';
+import Icon from '../../assets/icons';
 
 const tintColor: Record<string, string> = {
   purple: 'var(--purple-hi)',
@@ -240,7 +241,7 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
         {/* Disabled state */}
         {disabled && (
           <div style={centeredHint}>
-            <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.4 }}>💬</div>
+            <div style={{ marginBottom: 12, opacity: 0.4, color: 'var(--text-3)' }}><Icon name="chat" size={36} /></div>
             <div style={{ fontSize: 13.5, color: 'var(--text-3)', lineHeight: 1.6, maxWidth: 260, textAlign: 'center' }}>
               {disabledHint || 'Pick or create an agent to start testing'}
             </div>
@@ -258,8 +259,9 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
               fontSize: 28,
               marginBottom: 18,
               boxShadow: `0 0 30px ${color}22`,
+              color,
             }}>
-              💬
+              <Icon name="chat" size={28} />
             </div>
             <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', marginBottom: 6 }}>
               Ready to chat
@@ -303,9 +305,9 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
                     border: `1px solid ${border}`,
                     display: 'grid', placeItems: 'center',
                     flexShrink: 0,
-                    fontSize: 12,
+                    fontSize: 12, color,
                   }}>
-                    🤖
+                    <Icon name="bot" size={14} />
                   </div>
                 )}
 
@@ -349,8 +351,8 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
                 <div style={{
                   width: 26, height: 26, borderRadius: '50%',
                   background: alpha, border: `1px solid ${border}`,
-                  display: 'grid', placeItems: 'center', fontSize: 12,
-                }}>🤖</div>
+                  display: 'grid', placeItems: 'center', fontSize: 12, color,
+                }}><Icon name="bot" size={14} /></div>
                 <div style={{
                   padding: '12px 16px',
                   borderRadius: '4px 16px 16px 16px',

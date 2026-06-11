@@ -4,6 +4,7 @@
  * Accordion items: Knowledge Base | Languages | Requirements
  */
 import { useState, useEffect } from 'react';
+import Icon from '../../assets/icons';
 import AgentShell from './AgentShell';
 import EmbedModal from './EmbedModal';
 import AgentPicker from './AgentPicker';
@@ -195,7 +196,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
 
         {/* Right: accordion list */}
         <div style={{ ...rightCol, alignSelf: 'start' }}>
-          <AccordionItem open={kbOpen}   onToggle={() => setKbOpen(o => !o)}   label="Knowledge Base" icon="📚" color={color}>
+          <AccordionItem open={kbOpen}   onToggle={() => setKbOpen(o => !o)}   label="Knowledge Base" icon="book" color={color}>
             <KnowledgeBase
               tint={tint}
               agentId={agent?.id ?? null}
@@ -204,7 +205,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
             />
           </AccordionItem>
 
-          <AccordionItem open={langOpen} onToggle={() => setLangOpen(o => !o)} label="Languages"      icon="🌐" color={color}>
+          <AccordionItem open={langOpen} onToggle={() => setLangOpen(o => !o)} label="Languages"      icon="globe" color={color}>
             <div style={{ padding: 16 }}>
               <LanguagePicker
                 tint={tint}
@@ -222,7 +223,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
             open={skillsOpen}
             onToggle={() => setSkillsOpen(o => !o)}
             label="Skills"
-            icon="🧩"
+            icon="layers"
             color={color}
             badge={skillsCount > 0 ? skillsCount : undefined}
           >
@@ -234,7 +235,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
             />
           </AccordionItem>
 
-          <AccordionItem open={reqOpen}  onToggle={() => setReqOpen(o => !o)}  label="Requirements"   icon="⚡" color={color}>
+          <AccordionItem open={reqOpen}  onToggle={() => setReqOpen(o => !o)}  label="Requirements"   icon="zap" color={color}>
             <PromptEditor
               tint={tint}
               agentId={agent?.id ?? null}
@@ -295,7 +296,7 @@ function AccordionItem({
           letterSpacing: '0.01em',
         }}
       >
-        <span style={{ fontSize: 15 }}>{icon}</span>
+        <span style={{ display: 'inline-flex', color }}><Icon name={icon} size={15} /></span>
         <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
         {badge !== undefined && badge > 0 && (
           <span style={{

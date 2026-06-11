@@ -195,7 +195,7 @@ export default function EntryPointBanner({
       <div style={bannerWrap(color)}>
         {/* Left badge */}
         <div style={badgeCol}>
-          <div style={iconCircle(color)}>🌐</div>
+          <div style={{ ...iconCircle(color), color }}><Icon name="globe" size={20} /></div>
           <div>
             <div style={badgeTitle}>Website Chat</div>
             <div style={badgeSub}>Hosted widget + embed</div>
@@ -253,7 +253,7 @@ export default function EntryPointBanner({
     <div style={bannerWrap(color)}>
       {/* Left badge */}
       <div style={badgeCol}>
-        <div style={iconCircle(color)}>📞</div>
+        <div style={{ ...iconCircle(color), color }}><Icon name="phone" size={20} /></div>
         <div>
           <div style={badgeTitle}>Telephony</div>
           <div style={{ ...badgeSub, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -282,7 +282,7 @@ export default function EntryPointBanner({
                   borderRadius: 4,
                 }}
                 title="Remove number"
-              >✕</button>
+              ><Icon name="x" size={12} /></button>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-4)' }}>
               Inbound: set Answer URL in VoBiz → <code style={{ fontSize: 10 }}>POST /v1/vobiz/answer</code>
@@ -318,7 +318,11 @@ export default function EntryPointBanner({
                   transition: 'all 0.2s',
                 }}
               >
-                {dialing ? '📞 Dialling…' : dialStatus === 'ringing' ? '✓ Ringing' : '📞 Call'}
+                {dialing
+                  ? <><Icon name="phone" size={13} /> Dialling…</>
+                  : dialStatus === 'ringing'
+                    ? <><Icon name="check" size={13} /> Ringing</>
+                    : <><Icon name="phone" size={13} /> Call</>}
               </button>
             </div>
             {dialStatus === 'error' && dialError && (
