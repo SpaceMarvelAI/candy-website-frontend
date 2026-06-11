@@ -140,6 +140,30 @@ export default function FlowsPage() {
   const scrollWrapperRef = useRef<HTMLDivElement>(null);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
 
+  // ── Resizable left panel (desktop) ──────────────────────────────────────────
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [panelWidth, setPanelWidth] = useState(220);
+  const panelResizing = useRef(false);
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!panelResizing.current || !containerRef.current) return;
+      const left = containerRef.current.getBoundingClientRect().left;
+      setPanelWidth(Math.min(460, Math.max(180, e.clientX - left)));
+    }
+    function onUp() {
+      if (!panelResizing.current) return;
+      panelResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
   // ── Load ────────────────────────────────────────────────────────────────────
   useEffect(() => {
     listAgents().then(setAgents).catch(console.warn);
@@ -491,7 +515,7 @@ export default function FlowsPage() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display:'flex', height:'calc(100vh - 48px)',
+    <div ref={containerRef} style={{ display:'flex', height:'calc(100vh - 48px)',
       background:'var(--bg-0)', position:'relative', overflow:'hidden' }}>
 
       {/* ── Mobile backdrop — closes panel on tap outside ── */}
@@ -508,6 +532,8 @@ export default function FlowsPage() {
       {/* ── Left panel ─────────────────────────────────────────────────────── */}
       <div style={{
         ...leftPanel,
+        // Desktop: width is user-resizable via the drag handle on the right edge
+        ...(!isMobile && !isTablet ? { width: panelWidth } : {}),
         // Tablet: narrower in-flow panel; hide when closed
         ...(isTablet && !isMobile ? {
           width: 190,
@@ -541,8 +567,7 @@ export default function FlowsPage() {
         {/* Tabs */}
         <div style={{ display:'flex', borderBottom:'1px solid var(--border)', padding:'0 6px', flexShrink:0 }}>
           {(['agents','apps','webhooks'] as const).map(tab => (
-            <button key={tab} onClick={() => setLeftTab(tab)} style={{ ...leftTabBtn(leftTab===tab), display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-              <Icon name={tab==='agents' ? 'bot' : tab==='apps' ? 'plug' : 'webhook'} size={14} />
+            <button key={tab} onClick={() => setLeftTab(tab)} style={leftTabBtn(leftTab===tab)}>
               {tab.charAt(0).toUpperCase()+tab.slice(1)}
             </button>
           ))}
@@ -721,6 +746,25 @@ export default function FlowsPage() {
           )}
         </div>
       </div>
+
+      {/* ── Resize handle — drag to set panel width (desktop only) ──────────── */}
+      {!isMobile && !isTablet && (
+        <div
+          onMouseDown={() => {
+            panelResizing.current = true;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+          }}
+          title="Drag to resize panel"
+          style={{
+            width: 6, flexShrink: 0, cursor: 'col-resize',
+            marginLeft: -3, zIndex: 6,
+            background: 'transparent', transition: 'background 0.15s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--border-strong)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        />
+      )}
 
       {/* ── Canvas area ────────────────────────────────────────────────────── */}
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative',
@@ -1183,7 +1227,8 @@ const legend: React.CSSProperties = {
 
 function leftTabBtn(active: boolean): React.CSSProperties {
   return {
-    padding: '9px 10px', border: 'none', background: 'transparent', cursor: 'pointer',
+    flex: 1, textAlign: 'center',
+    padding: '9px 4px', border: 'none', background: 'transparent', cursor: 'pointer',
     fontSize: 11.5, fontWeight: active ? 700 : 500,
     color: active ? 'var(--purple-hi)' : 'var(--text-3)',
     borderBottom: active ? '2px solid var(--purple-hi)' : '2px solid transparent',

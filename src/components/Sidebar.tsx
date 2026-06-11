@@ -476,6 +476,17 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                         background:     isActive ? 'rgba(0, 113, 227, 0.12)' : 'transparent',
                         border:         isActive ? '1px solid rgba(0, 113, 227, 0.22)' : '1px solid transparent',
                         color:          isActive ? 'var(--text-1)' : 'var(--text-2)',
+                        transition:     'background 0.12s, color 0.12s',
+                      }}
+                      onMouseEnter={e => {
+                        if (isActive) return;
+                        e.currentTarget.style.background = 'var(--tint-2)';
+                        e.currentTarget.style.color = 'var(--text-1)';
+                      }}
+                      onMouseLeave={e => {
+                        if (isActive) return;
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-2)';
                       }}
                     >
                       {isActive && panelExpanded && <span style={styles.accentBar} />}
