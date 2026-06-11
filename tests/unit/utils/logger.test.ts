@@ -123,3 +123,35 @@ describe('logger.api — grouped output in dev mode', () => {
     expect(collapsedSpy).not.toHaveBeenCalled();
   });
 });
+
+// ── performance with meta + group() ────────────────────────────────────────────
+
+describe('logger.performance — with meta object', () => {
+  it('groups the metadata under the timing line', () => {
+    const groupSpy = vi.spyOn(console, 'groupCollapsed').mockImplementation(() => {});
+    const logSpy   = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'groupEnd').mockImplementation(() => {});
+    logger.performance('[api] with meta', 120, { rows: 3 });
+    expect(groupSpy).toHaveBeenCalledOnce();
+    expect(logSpy).toHaveBeenCalledWith({ rows: 3 });
+  });
+});
+
+describe('logger.group', () => {
+  it('runs the callback inside a collapsed group', () => {
+    const groupSpy = vi.spyOn(console, 'groupCollapsed').mockImplementation(() => {});
+    const endSpy   = vi.spyOn(console, 'groupEnd').mockImplementation(() => {});
+    const fn = vi.fn();
+    logger.group('[block] dump', fn);
+    expect(groupSpy).toHaveBeenCalledOnce();
+    expect(fn).toHaveBeenCalledOnce();
+    expect(endSpy).toHaveBeenCalledOnce();
+  });
+
+  it('still closes the group if the callback throws', () => {
+    vi.spyOn(console, 'groupCollapsed').mockImplementation(() => {});
+    const endSpy = vi.spyOn(console, 'groupEnd').mockImplementation(() => {});
+    expect(() => logger.group('[block] boom', () => { throw new Error('x'); })).toThrow();
+    expect(endSpy).toHaveBeenCalledOnce();
+  });
+});

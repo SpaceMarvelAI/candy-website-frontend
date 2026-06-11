@@ -106,4 +106,30 @@ describe('composio API calls (with mocked SSO exchange)', () => {
     server.use(http.get(`${META_API}/api/composio/apps/slack/auth-info`, () => HttpResponse.json({ app: 'slack', auth_type: 'oauth' })));
     expect((await Composio.getAppAuthInfo('slack')).auth_type).toBe('oauth');
   });
+
+  it('connectComposioApp POSTs and returns a redirect URL', async () => {
+    server.use(http.post(`${META_API}/api/composio/connect`, () => HttpResponse.json({ connect_url: 'https://oauth.example' })));
+    const r = await Composio.connectComposioApp('slack');
+    expect(Composio.redirectUrl(r)).toBe('https://oauth.example');
+  });
+
+  it('connectComposioAppWithCredentials POSTs credentials', async () => {
+    server.use(http.post(`${META_API}/api/composio/connect`, () => HttpResponse.json({ redirect_url: 'https://done' })));
+    const r = await Composio.connectComposioAppWithCredentials('linear', { api_key: 'k' });
+    expect(Composio.redirectUrl(r)).toBe('https://done');
+  });
+
+  it('caches the meta token across calls (SSO exchange runs once)', async () => {
+    let ssoHits = 0;
+    server.use(
+      http.post(`${SM_API}/api/rbac/auth/sso/generate/`, () => { ssoHits++; return HttpResponse.json({ sso_token: 'sso-x' }); }),
+      http.get(`${META_API}/api/sso/callback`, () => HttpResponse.json({ access_token: 'meta-x', expires_in: 3600 })),
+      http.get(`${META_API}/api/composio/apps`, () => HttpResponse.json([])),
+      http.get(`${META_API}/api/composio/connections`, () => HttpResponse.json([])),
+    );
+    await Composio.getComposioApps();
+    await Composio.getComposioConnections();
+    // Token cached from an earlier test in this block → SSO not re-run here.
+    expect(ssoHits).toBeLessThanOrEqual(1);
+  });
 });

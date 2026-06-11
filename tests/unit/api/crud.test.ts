@@ -290,6 +290,13 @@ describe('api/knowledge', () => {
     const r = await Knowledge.crawlWebsite('a1', 'https://site.com', 2);
     expect(r.pages_scraped).toBe(3);
   });
+
+  it('uploadKnowledgeFile POSTs the file as multipart and returns results', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/knowledge/uploads`, json([{ kb_document_id: 'u1', filename: 'doc.pdf', status: 'queued' }])));
+    const file = new File(['hello'], 'doc.pdf', { type: 'application/pdf' });
+    const r = await Knowledge.uploadKnowledgeFile('a1', file);
+    expect(r[0].filename).toBe('doc.pdf');
+  });
 });
 
 // ── agents ────────────────────────────────────────────────────────────────────
@@ -313,6 +320,21 @@ describe('api/agents', () => {
     server.use(http.post(`${B}/v1/agents/a1/publish`, json({ id: 'a1', agent_flow_status: 'live' })));
     const r = await Agents.publishAgent('a1');
     expect(r).toBeTruthy();
+  });
+
+  it('publishAgent appends ?force=true when forced', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/publish`, ({ request }) => {
+      expect(new URL(request.url).searchParams.get('force')).toBe('true');
+      return HttpResponse.json({ status: 'ok', agent_id: 'a1' });
+    }));
+    await Agents.publishAgent('a1', { force: true });
+  });
+
+  it('findAgentForSlug returns the first match or null', async () => {
+    server.use(http.get(`${B}/v1/agents`, json([{ id: 'a1', use_case_slug: 'ecommerce' }])));
+    expect((await Agents.findAgentForSlug('ecommerce'))?.id).toBe('a1');
+    server.use(http.get(`${B}/v1/agents`, json([])));
+    expect(await Agents.findAgentForSlug('ecommerce')).toBeNull();
   });
 
   it('deleteAgent DELETEs by id', async () => {
@@ -393,5 +415,84 @@ describe('api/demo', () => {
   it('prefetchDemoRag swallows errors (best-effort, never throws)', async () => {
     server.use(http.post(`${B}/v1/agents/a1/demo/d1/prefetch`, () => HttpResponse.json({ detail: 'boom' }, { status: 500 })));
     await expect(Demo.prefetchDemoRag('a1', 'd1', 'partial')).resolves.toBeUndefined();
+  });
+
+  // streamDemoTurn reads an SSE stream and dispatches a callback per sentence.
+  function sseStream(frames: string[]) {
+    const enc = new TextEncoder();
+    return new ReadableStream({
+      start(ctrl) {
+        for (const f of frames) ctrl.enqueue(enc.encode(f));
+        ctrl.close();
+      },
+    });
+  }
+
+  it('streamDemoTurn dispatches onSentence per frame then onDone', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/turn/stream`, () =>
+      new HttpResponse(
+        sseStream([
+          'data: {"sentence":"Hello"}\n\n',
+          'data: {"sentence":"there"}\n\n',
+          'data: {"done":true,"full_text":"Hello there","latency_ms":42}\n\n',
+        ]),
+        { headers: { 'Content-Type': 'text/event-stream' } }
+      )
+    ));
+    const sentences: string[] = [];
+    let done: any = null;
+    await Demo.streamDemoTurn('a1', 'd1', 'hi', {
+      onSentence: (s) => sentences.push(s),
+      onDone: (info) => { done = info; },
+    });
+    expect(sentences).toEqual(['Hello', 'there']);
+    expect(done.full_text).toBe('Hello there');
+    expect(done.latency_ms).toBe(42);
+  });
+
+  it('streamDemoTurn calls onError on an error event', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/turn/stream`, () =>
+      new HttpResponse(sseStream(['data: {"error":"model failed"}\n\n']), { headers: { 'Content-Type': 'text/event-stream' } })
+    ));
+    let err: Error | null = null;
+    await Demo.streamDemoTurn('a1', 'd1', 'hi', { onError: (e) => { err = e; } });
+    expect(err).toBeInstanceOf(Error);
+    expect((err as unknown as Error).message).toBe('model failed');
+  });
+
+  it('streamDemoTurn calls onError on a non-OK response', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/turn/stream`, () => HttpResponse.json({ detail: 'nope' }, { status: 500 })));
+    let err: any = null;
+    await Demo.streamDemoTurn('a1', 'd1', 'hi', { onError: (e) => { err = e; } });
+    expect(err).toBeTruthy();
+    expect(err.status).toBe(500);
+  });
+
+  it('streamDemoTurn calls onError on a network failure', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/turn/stream`, () => HttpResponse.error()));
+    let err: Error | null = null;
+    await Demo.streamDemoTurn('a1', 'd1', 'hi', { onError: (e) => { err = e; } });
+    expect(err).toBeInstanceOf(Error);
+  });
+
+  it('streamDemoTurn tolerates a malformed SSE frame and still finishes', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/turn/stream`, () =>
+      new HttpResponse(
+        sseStream([
+          'data: not-json\n\n',
+          'data: {"sentence":"ok"}\n\n',
+          'data: {"done":true}\n\n',
+        ]),
+        { headers: { 'Content-Type': 'text/event-stream' } }
+      )
+    ));
+    const sentences: string[] = [];
+    let done = false;
+    await Demo.streamDemoTurn('a1', 'd1', 'hi', {
+      onSentence: (s) => sentences.push(s),
+      onDone: () => { done = true; },
+    });
+    expect(sentences).toEqual(['ok']);
+    expect(done).toBe(true);
   });
 });

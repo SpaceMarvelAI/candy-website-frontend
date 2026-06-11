@@ -140,3 +140,155 @@ describe('useAgent — selectAgent()', () => {
     expect(result.current.agent?.id).toBe('agent_002');
   });
 });
+
+describe('useAgent — selection effect loads requirements + KB', () => {
+  it('populates prompt/persona/brand from requirements on selection', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/agents/:id/requirements`, () =>
+        HttpResponse.json({
+          requirements_text: 'Be helpful',
+          persona_name: 'Aria',
+          persona_style: 'warm',
+          brand_name: 'Acme',
+          multilingual: true,
+          call_direction: 'both',
+          supported_language_ids: [1],
+        })
+      ),
+      http.get(`${API_BASE}/v1/agents/:id/knowledge`, () => HttpResponse.json([{ id: 'k1', filename: 'doc.pdf' }])),
+    );
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.promptText).toBe('Be helpful'));
+    expect(result.current.personaName).toBe('Aria');
+    expect(result.current.personaStyle).toBe('warm');
+    expect(result.current.brandName).toBe('Acme');
+    expect(result.current.multilingual).toBe(true);
+    expect(result.current.callDirection).toBe('both');
+    expect(result.current.docs).toHaveLength(1);
+  });
+
+  it('resets fields when requirements fail to load', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/agents/:id/requirements`, () =>
+        HttpResponse.json({ detail: 'not found' }, { status: 404 })
+      ),
+    );
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.promptText).toBe('');
+    expect(result.current.personaStyle).toBe('professional');
+    expect(result.current.callDirection).toBe('inbound');
+  });
+
+  it('shows empty KB when knowledge fails to load', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/agents/:id/knowledge`, () => HttpResponse.json({ detail: 'err' }, { status: 500 })),
+    );
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.docs).toEqual([]);
+  });
+});
+
+describe('useAgent — refreshDocs / refreshRequirements', () => {
+  it('refreshDocs reloads the knowledge list', async () => {
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    server.use(http.get(`${API_BASE}/v1/agents/:id/knowledge`, () => HttpResponse.json([{ id: 'k9', filename: 'new.pdf' }])));
+    await act(async () => { await result.current.refreshDocs(); });
+    expect(result.current.docs.find(d => d.id === 'k9')).toBeTruthy();
+  });
+
+  it('refreshRequirements reloads the prompt text', async () => {
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    server.use(http.get(`${API_BASE}/v1/agents/:id/requirements`, () =>
+      HttpResponse.json({ requirements_text: 'Refreshed text', persona_style: 'concise' })
+    ));
+    await act(async () => { await result.current.refreshRequirements(); });
+    expect(result.current.promptText).toBe('Refreshed text');
+  });
+
+  it('refreshDocs swallows errors without throwing', async () => {
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    server.use(http.get(`${API_BASE}/v1/agents/:id/knowledge`, () => HttpResponse.json({ detail: 'x' }, { status: 500 })));
+    await expect(act(async () => { await result.current.refreshDocs(); })).resolves.toBeUndefined();
+  });
+});
+
+describe('useAgent — removeAgent()', () => {
+  it('removes the agent and falls back to the next one', async () => {
+    const second = { ...mockAgent, id: 'agent_002', name: 'Second' };
+    server.use(
+      http.get(`${API_BASE}/v1/agents`, () => HttpResponse.json([mockAgent, second])),
+      http.delete(`${API_BASE}/v1/agents/agent_001`, () => new HttpResponse(null, { status: 204 })),
+    );
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.agent?.id).toBe('agent_001');
+
+    await act(async () => { await result.current.removeAgent('agent_001'); });
+    expect(result.current.agents.find(a => a.id === 'agent_001')).toBeUndefined();
+    expect(result.current.agent?.id).toBe('agent_002');
+  });
+
+  it('throws when delete fails', async () => {
+    server.use(
+      http.delete(`${API_BASE}/v1/agents/agent_001`, () => HttpResponse.json({ detail: 'no' }, { status: 500 })),
+    );
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect(act(async () => { await result.current.removeAgent('agent_001'); })).rejects.toThrow();
+  });
+});
+
+describe('useAgent — reloadAgents()', () => {
+  it('refetches and re-filters by slug', async () => {
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    server.use(http.get(`${API_BASE}/v1/agents`, () =>
+      HttpResponse.json([
+        { ...mockAgent, id: 'r1', use_case_slug: 'ecommerce' },
+        { ...mockAgent, id: 'r2', use_case_slug: 'financial' },
+      ])
+    ));
+    await act(async () => { await result.current.reloadAgents(); });
+    expect(result.current.agents).toHaveLength(1);
+    expect(result.current.agents[0].id).toBe('r1');
+  });
+
+  it('sets error state when reload fails', async () => {
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    server.use(http.get(`${API_BASE}/v1/agents`, () => HttpResponse.json({ detail: 'boom' }, { status: 500 })));
+    await act(async () => { await result.current.reloadAgents(); });
+    expect(result.current.error).toBeTruthy();
+  });
+});
+
+describe('useAgent — field setters', () => {
+  it('exposes working setters for editable fields', async () => {
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.setPromptText('new prompt'));
+    expect(result.current.promptText).toBe('new prompt');
+    act(() => result.current.setPersonaName('Bob'));
+    expect(result.current.personaName).toBe('Bob');
+    act(() => result.current.setBrandName('BrandX'));
+    expect(result.current.brandName).toBe('BrandX');
+    act(() => result.current.setMultilingual(true));
+    expect(result.current.multilingual).toBe(true);
+    act(() => result.current.setCallDirection('outbound'));
+    expect(result.current.callDirection).toBe('outbound');
+    act(() => result.current.setSupportedCodes(['en', 'es']));
+    expect(result.current.supportedCodes).toEqual(['en', 'es']);
+    act(() => result.current.setPrimaryLang('es'));
+    expect(result.current.primaryLang).toBe('es');
+  });
+});

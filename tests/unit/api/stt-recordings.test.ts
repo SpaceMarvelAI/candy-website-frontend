@@ -89,4 +89,44 @@ describe('api/recordings', () => {
     server.use(http.get(`${B}/v1/recordings`, () => HttpResponse.json([])));
     expect(await Recordings.listAllRecordings()).toEqual([]);
   });
+
+  it('uploadRecording POSTs multipart audio and returns the row', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/s1/recording`, () => HttpResponse.json({ id: 'r1', role: 'user' })));
+    const audio = new Blob(['x'], { type: 'audio/webm' });
+    const r = await Recordings.uploadRecording({ agentId: 'a1', sessionId: 's1', role: 'user', turnIndex: 0, audio });
+    expect(r.id).toBe('r1');
+  });
+
+  it('uploadRecording handles all optional fields + non-webm mime types', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/s1/recording`, () => HttpResponse.json({ id: 'r2' })));
+    // ogg branch + transcript/languageCode/durationMs all set
+    const ogg = new Blob(['x'], { type: 'audio/ogg' });
+    const r = await Recordings.uploadRecording({
+      agentId: 'a1', sessionId: 's1', role: 'agent', turnIndex: 2,
+      audio: ogg, transcript: 'hi', languageCode: 'en', durationMs: 500,
+      recordingType: 'live_call',
+    });
+    expect(r.id).toBe('r2');
+  });
+
+  it('uploadRecording throws ApiError on failure', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/s1/recording`, () => HttpResponse.json({ detail: 'too big' }, { status: 413 })));
+    const audio = new Blob(['x'], { type: 'audio/wav' });
+    await expect(
+      Recordings.uploadRecording({ agentId: 'a1', sessionId: 's1', role: 'user', turnIndex: 0, audio })
+    ).rejects.toMatchObject({ status: 413 });
+  });
+
+  it('downloadRecordingBlob returns a Blob on success', async () => {
+    server.use(http.get(`${B}/v1/recordings/r1/download`, () =>
+      new HttpResponse(new Blob(['audio-bytes']), { headers: { 'Content-Type': 'audio/mpeg' } })
+    ));
+    const blob = await Recordings.downloadRecordingBlob('r1');
+    expect(blob).toBeInstanceOf(Blob);
+  });
+
+  it('downloadRecordingBlob throws on a failed response', async () => {
+    server.use(http.get(`${B}/v1/recordings/r1/download`, () => HttpResponse.json({ detail: 'not found' }, { status: 404 })));
+    await expect(Recordings.downloadRecordingBlob('r1')).rejects.toThrow();
+  });
 });
