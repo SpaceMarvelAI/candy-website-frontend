@@ -523,7 +523,8 @@ const widgetBannerStyle: React.CSSProperties = {
 
 const widgetCode: React.CSSProperties = {
   flex: 1,
-  background: 'rgba(0,0,0,0.3)',
+  background: 'var(--card-bg)',
+  border: '1px solid var(--border)',
   borderRadius: 6,
   padding: '6px 10px',
   fontSize: 11,

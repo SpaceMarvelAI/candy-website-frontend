@@ -90,8 +90,8 @@ function UseCaseCard({ uc, onClick }) {
       <div style={{
         width: 48, height: 48, borderRadius: 12,
         display: 'grid', placeItems: 'center',
-        background: 'var(--tint-2)',
-        border: '1px solid var(--border-strong)',
+        background: 'var(--card-bg)',
+        border: '1px solid var(--border)',
         marginBottom: 16,
         color: 'var(--text-2)',
       }}>

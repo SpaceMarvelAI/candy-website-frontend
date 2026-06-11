@@ -479,7 +479,7 @@ function FilterTab({
       onClick={onClick}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '4px 10px', borderRadius: 20, border: 'none',
+        padding: '4px 10px', borderRadius: 20,
         fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
         whiteSpace: 'nowrap', flexShrink: 0,
         transition: 'all 0.12s',

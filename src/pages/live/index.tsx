@@ -292,7 +292,7 @@ export default function LiveCallsPage() {
             title={t.hint}
             style={{
               padding: '7px 14px', borderRadius: 99,
-              background: tab === t.key ? 'var(--tint-4)' : 'var(--tint-2)',
+              background: 'var(--card-bg)',
               border: tab === t.key ? '1px solid var(--border-strong)' : '1px solid var(--border)',
               color: tab === t.key ? 'var(--text-1)' : 'var(--text-2)',
               cursor: 'pointer', fontSize: 12.5,
@@ -304,7 +304,7 @@ export default function LiveCallsPage() {
             <span
               style={{
                 fontSize: 10.5, padding: '1px 7px', borderRadius: 99,
-                background: tab === t.key ? 'var(--purple)' : 'var(--tint-4)',
+                background: tab === t.key ? 'var(--purple)' : 'var(--tint-1)',
                 color: tab === t.key ? '#fff' : 'var(--text-3)',
               }}
             >
@@ -317,7 +317,7 @@ export default function LiveCallsPage() {
           onClick={() => { refresh().then(() => addToast('Refreshed', 'success')); }}
           style={{
             padding: '7px 12px', borderRadius: 99,
-            background: 'var(--tint-2)',
+            background: 'var(--card-bg)',
             border: '1px solid var(--border)',
             color: 'var(--text-2)', cursor: 'pointer', fontSize: 12.5,
             display: 'inline-flex', alignItems: 'center', gap: 6,

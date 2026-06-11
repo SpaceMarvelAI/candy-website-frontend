@@ -165,7 +165,7 @@ export default function LanguagePicker({
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <label style={{ fontSize: 12, color: 'var(--text-2)' }}>Primary</label>
         <PrimaryDropdown
-          langs={langs.length === 0 ? [{ code: primary, name: primary }] : langs}
+          langs={langs.length === 0 ? [{ code: primary, name: primary } as Language] : langs}
           value={primary}
           onChange={onPrimaryChange}
           disabled={loading}
