@@ -50,7 +50,7 @@ export default function Topbar({ onMenuOpen }: TopbarProps) {
         display: 'flex',
         alignItems: 'center',
         gap: isSmallMobile ? 10 : 16,
-        borderBottom: '1px solid var(--border)',
+        borderBottom: 'none',
         background: 'var(--surface-solid)',
         position: 'sticky',
         top: 0,

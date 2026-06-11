@@ -2129,7 +2129,7 @@ const transcriptArea = {
   minHeight: 180,
   display: 'flex', flexDirection: 'column' as const, gap: 10,
   padding: 12,
-  background: 'var(--tint-1)',
+  background: 'var(--card-bg)',
   border: '1px solid var(--border)',
   borderRadius: 10,
   overflowY: 'auto' as const,

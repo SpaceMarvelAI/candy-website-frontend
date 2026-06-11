@@ -220,7 +220,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '10px 12px',
-            background: 'var(--tint-1)',
+            background: 'var(--card-bg)',
             border: '1px solid var(--border)',
             borderRadius: 10,
           }}
@@ -306,7 +306,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
         style={{
           ...dropZone,
           borderColor: dragOver ? tintColor[tint] : 'var(--border-strong)',
-          background: dragOver ? 'var(--tint-2)' : 'var(--tint-1)',
+          background: dragOver ? 'var(--tint-2)' : 'var(--card-bg)',
           opacity: agentId ? 1 : 0.6,
           cursor: agentId ? 'pointer' : 'wait',
         }}
@@ -338,7 +338,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
               <div
                 style={{
                   width: 30, height: 30, borderRadius: 7,
-                  background: 'var(--tint-2)',
+                  background: 'var(--tint-1)',
                   display: 'grid', placeItems: 'center',
                   color: tintColor[tint], flexShrink: 0,
                 }}
@@ -363,7 +363,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
                 <div
                   style={{
                     width: 30, height: 30, borderRadius: 7,
-                    background: 'var(--tint-2)',
+                    background: 'var(--tint-1)',
                     display: 'grid', placeItems: 'center',
                     color: d.status === 'embedded' ? 'var(--green)'
                          : d.status === 'failed'   ? 'var(--red)'
@@ -625,12 +625,12 @@ function DocViewerModal({
 
 const metaPill: React.CSSProperties = {
   fontSize: 11, padding: '3px 8px', borderRadius: 99,
-  background: 'var(--tint-1)', border: '1px solid var(--border)',
+  background: 'var(--card-bg)', border: '1px solid var(--border)',
   color: 'var(--text-3)',
 };
 
 const section = {
-  background: 'var(--surface)',
+  background: 'var(--card-bg)',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius)',
   padding: 22,
@@ -643,7 +643,7 @@ const sectionTitle = { fontSize: 14, fontWeight: 600, color: 'var(--text-1)', ma
 const pill = {
   fontSize: 11, fontWeight: 500, color: 'var(--text-3)',
   padding: '3px 8px', borderRadius: 99,
-  background: 'var(--tint-1)', border: '1px solid var(--border)',
+  background: 'var(--card-bg)', border: '1px solid var(--border)',
 };
 const dropZone = {
   cursor: 'pointer',
@@ -661,7 +661,7 @@ const fileList = {
 const fileRow = {
   display: 'flex', alignItems: 'center', gap: 12,
   padding: '10px 12px',
-  background: 'var(--tint-1)',
+  background: 'var(--card-bg)',
   border: '1px solid var(--border)',
   borderRadius: 9,
 };

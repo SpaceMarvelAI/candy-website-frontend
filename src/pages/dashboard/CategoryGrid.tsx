@@ -48,8 +48,8 @@ export default function CategoryGrid() {
               key={label}
               style={{
                 padding: '7px 12px', borderRadius: 8,
-                background: i === 0 ? 'var(--purple)' : 'var(--tint-2)',
-                border: i === 0 ? '1px solid var(--purple)' : '1px solid var(--border-strong)',
+                background: i === 0 ? 'var(--purple)' : 'var(--card-bg)',
+                border: i === 0 ? '1px solid var(--purple)' : '1px solid var(--border)',
                 color: i === 0 ? '#fff' : 'var(--text-2)',
                 cursor: 'pointer', fontSize: 12.5, transition: 'all 0.15s',
               }}
@@ -60,8 +60,8 @@ export default function CategoryGrid() {
           <button
             style={{
               padding: '7px 12px', borderRadius: 8,
-              background: 'var(--tint-2)',
-              border: '1px solid var(--border-strong)',
+              background: 'var(--card-bg)',
+              border: '1px solid var(--border)',
               color: 'var(--text-2)', cursor: 'pointer',
               fontSize: 12.5, transition: 'all 0.15s',
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -121,8 +121,8 @@ function CatCard({ cat, idx, onClick }) {
         style={{
           width: 48, height: 48, borderRadius: 12,
           display: 'grid', placeItems: 'center',
-          background: 'var(--tint-2)',
-          border: '1px solid var(--border-strong)',
+          background: 'var(--card-bg)',
+          border: '1px solid var(--border)',
           marginBottom: 16,
           color: 'var(--text-2)',
         }}

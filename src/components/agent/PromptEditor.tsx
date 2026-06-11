@@ -196,7 +196,7 @@ export default function PromptEditor({
                   padding: '5px 10px',
                   borderRadius: 7,
                   border: `1px solid ${callDirection === d ? tintColor[tint] : 'var(--border)'}`,
-                  background: callDirection === d ? `${tintColor[tint]}22` : 'var(--tint-1)',
+                  background: callDirection === d ? `${tintColor[tint]}22` : 'var(--card-bg)',
                   color: callDirection === d ? tintColor[tint] : 'var(--text-2)',
                   cursor: 'pointer',
                   fontWeight: callDirection === d ? 600 : 400,
@@ -242,7 +242,7 @@ export default function PromptEditor({
 }
 
 const section = {
-  background: 'var(--surface)',
+  background: 'var(--card-bg)',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius)',
   padding: 22,
@@ -289,7 +289,7 @@ const fieldInput = {
 const presetBtn = {
   fontSize: 11.5, padding: '6px 10px',
   borderRadius: 7,
-  background: 'var(--tint-1)',
+  background: 'var(--card-bg)',
   border: '1px solid var(--border)',
   color: 'var(--text-2)', cursor: 'pointer',
   transition: 'all 0.15s',

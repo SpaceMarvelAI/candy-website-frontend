@@ -365,9 +365,9 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           display: 'flex',
           flexDirection: 'column',
           background: 'var(--sidebar-bg)',
-          borderRight: '1px solid var(--border)',
+          borderRight: 'none',
           overflowX: 'hidden',
-          boxShadow: hasShadow ? 'var(--shadow-rail)' : 'none',
+          boxShadow: 'none',
           zIndex: 50,
         }}
       >
@@ -379,7 +379,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           padding: panelExpanded ? '0 14px' : '0',
           flexShrink: 0,
           boxSizing: 'border-box',
-          borderBottom: '1px solid var(--border)',
+          borderBottom: 'none',
         }}>
           {/* Collapsed desktop: candy favicon by default, expand icon on hover */}
           {!panelExpanded && !isMobileOrTablet ? (
@@ -473,9 +473,10 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                         height:         panelExpanded ? 'auto' : 36,
                         margin:         '0 0 2px 0',
                         borderRadius:   12,
-                        background:     isActive ? 'rgba(0, 113, 227, 0.12)' : 'transparent',
-                        border:         isActive ? '1px solid rgba(0, 113, 227, 0.22)' : '1px solid transparent',
+                        background:     isActive ? 'var(--tint-2)' : 'transparent',
+                        border:         '1px solid transparent',
                         color:          isActive ? 'var(--text-1)' : 'var(--text-2)',
+                        fontWeight:     isActive ? 600 : 500,
                         transition:     'background 0.12s, color 0.12s',
                       }}
                       onMouseEnter={e => {
@@ -489,7 +490,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                         e.currentTarget.style.color = 'var(--text-2)';
                       }}
                     >
-                      {isActive && panelExpanded && <span style={styles.accentBar} />}
                       {item.img ? (
                         <img src={item.img} alt={item.label}
                           style={{ width: 20, height: 20, objectFit: 'contain', filter: imgFilter, flexShrink: 0 }} />
@@ -516,7 +516,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           onClick={openProfileMenu}
           title={!panelExpanded ? `${userName} · ${userEmail}` : undefined}
           style={{
-            borderTop: '1px solid var(--border)',
+            borderTop: 'none',
             padding: panelExpanded ? '12px 12px' : '12px 0',
             flexShrink: 0,
             display: 'flex',
