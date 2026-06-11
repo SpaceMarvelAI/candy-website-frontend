@@ -77,13 +77,13 @@ function UseCaseCard({ uc, onClick }) {
         e.currentTarget.style.transform = 'translateY(-2px)';
         e.currentTarget.style.borderColor = 'var(--border-strong)';
         const cta = e.currentTarget.querySelector('.cat-cta') as HTMLElement | null;
-        if (cta) cta.style.gap = '10px';
+        if (cta) cta.style.color = 'var(--purple-hi)';
       }}
       onMouseLeave={e => {
         e.currentTarget.style.transform = 'translateY(0)';
         e.currentTarget.style.borderColor = 'var(--border)';
         const cta = e.currentTarget.querySelector('.cat-cta') as HTMLElement | null;
-        if (cta) cta.style.gap = '5px';
+        if (cta) cta.style.color = 'var(--text-1)';
       }}
     >
       {/* Icon */}
@@ -140,7 +140,7 @@ function UseCaseCard({ uc, onClick }) {
           style={{
             fontSize: 12.5, fontWeight: 600, color: 'var(--text-1)',
             display: 'inline-flex', alignItems: 'center', gap: 5,
-            transition: 'gap 0.2s',
+            transition: 'color 0.15s',
           }}
         >
           Open workspace <Icon name="arrowRight" size={14} />
