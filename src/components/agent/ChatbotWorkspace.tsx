@@ -13,6 +13,7 @@ import { publishAgent } from '../../api/agents';
 import { ApiError, getToken } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { logger } from '../../utils/logger';
 
 interface Props {
   slug: string;
@@ -38,6 +39,13 @@ export default function ChatbotWorkspace({
 }: Props) {
   const { addToast } = useApp();
   const isTabletOrMobile = useMediaQuery('(max-width: 1024px)');
+
+  // Mount / unmount lifecycle
+  useEffect(() => {
+    logger.info('[ChatbotWorkspace] Mounted', { slug, category, tint });
+    return () => { logger.info('[ChatbotWorkspace] Unmounted', { slug, category }); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Agent state ────────────────────────────────────────────────────────────
   const [agents, setAgents]         = useState<Agent[]>([]);
@@ -74,35 +82,59 @@ export default function ChatbotWorkspace({
   // ── Data loaders ───────────────────────────────────────────────────────────
   const refreshDocs = useCallback(async () => {
     if (!selectedId) return;
-    try { setDocs(await listKnowledge(selectedId)); }
-    catch (e) { console.warn('listKnowledge failed', e); }
+    logger.debug('[ChatbotWorkspace] refreshDocs', { agentId: selectedId });
+    try {
+      const docs = await listKnowledge(selectedId);
+      setDocs(docs);
+      logger.info('[ChatbotWorkspace] refreshDocs OK', { agentId: selectedId, count: docs.length });
+    } catch (e) {
+      logger.warn('[ChatbotWorkspace] refreshDocs failed', { agentId: selectedId, error: e });
+    }
   }, [selectedId]);
 
   const reloadAgents = useCallback(async () => {
     if (!getToken()) return;
+    logger.info('[ChatbotWorkspace] reloadAgents', { slug });
     try {
       const bots = await listAgents({ use_case: slug });
+      logger.info('[ChatbotWorkspace] reloadAgents OK', { slug, count: bots.length });
       setAgents(bots);
       setSelectedId(prev => bots.find(a => a.id === prev) ? prev : (bots[0]?.id ?? null));
-    } catch (e) { console.warn('reloadAgents failed', e); }
+    } catch (e) {
+      logger.warn('[ChatbotWorkspace] reloadAgents failed', { slug, error: e });
+    }
   }, [slug]);
 
   // Bootstrap — load agents on mount
   useEffect(() => {
-    if (!getToken()) { setError('Not signed in'); setLoading(false); return; }
+    logger.info('[ChatbotWorkspace] Bootstrap starting', { slug, hasToken: !!getToken() });
+    if (!getToken()) {
+      logger.warn('[ChatbotWorkspace] Bootstrap aborted — no auth token', { slug });
+      setError('Not signed in');
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
+    const t0 = performance.now();
     (async () => {
       try {
         const bots = await listAgents({ use_case: slug });
         if (cancelled) return;
+        logger.info('[ChatbotWorkspace] Bootstrap OK', {
+          slug,
+          count:   bots.length,
+          elapsed: `${(performance.now() - t0).toFixed(1)} ms`,
+        });
         setAgents(bots);
         if (bots.length > 0) setSelectedId(bots[0].id);
       } catch (e: any) {
         if (cancelled) return;
-        setError(e instanceof ApiError
+        const msg = e instanceof ApiError
           ? `${e.status}: ${typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message)}`
-          : (e?.message || 'Failed to load agents'));
+          : (e?.message || 'Failed to load agents');
+        logger.error('[ChatbotWorkspace] Bootstrap failed', { slug, error: e, message: msg });
+        setError(msg);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -113,7 +145,9 @@ export default function ChatbotWorkspace({
   // Load requirements + docs when selection changes
   useEffect(() => {
     if (!selectedId) return;
+    logger.info('[ChatbotWorkspace] Agent selected — loading requirements + KB', { agentId: selectedId });
     let cancelled = false;
+    const t0 = performance.now();
     (async () => {
       setLoading(true);
       setStatusOverride(null);
@@ -123,16 +157,34 @@ export default function ChatbotWorkspace({
           listKnowledge(selectedId),
         ]);
         if (cancelled) return;
+        logger.info('[ChatbotWorkspace] Agent data loaded', {
+          agentId:            selectedId,
+          requirementsStatus: reqRes.status,
+          kbStatus:           kbRes.status,
+          elapsed:            `${(performance.now() - t0).toFixed(1)} ms`,
+        });
         if (reqRes.status === 'fulfilled') {
           const r = reqRes.value;
           setPromptText(r.requirements_text ?? '');
           setPersonaName(r.persona_name ?? '');
           setPersonaStyle(r.persona_style ?? 'professional');
           setBrandName(r.brand_name ?? '');
+        } else {
+          logger.warn('[ChatbotWorkspace] getRequirements failed', {
+            agentId: selectedId,
+            reason:  (reqRes as PromiseRejectedResult).reason,
+          });
         }
-        if (kbRes.status === 'fulfilled') setDocs(kbRes.value);
+        if (kbRes.status === 'fulfilled') {
+          setDocs(kbRes.value);
+        } else {
+          logger.warn('[ChatbotWorkspace] listKnowledge failed', {
+            agentId: selectedId,
+            reason:  (kbRes as PromiseRejectedResult).reason,
+          });
+        }
       } catch (e) {
-        console.warn('load agent data failed', e);
+        logger.error('[ChatbotWorkspace] load agent data failed (unexpected)', { agentId: selectedId, error: e });
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -142,23 +194,38 @@ export default function ChatbotWorkspace({
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   async function createNewAgent(name: string) {
-    const created = await createAgent({ use_case_slug: slug, name, call_direction: 'chat' } as any);
-    setAgents(prev => [...prev, created]);
-    setSelectedId(created.id);
+    logger.info('[ChatbotWorkspace] createNewAgent', { slug, name });
+    try {
+      const created = await createAgent({ use_case_slug: slug, name, call_direction: 'chat' } as any);
+      logger.info('[ChatbotWorkspace] createNewAgent OK', { agentId: created.id });
+      setAgents(prev => [...prev, created]);
+      setSelectedId(created.id);
+    } catch (e: any) {
+      logger.error('[ChatbotWorkspace] createNewAgent failed', { slug, name, error: e });
+      throw e;
+    }
   }
 
   async function removeAgent(id: string) {
-    await deleteAgent(id);
-    setAgents(prev => prev.filter(a => a.id !== id));
-    setSelectedId(prev => {
-      if (prev !== id) return prev;
-      const remaining = agents.filter(a => a.id !== id);
-      return remaining[0]?.id ?? null;
-    });
+    logger.info('[ChatbotWorkspace] removeAgent', { agentId: id });
+    try {
+      await deleteAgent(id);
+      logger.info('[ChatbotWorkspace] removeAgent OK', { agentId: id });
+      setAgents(prev => prev.filter(a => a.id !== id));
+      setSelectedId(prev => {
+        if (prev !== id) return prev;
+        const remaining = agents.filter(a => a.id !== id);
+        return remaining[0]?.id ?? null;
+      });
+    } catch (e: any) {
+      logger.error('[ChatbotWorkspace] removeAgent failed', { agentId: id, error: e });
+      throw e;
+    }
   }
 
   async function onPublish() {
     if (!agent || publishing) return;
+    logger.info('[ChatbotWorkspace] onPublish start', { agentId: agent.id, category, currentStatus: status });
     setPublishing(true);
     try {
       let res: { status: string; agent_id: string };
@@ -169,17 +236,20 @@ export default function ChatbotWorkspace({
         const detail = e instanceof ApiError ? e.detail : null;
         const detailStr = typeof detail === 'string' ? detail : JSON.stringify(detail ?? '');
         if (detailStr.toLowerCase().includes('autotest') || detailStr.includes('force=true')) {
+          logger.warn('[ChatbotWorkspace] onPublish: AutoTest gate — retrying with force=true', { agentId: agent.id });
           res = await publishAgent(agent.id, { force: true });
         } else {
           throw e;
         }
       }
+      logger.info('[ChatbotWorkspace] onPublish OK', { agentId: agent.id, newStatus: res.status });
       setStatusOverride(res.status);
       addToast(`${category} chatbot published!`, 'success');
     } catch (e) {
       const msg = e instanceof ApiError
         ? (typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? (e as Error).message))
         : (e as Error).message;
+      logger.error('[ChatbotWorkspace] onPublish failed', { agentId: agent.id, error: e, message: msg });
       addToast(`Publish failed: ${msg}`, 'error');
     } finally {
       setPublishing(false);

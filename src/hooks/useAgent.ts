@@ -16,6 +16,7 @@ import { getRequirements } from '../api/requirements';
 import { listKnowledge, type KnowledgeDoc } from '../api/knowledge';
 import { listLanguages, type Language } from '../api/languages';
 import { ApiError, getToken } from '../api/client';
+import { logger } from '../utils/logger';
 
 export interface UseAgentResult {
   // Agent set
@@ -75,18 +76,22 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
 
   const refreshDocs = useCallback(async () => {
     if (!selectedId) return;
+    logger.debug('[useAgent] refreshDocs', { agentId: selectedId });
     try {
       const list = await listKnowledge(selectedId);
       setDocs(list);
+      logger.info('[useAgent] refreshDocs OK', { agentId: selectedId, count: list.length });
     } catch (e) {
-      console.warn('listKnowledge failed', e);
+      logger.warn('[useAgent] refreshDocs failed', { agentId: selectedId, error: e });
     }
   }, [selectedId]);
 
   const refreshRequirements = useCallback(async () => {
     if (!selectedId) return;
+    logger.debug('[useAgent] refreshRequirements', { agentId: selectedId });
     try {
       const r = await getRequirements(selectedId);
+      logger.info('[useAgent] refreshRequirements OK', { agentId: selectedId, requirements: r });
       setPrompt(r.requirements_text ?? '');
       setPersonaName(r.persona_name ?? '');
       setPersonaStyle(r.persona_style ?? 'professional');
@@ -102,7 +107,7 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
         setSupportedCodes([]);
       }
     } catch (e) {
-      console.warn('getRequirements failed', e);
+      logger.warn('[useAgent] refreshRequirements failed', { agentId: selectedId, error: e });
     }
   }, [selectedId, languages]);
 
@@ -110,29 +115,44 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
   // this slug, auto-create a starter agent so the user has something to
   // edit on first visit.
   useEffect(() => {
+    logger.info('[useAgent] Bootstrap starting', { slug, defaultName, hasToken: !!getToken() });
+
     if (!getToken()) {
+      logger.warn('[useAgent] Bootstrap aborted — no auth token present', { slug });
       setError('Not signed in');
       setLoading(false);
       return;
     }
 
     let cancelled = false;
+    const t0 = performance.now();
     (async () => {
       try {
         // Fetch all agents and filter client-side. The backend's
         // ?use_case=<slug> filter currently misses some matches in this
         // build, so doing the filter in JS is more robust.
         const [langsRes, all] = await Promise.all([
-          listLanguages().catch(() => [] as Language[]),
+          listLanguages().catch((e) => {
+            logger.warn('[useAgent] listLanguages failed — falling back to empty list', { error: e });
+            return [] as Language[];
+          }),
           listAgents(),
         ]);
         if (cancelled) return;
+        logger.info('[useAgent] Bootstrap data loaded', {
+          slug,
+          languages: langsRes.length,
+          totalAgents: all.length,
+          matchedAgents: all.filter(a => a.use_case_slug === slug).length,
+          elapsed: `${(performance.now() - t0).toFixed(1)} ms`,
+        });
         setLanguages(langsRes);
         const matched = all.filter(a => a.use_case_slug === slug);
         setAgents(matched);
         if (matched.length > 0) {
           setSelectedId(matched[0].id);
         } else {
+          logger.info('[useAgent] No existing agents for slug — UI will prompt creation', { slug });
           setLoading(false);
         }
       } catch (e: any) {
@@ -140,6 +160,7 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
         const msg = e instanceof ApiError
           ? `${e.status}: ${typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message)}`
           : (e?.message || 'Failed to load agents');
+        logger.error('[useAgent] Bootstrap failed', { slug, error: e, message: msg, stack: e?.stack });
         setError(msg);
         setLoading(false);
       }
@@ -151,7 +172,9 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
   // Whenever the selected agent changes, (re)load its reqs + KB.
   useEffect(() => {
     if (!selectedId) return;
+    logger.info('[useAgent] Agent selected — loading requirements + KB', { agentId: selectedId });
     let cancelled = false;
+    const t0 = performance.now();
     (async () => {
       setLoading(true);
       try {
@@ -160,6 +183,13 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
           listKnowledge(selectedId),
         ]);
         if (cancelled) return;
+
+        logger.info('[useAgent] Agent data loaded', {
+          agentId: selectedId,
+          requirementsStatus: reqRes.status,
+          kbStatus:           kbRes.status,
+          elapsed:            `${(performance.now() - t0).toFixed(1)} ms`,
+        });
 
         if (reqRes.status === 'fulfilled') {
           const r = reqRes.value;
@@ -179,6 +209,10 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
             setSupportedCodes([]);
           }
         } else {
+          logger.warn('[useAgent] getRequirements failed — resetting fields', {
+            agentId: selectedId,
+            reason:  (reqRes as PromiseRejectedResult).reason,
+          });
           setPrompt('');
           setPersonaName('');
           setPersonaStyle('professional');
@@ -190,6 +224,10 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
         if (kbRes.status === 'fulfilled') {
           setDocs(kbRes.value);
         } else {
+          logger.warn('[useAgent] listKnowledge failed — showing empty KB', {
+            agentId: selectedId,
+            reason:  (kbRes as PromiseRejectedResult).reason,
+          });
           setDocs([]);
         }
       } finally {
@@ -204,30 +242,46 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
   }, []);
 
   const createNewAgent = useCallback(async (name: string) => {
-    const created = await createAgent({ use_case_slug: slug, name });
-    setAgents(prev => [created, ...prev]);
-    setSelectedId(created.id);
+    logger.info('[useAgent] createNewAgent', { slug, name });
+    try {
+      const created = await createAgent({ use_case_slug: slug, name });
+      logger.info('[useAgent] createNewAgent OK', { agentId: created.id, name });
+      setAgents(prev => [created, ...prev]);
+      setSelectedId(created.id);
+    } catch (e: any) {
+      logger.error('[useAgent] createNewAgent failed', { slug, name, error: e, stack: e?.stack });
+      throw e;
+    }
   }, [slug]);
 
   const removeAgent = useCallback(async (id: string) => {
-    await deleteAgent(id);
-    setAgents(prev => {
-      const next = prev.filter(a => a.id !== id);
-      // If we just deleted the selected one, fall back to whatever's first.
-      setSelectedId(curr => {
-        if (curr !== id) return curr;
-        return next[0]?.id ?? null;
+    logger.info('[useAgent] removeAgent', { agentId: id });
+    try {
+      await deleteAgent(id);
+      logger.info('[useAgent] removeAgent OK', { agentId: id });
+      setAgents(prev => {
+        const next = prev.filter(a => a.id !== id);
+        // If we just deleted the selected one, fall back to whatever's first.
+        setSelectedId(curr => {
+          if (curr !== id) return curr;
+          return next[0]?.id ?? null;
+        });
+        return next;
       });
-      return next;
-    });
+    } catch (e: any) {
+      logger.error('[useAgent] removeAgent failed', { agentId: id, error: e, stack: e?.stack });
+      throw e;
+    }
   }, []);
 
   const reloadAgents = useCallback(async () => {
+    logger.info('[useAgent] reloadAgents', { slug });
     setError(null);
     setLoading(true);
     try {
       const all = await listAgents();
       const matched = all.filter(a => a.use_case_slug === slug);
+      logger.info('[useAgent] reloadAgents OK', { slug, total: all.length, matched: matched.length });
       setAgents(matched);
       if (matched.length > 0 && !selectedId) {
         setSelectedId(matched[0].id);
@@ -236,6 +290,7 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
       const msg = e instanceof ApiError
         ? `${e.status}: ${typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message)}`
         : (e?.message || 'Failed to load agents');
+      logger.error('[useAgent] reloadAgents failed', { slug, error: e, message: msg });
       setError(msg);
     } finally {
       setLoading(false);

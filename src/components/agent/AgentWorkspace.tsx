@@ -3,7 +3,7 @@
  * Layout: TestPanel (left, full height) + accordion config panel (right).
  * Accordion items: Knowledge Base | Languages | Requirements
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AgentShell from './AgentShell';
 import EmbedModal from './EmbedModal';
 import AgentPicker from './AgentPicker';
@@ -18,6 +18,7 @@ import { publishAgent } from '../../api/agents';
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { logger } from '../../utils/logger';
 
 interface Props {
   slug: string;
@@ -40,6 +41,14 @@ const tintColor: Record<string, string> = {
 export default function AgentWorkspace({ slug, category, icon, tint = 'purple', defaultPrompt, presets }: Props) {
   const { addToast } = useApp();
   const isTabletOrMobile = useMediaQuery('(max-width: 1024px)');
+
+  // Mount / unmount lifecycle
+  useEffect(() => {
+    logger.info('[AgentWorkspace] Mounted', { slug, category, tint });
+    return () => { logger.info('[AgentWorkspace] Unmounted', { slug, category }); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const {
     agents, agent, selectAgent, createNewAgent, removeAgent, reloadAgents,
     loading, error,
@@ -70,6 +79,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
 
   async function onPublish() {
     if (!agent || publishing) return;
+    logger.info('[AgentWorkspace] onPublish start', { agentId: agent.id, category, currentStatus: status });
     setPublishing(true);
     try {
       let res: { status: string; agent_id: string };
@@ -80,17 +90,20 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
         const detail = e instanceof ApiError ? e.detail : null;
         const detailStr = typeof detail === 'string' ? detail : JSON.stringify(detail ?? '');
         if (detailStr.toLowerCase().includes('autotest') || detailStr.includes('force=true')) {
+          logger.warn('[AgentWorkspace] onPublish: AutoTest gate — retrying with force=true', { agentId: agent.id });
           res = await publishAgent(agent.id, { force: true });
         } else {
           throw e;
         }
       }
+      logger.info('[AgentWorkspace] onPublish OK', { agentId: agent.id, newStatus: res.status });
       setStatusOverride(res.status);
       addToast('Agent published', 'success');
     } catch (e) {
       const msg = e instanceof ApiError
         ? (typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message))
         : (e as Error).message;
+      logger.error('[AgentWorkspace] onPublish failed', { agentId: agent.id, error: e, message: msg });
       addToast(`Publish failed: ${msg}`, 'error');
     } finally {
       setPublishing(false);
