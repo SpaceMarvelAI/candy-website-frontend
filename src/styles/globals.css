@@ -66,8 +66,9 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body {
+html, body, #root {
   height: 100%;
+  width: 100%;
   font-family: 'Zalando Sans';
   background: var(--bg-0);
   color: var(--text-1);
@@ -356,6 +357,7 @@ html.theme-transitioning *::after {
 /* ── App layout grid ── */
 .app-layout {
   display: flex;
+  width: 100%;
   min-height: 100vh;
 }
 
@@ -368,8 +370,6 @@ html.theme-transitioning *::after {
 /* ── Main content padding ── */
 .main-content-pad {
   padding: 32px 40px 60px;
-  max-width: 1440px;
-  margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
 }

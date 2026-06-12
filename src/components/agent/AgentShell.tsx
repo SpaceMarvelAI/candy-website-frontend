@@ -259,8 +259,6 @@ export default function AgentShell({
       <main
         style={{
           padding: isMobile ? '16px 14px 40px' : isTablet ? '20px 20px 48px' : '28px 28px 60px',
-          maxWidth: 1440,
-          margin: '0 auto',
         }}
       >
         {children}

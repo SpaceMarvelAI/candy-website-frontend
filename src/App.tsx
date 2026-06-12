@@ -104,7 +104,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function WithLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ position: 'relative', zIndex: 1 }}>
+    <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
       <AppLayout>{children}</AppLayout>
     </div>
   );

@@ -565,7 +565,7 @@ export default function FlowsPage() {
           </div>
         )}
         {/* Tabs */}
-        <div style={{ display:'flex', borderBottom:'1px solid var(--border)', padding:'0 6px', flexShrink:0 }}>
+        <div style={{ display:'flex', borderBottom:'1px solid var(--border)', padding:'0 6px', flexShrink:0, height:44, alignItems:'stretch' }}>
           {(['agents','apps','webhooks'] as const).map(tab => (
             <button key={tab} onClick={() => setLeftTab(tab)} style={leftTabBtn(leftTab===tab)}>
               {tab.charAt(0).toUpperCase()+tab.slice(1)}
@@ -772,7 +772,7 @@ export default function FlowsPage() {
         transition:'margin-right 0.22s ease' }}>
 
         {/* Toolbar */}
-        <div style={{ ...toolbar, gap: isMobile ? 6 : 10, padding: isMobile ? '8px 10px' : '10px 14px' }}>
+        <div style={{ ...toolbar, gap: isMobile ? 6 : 10, padding: isMobile ? '0 10px' : '0 14px' }}>
           {/* Panel toggle button — mobile + tablet */}
           {(isMobile || isTablet) && (
             <button
@@ -1210,7 +1210,7 @@ const leftPanel: React.CSSProperties = {
 
 const toolbar: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 10,
-  padding: '10px 14px', background: 'var(--surface)',
+  height: 44, padding: '0 14px', background: 'var(--surface)',
   borderBottom: '1px solid var(--border)', flexShrink: 0,
 };
 
@@ -1228,7 +1228,8 @@ const legend: React.CSSProperties = {
 function leftTabBtn(active: boolean): React.CSSProperties {
   return {
     flex: 1, textAlign: 'center',
-    padding: '9px 4px', border: 'none', background: 'transparent', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: '0 4px', border: 'none', background: 'transparent', cursor: 'pointer',
     fontSize: 11.5, fontWeight: active ? 700 : 500,
     color: active ? 'var(--purple-hi)' : 'var(--text-3)',
     borderBottom: active ? '2px solid var(--purple-hi)' : '2px solid transparent',
