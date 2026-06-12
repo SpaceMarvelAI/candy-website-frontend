@@ -292,7 +292,7 @@ export default function LiveCallsPage() {
             title={t.hint}
             style={{
               padding: '7px 14px', borderRadius: 99,
-              background: tab === t.key ? 'var(--tint-4)' : 'var(--tint-2)',
+              background: 'var(--card-bg)',
               border: tab === t.key ? '1px solid var(--border-strong)' : '1px solid var(--border)',
               color: tab === t.key ? 'var(--text-1)' : 'var(--text-2)',
               cursor: 'pointer', fontSize: 12.5,
@@ -304,7 +304,7 @@ export default function LiveCallsPage() {
             <span
               style={{
                 fontSize: 10.5, padding: '1px 7px', borderRadius: 99,
-                background: tab === t.key ? 'var(--purple)' : 'var(--tint-4)',
+                background: tab === t.key ? 'var(--purple)' : 'var(--tint-1)',
                 color: tab === t.key ? '#fff' : 'var(--text-3)',
               }}
             >
@@ -317,7 +317,7 @@ export default function LiveCallsPage() {
           onClick={() => { refresh().then(() => addToast('Refreshed', 'success')); }}
           style={{
             padding: '7px 12px', borderRadius: 99,
-            background: 'var(--tint-2)',
+            background: 'var(--card-bg)',
             border: '1px solid var(--border)',
             color: 'var(--text-2)', cursor: 'pointer', fontSize: 12.5,
             display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -425,11 +425,10 @@ function RecordingsTable({
   return (
     <div
       style={{
-        background: 'var(--surface)',
+        background: 'var(--card-bg)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-lg)',
         overflow: 'hidden',
-        backdropFilter: 'blur(20px)',
       }}
     >
       <div
@@ -763,7 +762,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
         style={{
           ...panelStyle,
           zIndex: 1001,
-          background: 'var(--surface-solid)',
+          background: 'var(--card-bg)',
           border: '1px solid var(--border-strong)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
@@ -783,7 +782,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
           padding: isMobile ? '8px 14px 12px' : '13px 14px',
           borderBottom: '1px solid var(--border)',
           flexShrink: 0,
-          background: 'var(--surface)',
+          background: 'var(--card-bg)',
         }}>
           <div style={{
             width: 32, height: 32, borderRadius: 9,
@@ -854,7 +853,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
         ) : (
           <div style={{
             padding: '8px 14px', borderBottom: '1px solid var(--border)',
-            flexShrink: 0, background: 'var(--tint-2)',
+            flexShrink: 0, background: 'var(--card-bg)',
           }}>
             <span style={{ fontSize: 11.5, color: 'var(--text-4)' }}>No playback URL — audio stored locally.</span>
           </div>
@@ -900,7 +899,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
                   maxWidth: '80%',
                   padding: '9px 12px',
                   borderRadius: turn.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                  background: turn.role === 'user' ? 'rgba(117,91,227,0.14)' : 'var(--tint-2)',
+                  background: turn.role === 'user' ? 'rgba(117,91,227,0.14)' : 'var(--card-bg-strong)',
                   border: `1px solid ${turn.role === 'user' ? 'rgba(117,91,227,0.28)' : 'var(--border)'}`,
                   fontSize: 13, lineHeight: 1.55, color: 'var(--text-1)',
                 }}>

@@ -86,7 +86,7 @@ export default function AgentShell({
           padding: isMobile ? '10px 14px 0' : '14px 28px',
           background: 'var(--surface)',
           backdropFilter: 'blur(20px)',
-          borderBottom: '1px solid var(--border)',
+          borderBottom: 'none',
         }}
       >
         {/* ── Row 1 left: back button ── */}
@@ -123,11 +123,11 @@ export default function AgentShell({
                 width: isMobile ? 34 : 38,
                 height: isMobile ? 34 : 38,
                 borderRadius: isMobile ? 10 : 11,
-                background: 'var(--tint-2)',
-                border: `1px solid ${tintGlow[tint]}`,
+                background: 'var(--card-bg)',
+                border: '1px solid var(--border)',
                 display: 'grid', placeItems: 'center',
                 color: tintColor[tint],
-                boxShadow: `0 0 20px ${tintGlow[tint]}`,
+                boxShadow: 'none',
                 flexShrink: 0,
               }}
             >
@@ -259,8 +259,6 @@ export default function AgentShell({
       <main
         style={{
           padding: isMobile ? '16px 14px 40px' : isTablet ? '20px 20px 48px' : '28px 28px 60px',
-          maxWidth: 1440,
-          margin: '0 auto',
         }}
       >
         {children}

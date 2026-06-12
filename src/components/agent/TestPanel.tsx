@@ -15,6 +15,7 @@ import { transcribe, streamUrl as sttStreamUrl } from '../../api/stt';
 import { uploadRecording } from '../../api/recordings';
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
+import { logger } from '../../utils/logger';
 
 // MediaRecorder is what we now use to capture mic audio. We send the
 // recorded blob to /v1/stt/transcribe (Deepgram with detect_language=true)
@@ -563,16 +564,16 @@ export default function TestPanel({
     let cancelled = false;
     (async () => {
       try {
-        console.log('[TestPanel] eagerly starting demo session for', agentId);
+        logger.info('[TestPanel] eagerly starting demo session', { agentId });
         const t0 = performance.now();
         const s = await startDemo(agentId);
         const dt = Math.round(performance.now() - t0);
         if (cancelled) return;
         setSessionId(s.demo_session_id);
-        console.log('[TestPanel] eager session ready in', dt, 'ms', s);
+        logger.info('[TestPanel] eager session ready', { agentId, sessionId: s.demo_session_id, elapsed: `${dt} ms` });
       } catch (e) {
         if (cancelled) return;
-        console.warn('[TestPanel] eager startDemo failed; will retry on first turn', e);
+        logger.warn('[TestPanel] eager startDemo failed — will retry on first turn', { agentId, error: e });
       }
     })();
     return () => { cancelled = true; };
@@ -835,7 +836,7 @@ export default function TestPanel({
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
       setTranscript(prev => [
         ...prev.filter(m => m.role !== 'typing'),
-        { role: 'agent', text: `⚠️  ${msg}` },
+        { role: 'agent', text: `Error: ${msg}` },
       ]);
     } finally {
       setBusy(false);
@@ -1175,7 +1176,7 @@ export default function TestPanel({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch (e: any) {
-      console.error('[TestPanel] getUserMedia failed', e);
+      logger.error('[TestPanel] getUserMedia failed', { name: e?.name, message: e?.message, stack: e?.stack });
       addToast(
         e?.name === 'NotAllowedError'
           ? 'Microphone permission denied — allow it in the address-bar lock icon.'
@@ -1651,9 +1652,10 @@ export default function TestPanel({
           durationMs,
           recordingType: 'demo_session',
         });
+        logger.info('[TestPanel] session recording uploaded', { agentId, sessionId: sid, durationMs, blobSize: blob.size });
         addToast('Recording saved · view it in Voice Bots → Live Call Logs', 'success');
       } catch (err) {
-        console.warn('[TestPanel] session upload failed', err);
+        logger.error('[TestPanel] session recording upload failed', { agentId, error: err });
         addToast('Recording was captured but upload failed — check the console.', 'error');
       }
     };
@@ -1925,10 +1927,6 @@ export default function TestPanel({
           // Language-switch system badge — shown as a centered pill between messages.
           if (m.role === 'lang_switch') {
             const label = m.lang ? (LANG_LABEL[m.lang] || m.lang.toUpperCase()) : '?';
-            const flag: Record<string, string> = {
-              hi: '🇮🇳', ta: '🇮🇳', te: '🇮🇳', kn: '🇮🇳', ml: '🇮🇳', bn: '🇮🇳',
-              es: '🇪🇸', fr: '🇫🇷', de: '🇩🇪', ja: '🇯🇵', ko: '🇰🇷', en: '🇬🇧',
-            };
             return (
               <div
                 key={i}
@@ -1949,7 +1947,7 @@ export default function TestPanel({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {flag[m.lang ?? ''] ?? '🌐'} Switched to {label}
+                  <Icon name="globe" size={11} /> Switched to {label}
                 </span>
                 <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
@@ -2131,7 +2129,7 @@ const transcriptArea = {
   minHeight: 180,
   display: 'flex', flexDirection: 'column' as const, gap: 10,
   padding: 12,
-  background: 'var(--tint-1)',
+  background: 'var(--card-bg)',
   border: '1px solid var(--border)',
   borderRadius: 10,
   overflowY: 'auto' as const,

@@ -97,7 +97,7 @@ export default function ChatPanel() {
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
       setChatMessages(prev => [
         ...prev.filter(m => m.role !== 'typing'),
-        { role: 'ai', text: `⚠️ ${msg}`, time },
+        { role: 'ai', text: `Error: ${msg}`, time },
       ]);
     } finally {
       setBusy(false);

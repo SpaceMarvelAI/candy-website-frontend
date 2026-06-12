@@ -175,7 +175,7 @@ export default function AgentPicker({
           )}
           <button
             onClick={() => setShowAll(v => !v)}
-            style={{ ...newBtn, background: showAll ? `${tintColor[tint]}1f` : 'var(--tint-2)' }}
+            style={{ ...newBtn, background: showAll ? `${tintColor[tint]}1f` : 'var(--card-bg)' }}
           >
             <Icon name="grid" size={11} /> {showAll ? 'Showing all' : 'Show all my agents'}
           </button>
@@ -237,7 +237,7 @@ export default function AgentPicker({
               style={{
                 display: 'inline-flex', alignItems: 'stretch',
                 borderRadius: 9, overflow: 'hidden',
-                background: active ? `${tintColor[tint]}1f` : 'var(--tint-1)',
+                background: active ? `${tintColor[tint]}1f` : 'var(--card-bg)',
                 border: `1px solid ${active ? tintColor[tint] : 'var(--border)'}`,
                 opacity: wrongSlug ? 0.65 : 1,
                 transition: 'all 0.15s',
@@ -407,7 +407,7 @@ export default function AgentPicker({
 }
 
 const section = {
-  background: 'var(--surface)',
+  background: 'var(--card-bg)',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius)',
   padding: 16,
@@ -427,8 +427,8 @@ const pill = {
 const newBtn = {
   fontSize: 12, fontWeight: 600,
   padding: '6px 11px', borderRadius: 8,
-  background: 'var(--tint-2)',
-  border: '1px solid var(--border-strong)',
+  background: 'var(--card-bg)',
+  border: '1px solid var(--border)',
   color: 'var(--text-1)', cursor: 'pointer',
   display: 'inline-flex', alignItems: 'center', gap: 6,
   transition: 'all 0.15s',

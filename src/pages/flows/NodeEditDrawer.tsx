@@ -51,7 +51,7 @@ function CopyBox({ value, mono = true }: { value: string; mono?: boolean }) {
         borderColor: copied ? 'rgba(76,175,80,0.4)' : undefined,
         background: copied ? 'rgba(76,175,80,0.1)' : undefined,
       }}>
-        {copied ? '✓' : <Icon name="export" size={11} />}
+        {copied ? <Icon name="check" size={11} /> : <Icon name="export" size={11} />}
       </button>
     </div>
   );
@@ -266,8 +266,8 @@ function EmbedGuide({ agentId, agentName, agentType = 'chat' }: {
         background:`${color}12`, borderRadius:12, border:`1px solid ${color}30` }}>
         <div style={{ width:46, height:46, borderRadius:'50%', flexShrink:0,
           background:`linear-gradient(135deg,${color},${color}bb)`,
-          display:'flex', alignItems:'center', justifyContent:'center', fontSize:22 }}>
-          {isVoice ? '🎙' : '💬'}
+          display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, color:'#fff' }}>
+          <Icon name={isVoice ? 'mic' : 'chat'} size={22} />
         </div>
         <div>
           <div style={{ fontSize:13, fontWeight:700, color:'var(--text-1)' }}>
@@ -332,16 +332,20 @@ function EmbedGuide({ agentId, agentName, agentType = 'chat' }: {
       <button onClick={generate} disabled={loading} style={{
         ...primaryBtn, fontSize:14, padding:'11px', width:'100%',
         opacity: loading ? 0.7 : 1,
+        display:'inline-flex', alignItems:'center', justifyContent:'center', gap:7,
       }}>
-        {loading ? 'Generating…' : latestInstall ? '🔄 Generate New Code' : '✨ Generate Embed Code'}
+        {loading ? 'Generating…' : (
+          <><Icon name={latestInstall ? 'refresh' : 'spark'} size={14} />
+          {latestInstall ? 'Generate New Code' : 'Generate Embed Code'}</>
+        )}
       </button>
 
       {/* Generated snippet */}
       {latestInstall && (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
           <Divider />
-          <div style={{ fontSize:10.5, fontWeight:700, color:'var(--amber)', letterSpacing:'0.08em' }}>
-            ✅ YOUR EMBED CODE — COPY &amp; PASTE INTO YOUR WEBSITE
+          <div style={{ fontSize:10.5, fontWeight:700, color:'var(--amber)', letterSpacing:'0.08em', display:'flex', alignItems:'center', gap:5 }}>
+            <Icon name="check" size={12} /> YOUR EMBED CODE — COPY &amp; PASTE INTO YOUR WEBSITE
           </div>
 
           <InfoBox color="var(--green)">
@@ -359,7 +363,7 @@ function EmbedGuide({ agentId, agentName, agentType = 'chat' }: {
                 padding:'6px 12px', borderRadius:6, border:'none',
                 background: copied==='snippet' ? 'var(--green)' : 'var(--purple)',
                 color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer' }}>
-              {copied==='snippet' ? '✓ Copied!' : 'Copy'}
+              {copied==='snippet' ? 'Copied!' : 'Copy'}
             </button>
           </div>
 
@@ -387,7 +391,7 @@ function EmbedGuide({ agentId, agentName, agentType = 'chat' }: {
                 padding:'6px 12px', borderRadius:6, border:'none',
                 background: copied==='custom' ? 'var(--green)' : 'var(--purple)',
                 color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer' }}>
-              {copied==='custom' ? '✓ Copied!' : 'Copy'}
+              {copied==='custom' ? 'Copied!' : 'Copy'}
             </button>
           </div>
 
@@ -416,7 +420,7 @@ function EmbedGuide({ agentId, agentName, agentType = 'chat' }: {
               </div>
               <button onClick={() => copy(buildSnippet(inst), inst.id)}
                 style={{ ...secondaryBtn, fontSize:10, padding:'3px 8px', flexShrink:0 }}>
-                {copied===inst.id ? '✓' : 'Copy'}
+                {copied===inst.id ? <Icon name="check" size={11} /> : 'Copy'}
               </button>
             </div>
           ))}
@@ -441,7 +445,7 @@ function AgentEditor({ node }: { node: FlowNode }) {
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px',
         borderRadius:8, background: isChat ? 'rgba(123,91,230,0.1)' : 'rgba(59,130,246,0.1)',
         border: `1px solid ${isChat ? 'rgba(123,91,230,0.3)' : 'rgba(59,130,246,0.3)'}` }}>
-        <span style={{ fontSize:18 }}>{isChat ? '🤖' : '📞'}</span>
+        <span style={{ display:'inline-flex', color: isChat ? 'var(--purple-hi)' : 'var(--blue)' }}><Icon name={isChat ? 'bot' : 'phone'} size={18} /></span>
         <div>
           <div style={{ fontSize:12, fontWeight:700, color:'var(--text-1)' }}>
             {isChat ? 'Chat Agent' : 'Voice Agent'}
@@ -457,10 +461,10 @@ function AgentEditor({ node }: { node: FlowNode }) {
       {/* Tabs — same for both chat and voice */}
       <div style={{ display: 'flex', gap: 4, background: 'var(--bg-0)', borderRadius: 8, padding: 3, border: '1px solid var(--border)' }}>
         {(['embed', 'hosted'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={tabPillStyle(tab === t)}>
+          <button key={t} onClick={() => setTab(t)} style={{ ...tabPillStyle(tab === t), display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6 }}>
             {t === 'embed'
-              ? (isChat ? '💬 Add to website' : '🎙 Add to website')
-              : '🔗 Hosted URL'}
+              ? <><Icon name={isChat ? 'chat' : 'mic'} size={13} /> Add to website</>
+              : <><Icon name="externallink" size={13} /> Hosted URL</>}
           </button>
         ))}
       </div>
@@ -589,11 +593,13 @@ function AppEditor({
         border: `1px solid ${connection?.is_connected ? 'rgba(76,175,80,0.35)' : 'var(--border)'}`,
         background: connection?.is_connected ? 'rgba(76,175,80,0.07)' : 'var(--tint-2)',
       }}>
-        <span style={{ fontSize: 22 }}>{appMeta.icon}</span>
+        <span style={{ display:'inline-flex', color: appMeta.color }}><Icon name={appMeta.icon} size={22} /></span>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>{appMeta.label}</div>
-          <div style={{ fontSize: 11, color: connection?.is_connected ? 'var(--green)' : 'var(--text-4)' }}>
-            {connection?.is_connected ? `✓ Connected${connection.masked_key ? ` · ${connection.masked_key}` : ''}` : 'Not connected'}
+          <div style={{ fontSize: 11, color: connection?.is_connected ? 'var(--green)' : 'var(--text-4)', display:'flex', alignItems:'center', gap:4 }}>
+            {connection?.is_connected
+              ? <><Icon name="check" size={11} /> Connected{connection.masked_key ? ` · ${connection.masked_key}` : ''}</>
+              : 'Not connected'}
           </div>
         </div>
         {connection && (
@@ -603,8 +609,9 @@ function AppEditor({
         )}
       </div>
       {testResult && (
-        <div style={{ fontSize: 12, color: testResult.ok ? 'var(--green)' : '#ff8194' }}>
-          {testResult.ok ? '✓ Connection OK' : `✗ ${testResult.message}`}
+        <div style={{ fontSize: 12, color: testResult.ok ? 'var(--green)' : '#ff8194', display:'flex', alignItems:'center', gap:5 }}>
+          <Icon name={testResult.ok ? 'check' : 'x'} size={12} />
+          {testResult.ok ? 'Connection OK' : testResult.message}
         </div>
       )}
 
@@ -621,7 +628,7 @@ function AppEditor({
               {appMeta.type === 'gmail' ? 'send emails on your behalf' : 'read and write your Google Sheets'}.
               No passwords shared — you can revoke access any time from your Google account settings.
               {connection?.is_connected && connection.masked_key && (
-                <><br /><span style={{ color: 'var(--green)', fontWeight: 600 }}>✓ Connected as {connection.masked_key}</span></>
+                <><br /><span style={{ color: 'var(--green)', fontWeight: 600, display:'inline-flex', alignItems:'center', gap:4 }}><Icon name="check" size={11} /> Connected as {connection.masked_key}</span></>
               )}
             </InfoBox>
           )}
@@ -682,7 +689,7 @@ function AppEditor({
           </span>
           <br /><br />
           <span style={{ color: 'var(--text-4)', fontSize: 11 }}>
-            💡 <strong style={{ color: 'var(--text-2)' }}>Want the agent to book silently without the visitor clicking?</strong>
+            <Icon name="bulb" size={12} /> <strong style={{ color: 'var(--text-2)' }}>Want the agent to book silently without the visitor clicking?</strong>
             {' '}Go to the agent's Settings → Integrations and connect your Cal.com API key.
           </span>
         </InfoBox>
@@ -694,7 +701,7 @@ function AppEditor({
           <code style={{ fontSize: 11 }}>{'{{visitor_email}}'}</code>, and <code style={{ fontSize: 11 }}>{'{{message}}'}</code> as placeholders.
           <br /><br />
           <span style={{ color: 'var(--text-4)', fontSize: 11 }}>
-            💡 To send from your own Gmail account, go to the agent's Settings → Integrations and click <strong style={{ color: 'var(--text-2)' }}>Connect Google</strong>.
+            <Icon name="bulb" size={12} /> To send from your own Gmail account, go to the agent's Settings → Integrations and click <strong style={{ color: 'var(--text-2)' }}>Connect Google</strong>.
           </span>
         </InfoBox>
       ) : appMeta.authScheme === 'none' && appMeta.type === 'google_sheets' ? (
@@ -705,7 +712,7 @@ function AppEditor({
           is appended with the details you choose.
           <br /><br />
           <span style={{ color: 'var(--text-4)', fontSize: 11 }}>
-            💡 Make sure to share the sheet with your Google service account, or connect Google in the
+            <Icon name="bulb" size={12} /> Make sure to share the sheet with your Google service account, or connect Google in the
             agent's Settings → Integrations.
           </span>
         </InfoBox>
@@ -820,9 +827,9 @@ export default function NodeEditDrawer({ node, connection, onClose, onUpdate, on
               : node.type === 'webhook' ? (node.data.appLabel ?? 'Inbound Webhook')
               : (appMeta?.label ?? node.data.appLabel ?? 'App');
 
-  const icon  = node.type === 'agent'   ? (node.data.agentType === 'chat' ? '🤖' : '📞')
-              : node.type === 'webhook' ? '🪝'
-              : (appMeta?.icon ?? '🔗');
+  const icon  = node.type === 'agent'   ? (node.data.agentType === 'chat' ? 'bot' : 'phone')
+              : node.type === 'webhook' ? 'webhook'
+              : (appMeta?.icon ?? 'plug');
 
   const subtitle = node.type === 'agent'
     ? `${node.data.agentType} · ${node.data.agentId?.slice(0, 8)}…`
@@ -848,7 +855,7 @@ export default function NodeEditDrawer({ node, connection, onClose, onUpdate, on
     <div style={drawerStyle} onClick={e => e.stopPropagation()}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-        <span style={{ fontSize: 24 }}>{icon}</span>
+        <span style={{ display:'inline-flex', color: 'var(--text-2)' }}><Icon name={icon} size={24} /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>{title}</div>
           <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 1 }}>{subtitle}</div>

@@ -200,6 +200,90 @@ const iconPaths = {
   'sidebar-collapse': (
     <path fill="currentColor" d="M3.75 2h16.5c.966 0 1.75.784 1.75 1.75v16.5A1.75 1.75 0 0 1 20.25 22H3.75A1.75 1.75 0 0 1 2 20.25V3.75C2 2.784 2.784 2 3.75 2ZM3.5 3.75v16.5c0 .138.112.25.25.25H15v-17H3.75a.25.25 0 0 0-.25.25ZM16.5 20.5h3.75a.25.25 0 0 0 .25-.25V3.75a.25.25 0 0 0-.25-.25H16.5ZM8.22 8.03a.75.75 0 0 1 1.06 0l2.5 2.5a.749.749 0 0 1 0 1.06l-2.5 2.5a.749.749 0 1 1-1.06-1.06l1.97-1.97-1.97-1.97a.75.75 0 0 1 0-1.06Z"/>
   ),
+
+  // ── Added to replace emoji across the UI (monochrome line style) ─────────────
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+    </>
+  ),
+  bot: (
+    <>
+      <rect x="4" y="8" width="16" height="11" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <path d="M12 4v4M8 13h.01M16 13h.01M9 19v2M15 19v2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+      <circle cx="12" cy="3" r="1.4" fill="currentColor"/>
+    </>
+  ),
+  alert: (
+    <>
+      <path d="M12 3 2.5 20h19L12 3z" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+      <path d="M12 9v5M12 17h.01" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="4" y="10" width="16" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+    </>
+  ),
+  card: (
+    <>
+      <rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <path d="M2.5 9.5h19" stroke="currentColor" strokeWidth="1.75"/>
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="16" rx="2" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <path d="M3.5 9h17M8 3v3M16 3v3" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <path d="m3.5 7 8.5 6 8.5-6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+    </>
+  ),
+  webhook: (
+    <>
+      <path d="M8.5 9a3.5 3.5 0 1 1 5 3.2l2.4 4.05" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+      <path d="M15.5 14a3.5 3.5 0 1 1-3.4 4.4H7.6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+      <path d="M8.6 18.4 6.2 14a3.5 3.5 0 0 1 1.3-5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+    </>
+  ),
+  bulb: (
+    <>
+      <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.5.4.5 1 .5 1.6V16h6v-.5c0-.6 0-1.2.5-1.6A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </>
+  ),
+  save: (
+    <>
+      <path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+      <path d="M8 3v5h7M8 14h8v7H8z" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+    </>
+  ),
+  hexagon: (
+    <path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7L12 2.5z" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+  ),
+  trash: (
+    <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+  ),
+  shuffle: (
+    <path d="M16 3h5v5M21 3l-7 7M16 21h5v-5M21 21l-7-7M3 4l5 5M3 20l9-9" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+  ),
+  star: (
+    <path d="m12 3 2.7 5.5 6 .9-4.35 4.24 1.03 6L12 17.8 6.62 19.6l1.03-6L3.3 9.4l6-.9L12 3z" fill="currentColor" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+  ),
+  starOutline: (
+    <path d="m12 3 2.7 5.5 6 .9-4.35 4.24 1.03 6L12 17.8 6.62 19.6l1.03-6L3.3 9.4l6-.9L12 3z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+  ),
+  box: (
+    <>
+      <path d="M21 8 12 3 3 8v8l9 5 9-5V8z" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+      <path d="m3 8 9 5 9-5M12 13v8" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+    </>
+  ),
 };
 
 export function Icon({ name, size = 16, className = '', style = {} }) {

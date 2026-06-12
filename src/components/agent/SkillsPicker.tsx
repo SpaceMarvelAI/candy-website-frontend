@@ -5,23 +5,29 @@
  * Fetches available skills from /v1/skills and current attachments from
  * /v1/agents/{id}/skills. Attach/detach are instant (optimistic UI).
  */
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
+import Icon from '../../assets/icons';
 import {
   listSkills, getAgentSkills, attachSkill, detachSkill,
   type Skill, type SkillCategory,
 } from '../../api/skills';
 
+const tintColor: Record<string, string> = {
+  purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
+  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)',
+};
+
 // ── Category metadata (visual) ────────────────────────────────────────────────
 
-const CATEGORY_META: Record<SkillCategory, { emoji: string; color: string; label: string }> = {
-  verification:  { emoji: '🔐', color: 'var(--purple-hi)', label: 'Verification'  },
-  payment:       { emoji: '💳', color: 'var(--blue)',      label: 'Payment'       },
-  scheduling:    { emoji: '📅', color: 'var(--teal)',      label: 'Scheduling'    },
-  communication: { emoji: '📨', color: 'var(--green)',     label: 'Communication' },
-  analytics:     { emoji: '📊', color: 'var(--amber)',     label: 'Analytics'     },
-  escalation:    { emoji: '🚨', color: 'var(--pink)',      label: 'Escalation'    },
-  general:       { emoji: '⚙️', color: 'var(--text-3)',    label: 'General'       },
+const CATEGORY_META: Record<SkillCategory, { icon: string; color: string; label: string }> = {
+  verification:  { icon: 'lock',     color: 'var(--purple-hi)', label: 'Verification'  },
+  payment:       { icon: 'card',     color: 'var(--blue)',      label: 'Payment'       },
+  scheduling:    { icon: 'calendar', color: 'var(--teal)',      label: 'Scheduling'    },
+  communication: { icon: 'mail',     color: 'var(--green)',     label: 'Communication' },
+  analytics:     { icon: 'chart',    color: 'var(--amber)',     label: 'Analytics'     },
+  escalation:    { icon: 'alert',    color: 'var(--pink)',      label: 'Escalation'    },
+  general:       { icon: 'settings', color: 'var(--text-3)',    label: 'General'       },
 };
 
 // ── Fallback list shown while API loads (or if backend isn't wired yet) ────────
@@ -80,6 +86,9 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
   const [loading,      setLoading]      = useState(false);
   const [toggling,     setToggling]     = useState<Set<string>>(new Set());
   const [filter,       setFilter]       = useState<SkillCategory | 'all'>('all');
+  const [page,         setPage]         = useState(0);
+  const [slideDir,     setSlideDir]     = useState<'next' | 'prev'>('next');
+  const [animKey,      setAnimKey]      = useState(0);
 
   // Report count up to the accordion header for the badge
   useEffect(() => {
@@ -156,6 +165,23 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
   // Derive unique categories for the filter tabs
   const categories = Array.from(new Set(skills.map(s => s.category)));
 
+  const PAGE_SIZE = 4;
+  const totalPages = Math.ceil(visibleSkills.length / PAGE_SIZE);
+  const pagedSkills = visibleSkills.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  function changeFilter(f: SkillCategory | 'all') {
+    setFilter(f);
+    setPage(0);
+    setAnimKey(k => k + 1);
+    setSlideDir('next');
+  }
+
+  function navigate(dir: 'next' | 'prev') {
+    setSlideDir(dir);
+    setAnimKey(k => k + 1);
+    setPage(p => dir === 'next' ? p + 1 : p - 1);
+  }
+
   return (
     <div style={{ padding: 0 }}>
 
@@ -169,9 +195,9 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
         <FilterTab
           active={filter === 'all'}
           label="All"
-          emoji="✦"
-          color="var(--text-2)"
-          onClick={() => setFilter('all')}
+          icon="spark"
+          color={tintColor[tint as keyof typeof tintColor] ?? 'var(--purple-hi)'}
+          onClick={() => changeFilter('all')}
         />
         {categories.map(cat => {
           const meta = CATEGORY_META[cat] ?? CATEGORY_META.general;
@@ -180,9 +206,9 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
               key={cat}
               active={filter === cat}
               label={meta.label}
-              emoji={meta.emoji}
+              icon={meta.icon}
               color={meta.color}
-              onClick={() => setFilter(cat)}
+              onClick={() => changeFilter(cat)}
             />
           );
         })}
@@ -190,35 +216,76 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
 
       {/* ── Skill grid ───────────────────────────────────────────────────────── */}
       {!agentId ? (
-        <EmptyState emoji="🧩" message="Pick an agent above to manage its skills." />
+        <EmptyState icon="layers" message="Pick an agent above to manage its skills." />
       ) : loading ? (
-        <EmptyState emoji="⏳" message="Loading skills…" />
+        <EmptyState icon="refresh" message="Loading skills…" />
       ) : visibleSkills.length === 0 ? (
-        <EmptyState emoji="🧩" message="No skills match this filter." />
+        <EmptyState icon="layers" message="No skills match this filter." />
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 10,
-          padding: 14,
-        }}>
-          {visibleSkills.map(skill => {
-            const attached = attachedSlugs.has(skill.slug);
-            const busy     = toggling.has(skill.slug);
-            const meta     = CATEGORY_META[skill.category] ?? CATEGORY_META.general;
+        <>
+          <style>{`
+            @keyframes skillSlideInRight { from { transform: translateX(80px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+            @keyframes skillSlideInLeft  { from { transform: translateX(-80px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+          `}</style>
+          <div style={{ overflow: 'hidden' }}>
+          <div
+            key={animKey}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 10,
+              padding: 14,
+              animation: `${slideDir === 'next' ? 'skillSlideInRight' : 'skillSlideInLeft'} 0.38s cubic-bezier(0.25, 0.46, 0.45, 0.94)`,
+            }}
+          >
+            {pagedSkills.map(skill => {
+              const attached = attachedSlugs.has(skill.slug);
+              const busy     = toggling.has(skill.slug);
+              const meta     = CATEGORY_META[skill.category] ?? CATEGORY_META.general;
 
-            return (
-              <SkillCard
-                key={skill.slug}
-                skill={skill}
-                meta={meta}
-                attached={attached}
-                busy={busy}
-                onToggle={() => toggle(skill)}
-              />
-            );
-          })}
-        </div>
+              return (
+                <SkillCard
+                  key={skill.slug}
+                  skill={skill}
+                  meta={meta}
+                  attached={attached}
+                  busy={busy}
+                  onToggle={() => toggle(skill)}
+                />
+              );
+            })}
+          </div>
+          </div>
+
+          {/* ── Pagination ─────────────────────────────────────────────────── */}
+          {totalPages > 1 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '0 14px 14px',
+              gap: 8,
+            }}>
+              <button
+                onClick={() => navigate('prev')}
+                disabled={page === 0}
+                style={navBtn(page === 0)}
+              >
+                <Icon name="arrowRight" size={13} style={{ transform: 'rotate(180deg)' }} />
+              </button>
+
+              <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+                {page + 1} / {totalPages}
+              </span>
+
+              <button
+                onClick={() => navigate('next')}
+                disabled={page === totalPages - 1}
+                style={navBtn(page === totalPages - 1)}
+              >
+                <Icon name="arrowRight" size={13} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* ── Attached count footer ────────────────────────────────────────────── */}
@@ -259,7 +326,7 @@ function SkillCard({
   skill, meta, attached, busy, onToggle,
 }: {
   skill:    Skill;
-  meta:     { emoji: string; color: string; label: string };
+  meta:     { icon: string; color: string; label: string };
   attached: boolean;
   busy:     boolean;
   onToggle: () => void;
@@ -278,8 +345,8 @@ function SkillCard({
           : hovered ? 'var(--border-strong)' : 'var(--border)'
         }`,
         background: attached
-          ? `color-mix(in srgb, ${meta.color} 8%, var(--surface))`
-          : hovered ? 'var(--surface-elev)' : 'var(--surface)',
+          ? `color-mix(in srgb, ${meta.color} 8%, var(--card-bg))`
+          : hovered ? 'var(--tint-1)' : 'var(--card-bg)',
         padding: '13px 13px 11px',
         display: 'flex',
         flexDirection: 'column',
@@ -307,9 +374,9 @@ function SkillCard({
           background: `color-mix(in srgb, ${meta.color} 15%, transparent)`,
           border: `1px solid color-mix(in srgb, ${meta.color} 35%, transparent)`,
           display: 'grid', placeItems: 'center',
-          fontSize: 18,
+          fontSize: 18, color: meta.color,
         }}>
-          {meta.emoji}
+          <Icon name={meta.icon} size={18} />
         </div>
         <div style={{
           display: 'inline-flex', alignItems: 'center',
@@ -350,7 +417,7 @@ function SkillCard({
           fontSize: 10, color: 'var(--text-4)',
           display: 'flex', alignItems: 'center', gap: 4,
         }}>
-          <span>{skill.channel === 'voice' ? '🎙' : skill.channel === 'chat' ? '💬' : '🎙 💬'}</span>
+          <Icon name={skill.channel === 'chat' ? 'chat' : 'mic'} size={11} />
           <span style={{ textTransform: 'capitalize' }}>{skill.channel}</span>
         </div>
 
@@ -367,7 +434,7 @@ function SkillCard({
             opacity: busy ? 0.6 : 1,
             background: attached
               ? `color-mix(in srgb, ${meta.color} 20%, transparent)`
-              : 'var(--tint-3)',
+              : 'var(--card-bg)',
             color: attached ? meta.color : 'var(--text-3)',
             border: attached
               ? `1px solid color-mix(in srgb, ${meta.color} 40%, transparent)`
@@ -399,11 +466,11 @@ function SkillCard({
 // ── FilterTab ─────────────────────────────────────────────────────────────────
 
 function FilterTab({
-  active, label, emoji, color, onClick,
+  active, label, icon, color, onClick,
 }: {
   active: boolean;
   label:  string;
-  emoji:  string;
+  icon:   string;
   color:  string;
   onClick: () => void;
 }) {
@@ -412,16 +479,17 @@ function FilterTab({
       onClick={onClick}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '4px 10px', borderRadius: 20, border: 'none',
+        padding: '4px 10px', borderRadius: 20,
         fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
         whiteSpace: 'nowrap', flexShrink: 0,
         transition: 'all 0.12s',
-        background: active ? `color-mix(in srgb, ${color} 18%, transparent)` : 'var(--tint-2)',
+        background: active ? `color-mix(in srgb, ${color} 18%, transparent)` : 'var(--card-bg)',
         color:      active ? color : 'var(--text-3)',
-        outline:    active ? `1px solid color-mix(in srgb, ${color} 35%, transparent)` : 'none',
+        border:     active ? `1px solid color-mix(in srgb, ${color} 35%, transparent)` : '1px solid var(--border)',
+        outline:    'none',
       }}
     >
-      <span style={{ fontSize: 13 }}>{emoji}</span>
+      <Icon name={icon} size={13} />
       <span>{label}</span>
     </button>
   );
@@ -429,7 +497,7 @@ function FilterTab({
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
-function EmptyState({ emoji, message }: { emoji: string; message: string }) {
+function EmptyState({ icon, message }: { icon: string; message: string }) {
   return (
     <div style={{
       minHeight: 180,
@@ -437,7 +505,7 @@ function EmptyState({ emoji, message }: { emoji: string; message: string }) {
       alignItems: 'center', justifyContent: 'center',
       gap: 10, padding: 24,
     }}>
-      <div style={{ fontSize: 32 }}>{emoji}</div>
+      <div style={{ color: 'var(--text-3)' }}><Icon name={icon} size={32} /></div>
       <div style={{ fontSize: 13, color: 'var(--text-3)', textAlign: 'center', lineHeight: 1.5 }}>
         {message}
       </div>
@@ -462,6 +530,20 @@ function PlusIcon() {
       <line x1="2" y1="6" x2="10" y2="6" />
     </svg>
   );
+}
+
+function navBtn(disabled: boolean) {
+  return {
+    width: 30, height: 30,
+    display: 'grid', placeItems: 'center',
+    borderRadius: 8,
+    background: 'var(--card-bg)',
+    border: '1px solid var(--border)',
+    color: disabled ? 'var(--text-4)' : 'var(--text-2)',
+    cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.4 : 1,
+    transition: 'all 0.12s',
+  } as React.CSSProperties;
 }
 
 function SpinnerIcon() {

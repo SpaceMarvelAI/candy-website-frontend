@@ -1,10 +1,12 @@
-import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
 import AppLayout   from './layouts/AppLayout';
 import { redirectToSSO } from './utils/sso';
 import { useApp } from './context/AppContext';
+import { RouteErrorBoundary } from './components/ErrorBoundary';
+import { logger } from './utils/logger';
 import {
   DashboardSkeleton,
   LiveCallsSkeleton,
@@ -45,6 +47,20 @@ const LogisticsAgent  = lazy(() => import('./pages/logistics'));
 const HealthcareAgent = lazy(() => import('./pages/healthcare'));
 const MarketingAgent  = lazy(() => import('./pages/marketing'));
 const HRAgent         = lazy(() => import('./pages/hr'));
+
+// Logs every route change so navigation failures are traceable from the console.
+function RouteLogger() {
+  const location = useLocation();
+  useEffect(() => {
+    logger.info('[Router] Navigation', {
+      pathname: location.pathname,
+      search:   location.search,
+      hash:     location.hash,
+      state:    location.state,
+    });
+  }, [location]);
+  return null;
+}
 
 function PageLoader() {
   return (
@@ -88,7 +104,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function WithLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ position: 'relative', zIndex: 1 }}>
+    <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
       <AppLayout>{children}</AppLayout>
     </div>
   );
@@ -103,9 +119,11 @@ function AppRoute({
   return (
     <ProtectedRoute>
       <WithLayout>
-        <Suspense fallback={skeleton ?? <DefaultContentSkeleton />}>
-          {children}
-        </Suspense>
+        <RouteErrorBoundary>
+          <Suspense fallback={skeleton ?? <DefaultContentSkeleton />}>
+            {children}
+          </Suspense>
+        </RouteErrorBoundary>
       </WithLayout>
     </ProtectedRoute>
   );
@@ -115,6 +133,7 @@ export default function App() {
   return (
     <>
       <AmbientBg />
+      <RouteLogger />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Landing — redirects to /dashboard if already signed in */}
@@ -145,20 +164,20 @@ export default function App() {
           <Route path="/chatbots"        element={<AppRoute skeleton={<ChatbotsSkeleton />}><ChatbotsPage /></AppRoute>} />
 
           {/* Chatbot workspaces — full-screen, no sidebar */}
-          <Route path="/chatbots/cs"     element={<ProtectedRoute><ChatbotCS /></ProtectedRoute>} />
-          <Route path="/chatbots/tech"   element={<ProtectedRoute><ChatbotTech /></ProtectedRoute>} />
-          <Route path="/chatbots/health" element={<ProtectedRoute><ChatbotHealth /></ProtectedRoute>} />
-          <Route path="/chatbots/bank"   element={<ProtectedRoute><ChatbotBank /></ProtectedRoute>} />
-          <Route path="/chatbots/appt"   element={<ProtectedRoute><ChatbotAppt /></ProtectedRoute>} />
-          <Route path="/chatbots/hr"     element={<ProtectedRoute><ChatbotHR /></ProtectedRoute>} />
+          <Route path="/chatbots/cs"     element={<ProtectedRoute><RouteErrorBoundary><ChatbotCS /></RouteErrorBoundary></ProtectedRoute>} />
+          <Route path="/chatbots/tech"   element={<ProtectedRoute><RouteErrorBoundary><ChatbotTech /></RouteErrorBoundary></ProtectedRoute>} />
+          <Route path="/chatbots/health" element={<ProtectedRoute><RouteErrorBoundary><ChatbotHealth /></RouteErrorBoundary></ProtectedRoute>} />
+          <Route path="/chatbots/bank"   element={<ProtectedRoute><RouteErrorBoundary><ChatbotBank /></RouteErrorBoundary></ProtectedRoute>} />
+          <Route path="/chatbots/appt"   element={<ProtectedRoute><RouteErrorBoundary><ChatbotAppt /></RouteErrorBoundary></ProtectedRoute>} />
+          <Route path="/chatbots/hr"     element={<ProtectedRoute><RouteErrorBoundary><ChatbotHR /></RouteErrorBoundary></ProtectedRoute>} />
 
           {/* Voice agent workspaces — full-screen, no sidebar */}
-          <Route path="/agents/ecommerce"  element={<ProtectedRoute><EcommerceAgent /></ProtectedRoute>} />
-          <Route path="/agents/financial"  element={<ProtectedRoute><FinancialAgent /></ProtectedRoute>} />
-          <Route path="/agents/logistics"  element={<ProtectedRoute><LogisticsAgent /></ProtectedRoute>} />
-          <Route path="/agents/healthcare" element={<ProtectedRoute><HealthcareAgent /></ProtectedRoute>} />
-          <Route path="/agents/marketing"  element={<ProtectedRoute><MarketingAgent /></ProtectedRoute>} />
-          <Route path="/agents/hr"         element={<ProtectedRoute><HRAgent /></ProtectedRoute>} />
+          <Route path="/agents/ecommerce"  element={<ProtectedRoute><RouteErrorBoundary><EcommerceAgent /></RouteErrorBoundary></ProtectedRoute>} />
+          <Route path="/agents/financial"  element={<ProtectedRoute><RouteErrorBoundary><FinancialAgent /></RouteErrorBoundary></ProtectedRoute>} />
+          <Route path="/agents/logistics"  element={<ProtectedRoute><RouteErrorBoundary><LogisticsAgent /></RouteErrorBoundary></ProtectedRoute>} />
+          <Route path="/agents/healthcare" element={<ProtectedRoute><RouteErrorBoundary><HealthcareAgent /></RouteErrorBoundary></ProtectedRoute>} />
+          <Route path="/agents/marketing"  element={<ProtectedRoute><RouteErrorBoundary><MarketingAgent /></RouteErrorBoundary></ProtectedRoute>} />
+          <Route path="/agents/hr"         element={<ProtectedRoute><RouteErrorBoundary><HRAgent /></RouteErrorBoundary></ProtectedRoute>} />
 
           <Route path="/connects"          element={<AppRoute><ConnectsPage /></AppRoute>} />
           <Route path="/composio/callback" element={<Suspense fallback={null}><ComposioCallback /></Suspense>} />

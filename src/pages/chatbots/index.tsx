@@ -77,21 +77,21 @@ function UseCaseCard({ uc, onClick }) {
         e.currentTarget.style.transform = 'translateY(-2px)';
         e.currentTarget.style.borderColor = 'var(--border-strong)';
         const cta = e.currentTarget.querySelector('.cat-cta') as HTMLElement | null;
-        if (cta) cta.style.gap = '10px';
+        if (cta) cta.style.color = 'var(--purple-hi)';
       }}
       onMouseLeave={e => {
         e.currentTarget.style.transform = 'translateY(0)';
         e.currentTarget.style.borderColor = 'var(--border)';
         const cta = e.currentTarget.querySelector('.cat-cta') as HTMLElement | null;
-        if (cta) cta.style.gap = '5px';
+        if (cta) cta.style.color = 'var(--text-1)';
       }}
     >
       {/* Icon */}
       <div style={{
         width: 48, height: 48, borderRadius: 12,
         display: 'grid', placeItems: 'center',
-        background: 'var(--tint-2)',
-        border: '1px solid var(--border-strong)',
+        background: 'var(--card-bg)',
+        border: '1px solid var(--border)',
         marginBottom: 16,
         color: 'var(--text-2)',
       }}>
@@ -111,8 +111,9 @@ function UseCaseCard({ uc, onClick }) {
             border: '1px solid rgba(0, 113, 227, 0.30)',
             color: 'var(--purple-hi)',
             borderRadius: 99, marginLeft: 6, verticalAlign: 'middle',
+            display: 'inline-flex', alignItems: 'center', gap: 4,
           }}>
-            ⚡ Featured
+            <Icon name="zap" size={11} /> Featured
           </span>
         )}
       </div>
@@ -139,7 +140,7 @@ function UseCaseCard({ uc, onClick }) {
           style={{
             fontSize: 12.5, fontWeight: 600, color: 'var(--text-1)',
             display: 'inline-flex', alignItems: 'center', gap: 5,
-            transition: 'gap 0.2s',
+            transition: 'color 0.15s',
           }}
         >
           Open workspace <Icon name="arrowRight" size={14} />

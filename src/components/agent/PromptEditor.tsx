@@ -11,6 +11,7 @@ import Icon from '../../assets/icons';
 import { saveRequirements } from '../../api/requirements';
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
+import { logger } from '../../utils/logger';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
@@ -76,7 +77,14 @@ export default function PromptEditor({
       addToast('Requirements are too short — at least 10 characters.', 'info');
       return;
     }
+    logger.info('[PromptEditor] save start', {
+      agentId, textLength: value.trim().length,
+      multilingual, callDirection,
+      personaName: personaName.trim() || '(unset)',
+      brandName:   brandName.trim()   || '(unset)',
+    });
     setBusy(true);
+    const t0 = performance.now();
     try {
       const res = await saveRequirements(agentId, {
         requirements_text: value,
@@ -87,10 +95,12 @@ export default function PromptEditor({
         ...(personaStyle.trim() ? { persona_style: personaStyle.trim() } : {}),
         ...(brandName.trim()    ? { brand_name:    brandName.trim()    } : {}),
       });
-      // Backend now compiles inline (up to ~12s) and tells us the
-      // outcome via prompt_compile + agent_flow_status. Reflect that
-      // honestly so the user knows whether the next test will pick up
-      // the new requirements.
+      logger.info('[PromptEditor] save OK', {
+        agentId,
+        prompt_compile:    res.prompt_compile,
+        agent_flow_status: res.agent_flow_status,
+        elapsed:           `${(performance.now() - t0).toFixed(1)} ms`,
+      });
       switch (res.prompt_compile) {
         case 'compiled':
           addToast('Requirements saved · agent ready to test', 'success');
@@ -107,6 +117,7 @@ export default function PromptEditor({
       onSaved?.();
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
+      logger.error('[PromptEditor] save failed', { agentId, error: e, message: msg });
       addToast(`Save failed: ${msg}`, 'error');
     } finally {
       setBusy(false);
@@ -185,7 +196,7 @@ export default function PromptEditor({
                   padding: '5px 10px',
                   borderRadius: 7,
                   border: `1px solid ${callDirection === d ? tintColor[tint] : 'var(--border)'}`,
-                  background: callDirection === d ? `${tintColor[tint]}22` : 'var(--tint-1)',
+                  background: callDirection === d ? `${tintColor[tint]}22` : 'var(--card-bg)',
                   color: callDirection === d ? tintColor[tint] : 'var(--text-2)',
                   cursor: 'pointer',
                   fontWeight: callDirection === d ? 600 : 400,
@@ -231,7 +242,7 @@ export default function PromptEditor({
 }
 
 const section = {
-  background: 'var(--surface)',
+  background: 'var(--card-bg)',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius)',
   padding: 22,
@@ -278,7 +289,7 @@ const fieldInput = {
 const presetBtn = {
   fontSize: 11.5, padding: '6px 10px',
   borderRadius: 7,
-  background: 'var(--tint-1)',
+  background: 'var(--card-bg)',
   border: '1px solid var(--border)',
   color: 'var(--text-2)', cursor: 'pointer',
   transition: 'all 0.15s',

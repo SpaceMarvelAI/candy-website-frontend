@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { seedChatMessages } from '../utils/mockData';
 import { loadStoredUser, logout as apiLogout, ssoCallback, type AuthUser } from '../api/auth';
 import { themeStore } from '../hooks/useTheme';
+import { logger } from '../utils/logger';
 
 // Bidirectional mapping between legacy view names and URL paths.
 // All existing showView('dashboard') calls keep working unchanged.
@@ -38,6 +39,7 @@ export function AppProvider({ children }) {
   const location = useLocation();
 
   const initialUser = (typeof window !== 'undefined') ? loadStoredUser() : null;
+  logger.info('[AppContext] Initialising', { hasStoredUser: !!initialUser, pathname: typeof window !== 'undefined' ? window.location.pathname : '(ssr)' });
 
   // True while we are processing an incoming ?sso_token — suppresses the
   // signup popup so it doesn't flash before the SSO call resolves.
@@ -59,12 +61,14 @@ export function AppProvider({ children }) {
 
   const showView = useCallback((name: string) => {
     const path = VIEW_TO_PATH[name] ?? '/dashboard';
+    logger.info('[AppContext] showView', { name, resolvedPath: path });
     navigate(path);
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [navigate]);
 
   const addToast = useCallback((msg: string, kind = 'success') => {
     const id = Date.now() + Math.random();
+    logger.debug('[AppContext] addToast', { msg, kind });
     setToasts(prev => [...prev, { id, msg, kind }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
@@ -72,12 +76,14 @@ export function AppProvider({ children }) {
   }, []);
 
   const signedIn = useCallback((u: AuthUser) => {
+    logger.info('[AppContext] signedIn', { userId: u.user_id, email: u.email, role: u.role, company: u.company_name });
     themeStore.set('light');
     setUser(u);
     navigate('/dashboard');
   }, [navigate]);
 
   const signOut = useCallback(() => {
+    logger.info('[AppContext] signOut — clearing session and redirecting to /');
     apiLogout();
     // Wipe everything — both SSO session and any persisted login data
     try { sessionStorage.clear(); } catch {}
@@ -93,6 +99,7 @@ export function AppProvider({ children }) {
   // Clear user + redirect to SSO when the API client fires a 401
   useEffect(() => {
     function onAuthExpired() {
+      logger.warn('[AppContext] candy:auth-expired event received — clearing user state');
       setUser(null);
     }
     window.addEventListener('candy:auth-expired', onAuthExpired);
@@ -109,6 +116,10 @@ export function AppProvider({ children }) {
     if (!token && !accessToken) return;
 
     ssoHandled.current = true;
+    logger.info('[AppContext] SSO token detected — beginning exchange', {
+      hasToken: !!token,
+      hasAccessToken: !!accessToken,
+    });
     // Strip all auth params from URL immediately so they can't be replayed
     window.history.replaceState({}, '', window.location.pathname);
 
@@ -124,6 +135,7 @@ export function AppProvider({ children }) {
 
     ssoCallback(token)
       .then(({ user: u }) => {
+        logger.info('[AppContext] SSO exchange succeeded', { userId: u.user_id, email: u.email });
         themeStore.set('light');
         setUser(u);
         navigate('/dashboard', { replace: true });
@@ -132,6 +144,7 @@ export function AppProvider({ children }) {
         const msg = err?.detail
           ? (typeof err.detail === 'string' ? err.detail : err.detail?.detail)
           : err?.message;
+        logger.error('[AppContext] SSO exchange failed', { err, message: msg });
         addToast('SSO sign-in failed: ' + (msg || 'invalid or expired token'), 'error');
       })
       .finally(() => {

@@ -66,8 +66,9 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body {
+html, body, #root {
   height: 100%;
+  width: 100%;
   font-family: 'Zalando Sans';
   background: var(--bg-0);
   color: var(--text-1);
@@ -270,7 +271,7 @@ button, input, textarea { font-family: inherit; }
    LIGHT THEME
    ========================================================= */
 [data-theme="light"] {
-  --bg-0: #f5f5f7;
+  --bg-0: #ffffff;
   --bg-1: #ffffff;
   --bg-2: #ffffff;
   --bg-3: #fafafc;
@@ -313,9 +314,9 @@ html.theme-transitioning *::after {
   --input-bg-strong: rgba(29, 29, 31, 0.95);
   --surface-soft:    rgba(0, 0, 0, 0.22);
   --hero-bg:         #000000;
-  --card-bg:         #272729;
-  --card-bg-strong:  #1d1d1f;
-  --sidebar-bg:      #1d1d1f;
+  --card-bg:         #0a0a0c;
+  --card-bg-strong:  #060608;
+  --sidebar-bg:      #09090b;
   --shadow-deep:     0 20px 40px -10px rgba(0, 0, 0, 0.6);
   --shadow-rail:     8px 0 32px rgba(0, 0, 0, 0.45);
 }
@@ -324,10 +325,10 @@ html.theme-transitioning *::after {
   --input-bg:        rgba(255, 255, 255, 0.80);
   --input-bg-strong: rgba(255, 255, 255, 0.98);
   --surface-soft:    rgba(0, 0, 0, 0.04);
-  --hero-bg:         #f5f5f7;
+  --hero-bg:         #ffffff;
   --card-bg:         #ffffff;
   --card-bg-strong:  #ffffff;
-  --sidebar-bg:      #f5f5f7;
+  --sidebar-bg:      #f8f8fa;
   --shadow-deep:     0 20px 40px -10px rgba(0, 0, 0, 0.18);
   --shadow-rail:     8px 0 32px rgba(0, 0, 0, 0.10);
 }
@@ -356,6 +357,7 @@ html.theme-transitioning *::after {
 /* ── App layout grid ── */
 .app-layout {
   display: flex;
+  width: 100%;
   min-height: 100vh;
 }
 
@@ -368,8 +370,6 @@ html.theme-transitioning *::after {
 /* ── Main content padding ── */
 .main-content-pad {
   padding: 32px 40px 60px;
-  max-width: 1440px;
-  margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
 }

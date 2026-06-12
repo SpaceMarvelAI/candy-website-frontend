@@ -19,7 +19,7 @@ export default function LiveStats({ counts }) {
         <div
           key={s.key}
           style={{
-            background: 'var(--surface)',
+            background: 'var(--card-bg)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
             padding: 18,

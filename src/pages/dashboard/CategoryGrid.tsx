@@ -48,9 +48,9 @@ export default function CategoryGrid() {
               key={label}
               style={{
                 padding: '7px 12px', borderRadius: 8,
-                background: i === 0 ? 'var(--purple)' : 'var(--tint-2)',
-                border: i === 0 ? '1px solid var(--purple)' : '1px solid var(--border-strong)',
-                color: '#fff',
+                background: i === 0 ? 'var(--purple)' : 'var(--card-bg)',
+                border: i === 0 ? '1px solid var(--purple)' : '1px solid var(--border)',
+                color: i === 0 ? '#fff' : 'var(--text-2)',
                 cursor: 'pointer', fontSize: 12.5, transition: 'all 0.15s',
               }}
             >
@@ -60,8 +60,8 @@ export default function CategoryGrid() {
           <button
             style={{
               padding: '7px 12px', borderRadius: 8,
-              background: 'var(--tint-2)',
-              border: '1px solid var(--border-strong)',
+              background: 'var(--card-bg)',
+              border: '1px solid var(--border)',
               color: 'var(--text-2)', cursor: 'pointer',
               fontSize: 12.5, transition: 'all 0.15s',
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -107,13 +107,13 @@ function CatCard({ cat, idx, onClick }) {
         e.currentTarget.style.transform = 'translateY(-2px)';
         e.currentTarget.style.borderColor = 'var(--border-strong)';
         const cta = e.currentTarget.querySelector('.cat-cta');
-        if (cta) (cta as HTMLElement).style.gap = '10px';
+        if (cta) (cta as HTMLElement).style.color = 'var(--purple-hi)';
       }}
       onMouseLeave={e => {
         e.currentTarget.style.transform = 'translateY(0)';
         e.currentTarget.style.borderColor = 'var(--border)';
         const cta = e.currentTarget.querySelector('.cat-cta');
-        if (cta) (cta as HTMLElement).style.gap = '5px';
+        if (cta) (cta as HTMLElement).style.color = 'var(--text-1)';
       }}
     >
       {/* Icon */}
@@ -121,8 +121,8 @@ function CatCard({ cat, idx, onClick }) {
         style={{
           width: 48, height: 48, borderRadius: 12,
           display: 'grid', placeItems: 'center',
-          background: 'var(--tint-2)',
-          border: '1px solid var(--border-strong)',
+          background: 'var(--card-bg)',
+          border: '1px solid var(--border)',
           marginBottom: 16,
           color: 'var(--text-2)',
         }}
@@ -140,9 +140,10 @@ function CatCard({ cat, idx, onClick }) {
               border: '1px solid rgba(0, 113, 227, 0.30)',
               color: 'var(--purple-hi)',
               borderRadius: 99, marginLeft: 6, verticalAlign: 'middle',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
             }}
           >
-            ⚡ Featured
+            <Icon name="zap" size={11} /> Featured
           </span>
         )}
       </div>
@@ -157,7 +158,7 @@ function CatCard({ cat, idx, onClick }) {
           paddingTop: 14, borderTop: '1px solid var(--border)',
         }}
       >
-        <div style={{ fontSize: 11.5, color: 'var(--text-3)', display: 'flex', gap: 12 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-3)', display: 'flex', gap: 12 }}>
           <span><strong style={{ color: 'var(--text-1)', fontWeight: 600 }}>{cat.flows}</strong> flows</span>
           <span><strong style={{ color: 'var(--text-1)', fontWeight: 600 }}>{cat.agents}</strong> agents</span>
         </div>
@@ -166,7 +167,7 @@ function CatCard({ cat, idx, onClick }) {
           style={{
             fontSize: 12.5, fontWeight: 600, color: 'var(--text-1)',
             display: 'inline-flex', alignItems: 'center', gap: 5,
-            transition: 'gap 0.2s',
+            transition: 'color 0.15s',
           }}
         >
           Explore <Icon name="arrowRight" size={14} />

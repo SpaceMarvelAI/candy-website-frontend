@@ -76,7 +76,7 @@ export async function synthesizeStreaming(
         const sb = ms.addSourceBuffer('audio/mpeg');
         const reader = res.body!.getReader();
 
-        const append = (value: Uint8Array) => new Promise<void>((ok, fail) => {
+        const append = (value: Uint8Array<ArrayBuffer>) => new Promise<void>((ok, fail) => {
           const done = () => { sb.removeEventListener('updateend', done); ok(); };
           const err  = (e: Event) => { sb.removeEventListener('error', err); fail(e); };
           sb.addEventListener('updateend', done, { once: true });
@@ -92,7 +92,7 @@ export async function synthesizeStreaming(
             const { done, value } = await reader.read();
             if (done) break;
             if (value && value.byteLength > 0) {
-              await append(value);
+              await append(value as Uint8Array<ArrayBuffer>);
               // Start playback as soon as we have the first chunk
               if (audio.paused && audio.readyState >= 2) {
                 try { await audio.play(); } catch {}
@@ -108,7 +108,7 @@ export async function synthesizeStreaming(
         }
       }, { once: true });
 
-      ms.addEventListener('sourceended', resolve, { once: true });
+      ms.addEventListener('sourceended', () => resolve(), { once: true });
       ms.addEventListener('error', reject, { once: true });
 
       // Kick off playback

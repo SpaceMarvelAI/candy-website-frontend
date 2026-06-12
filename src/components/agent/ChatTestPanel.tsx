@@ -13,6 +13,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api/client';
+import { logger } from '../../utils/logger';
+import Icon from '../../assets/icons';
 
 const tintColor: Record<string, string> = {
   purple: 'var(--purple-hi)',
@@ -117,18 +119,21 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
 
   async function startSession() {
     if (!agentId || starting) return;
+    logger.info('[ChatTestPanel] startSession', { agentId });
     setStarting(true);
     setError(null);
+    const t0 = performance.now();
     try {
       const res = await api<{ demo_session_id: string; session_id?: string }>(
         `/v1/agents/${agentId}/demo`,
         { method: 'POST' },
       );
       const sid = res.demo_session_id ?? res.session_id ?? null;
+      logger.info('[ChatTestPanel] session started', { agentId, sessionId: sid, elapsed: `${(performance.now() - t0).toFixed(1)} ms` });
+      if (!sid) logger.warn('[ChatTestPanel] startSession: no session ID in response', { res });
       setSessionId(sid);
       setActive(true);
 
-      // Animate the welcome message
       const welcome = "Hi! I'm ready to help. What can I assist you with today?";
       const welcomeId = nextId();
       setMessages([{ id: welcomeId, role: 'agent', text: '', streaming: true }]);
@@ -136,6 +141,7 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
         setTimeout(() => inputRef.current?.focus(), 50);
       });
     } catch (e: any) {
+      logger.error('[ChatTestPanel] startSession failed', { agentId, error: e, message: e?.message, stack: e?.stack });
       setError(e?.message || 'Failed to start session');
     } finally {
       setStarting(false);
@@ -147,26 +153,29 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
     if (!text || !sessionId || !agentId) return;
     if (busy) return;
 
+    logger.info('[ChatTestPanel] sendMessage', { agentId, sessionId, textLength: text.length });
     const userMsg: Message = { id: nextId(), role: 'user', text };
     setMessages(m => [...m, userMsg]);
     setInput('');
     setBusy(true);
 
-    // Immediately add a streaming placeholder for the agent reply
     const agentMsgId = nextId();
     setMessages(m => [...m, { id: agentMsgId, role: 'agent', text: '', streaming: true }]);
 
+    const t0 = performance.now();
     try {
       const res = await api<{ agent_response?: string; final_answer?: string }>(
         `/v1/agents/${agentId}/demo/${sessionId}/turn`,
         { method: 'POST', body: { utterance: text } },
       );
       const reply = res.agent_response || res.final_answer || '…';
+      logger.info('[ChatTestPanel] turn OK', { agentId, sessionId, elapsed: `${(performance.now() - t0).toFixed(1)} ms`, replyLength: reply.length });
       setBusy(false);
       animateMessage(reply, setMessages, () => {
         setTimeout(() => inputRef.current?.focus(), 50);
       });
     } catch (e: any) {
+      logger.error('[ChatTestPanel] sendMessage failed', { agentId, sessionId, error: e, message: e?.message, stack: e?.stack });
       setBusy(false);
       const errText = `Sorry, something went wrong: ${e?.message || 'Unknown error'}`;
       setMessages(m => {
@@ -232,7 +241,7 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
         {/* Disabled state */}
         {disabled && (
           <div style={centeredHint}>
-            <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.4 }}>💬</div>
+            <div style={{ marginBottom: 12, opacity: 0.4, color: 'var(--text-3)' }}><Icon name="chat" size={36} /></div>
             <div style={{ fontSize: 13.5, color: 'var(--text-3)', lineHeight: 1.6, maxWidth: 260, textAlign: 'center' }}>
               {disabledHint || 'Pick or create an agent to start testing'}
             </div>
@@ -250,8 +259,9 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
               fontSize: 28,
               marginBottom: 18,
               boxShadow: `0 0 30px ${color}22`,
+              color,
             }}>
-              💬
+              <Icon name="chat" size={28} />
             </div>
             <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', marginBottom: 6 }}>
               Ready to chat
@@ -295,9 +305,9 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
                     border: `1px solid ${border}`,
                     display: 'grid', placeItems: 'center',
                     flexShrink: 0,
-                    fontSize: 12,
+                    fontSize: 12, color,
                   }}>
-                    🤖
+                    <Icon name="bot" size={14} />
                   </div>
                 )}
 
@@ -341,8 +351,8 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
                 <div style={{
                   width: 26, height: 26, borderRadius: '50%',
                   background: alpha, border: `1px solid ${border}`,
-                  display: 'grid', placeItems: 'center', fontSize: 12,
-                }}>🤖</div>
+                  display: 'grid', placeItems: 'center', fontSize: 12, color,
+                }}><Icon name="bot" size={14} /></div>
                 <div style={{
                   padding: '12px 16px',
                   borderRadius: '4px 16px 16px 16px',
