@@ -287,7 +287,7 @@ function AccordionItem({
           borderRadius: open ? '10px 10px 0 0' : 10,
           border: `1px solid ${open ? color : 'var(--border)'}`,
           borderBottom: open ? 'none' : `1px solid ${open ? color : 'var(--border)'}`,
-          background: open ? `${color}12` : 'var(--surface)',
+          background: open ? `${color}12` : 'var(--card-bg)',
           color: open ? color : 'var(--text-2)',
           fontSize: 13,
           fontWeight: 600,

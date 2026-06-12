@@ -380,7 +380,7 @@ export default function AgentPicker({
               onClick={() => setShowNewModal(false)}
               style={{
                 padding: '9px 18px', borderRadius: 'var(--radius)',
-                background: 'var(--tint-2)', border: '1px solid var(--border-strong)',
+                background: 'var(--card-bg)', border: '1px solid var(--border-strong)',
                 color: 'var(--text-2)', fontSize: 13, fontWeight: 500, cursor: 'pointer',
               }}
             >
@@ -422,7 +422,7 @@ const sectionTitle = { fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)', 
 const pill = {
   fontSize: 10.5, fontWeight: 600, color: 'var(--text-3)',
   padding: '2px 7px', borderRadius: 99,
-  background: 'var(--tint-1)', border: '1px solid var(--border)',
+  background: 'var(--card-bg)', border: '1px solid var(--border)',
 };
 const newBtn = {
   fontSize: 12, fontWeight: 600,
