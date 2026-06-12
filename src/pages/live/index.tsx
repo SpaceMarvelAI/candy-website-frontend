@@ -425,11 +425,10 @@ function RecordingsTable({
   return (
     <div
       style={{
-        background: 'var(--surface)',
+        background: 'var(--card-bg)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-lg)',
         overflow: 'hidden',
-        backdropFilter: 'blur(20px)',
       }}
     >
       <div
@@ -763,7 +762,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
         style={{
           ...panelStyle,
           zIndex: 1001,
-          background: 'var(--surface-solid)',
+          background: 'var(--card-bg)',
           border: '1px solid var(--border-strong)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
@@ -783,7 +782,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
           padding: isMobile ? '8px 14px 12px' : '13px 14px',
           borderBottom: '1px solid var(--border)',
           flexShrink: 0,
-          background: 'var(--surface)',
+          background: 'var(--card-bg)',
         }}>
           <div style={{
             width: 32, height: 32, borderRadius: 9,
@@ -854,7 +853,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
         ) : (
           <div style={{
             padding: '8px 14px', borderBottom: '1px solid var(--border)',
-            flexShrink: 0, background: 'var(--tint-2)',
+            flexShrink: 0, background: 'var(--card-bg)',
           }}>
             <span style={{ fontSize: 11.5, color: 'var(--text-4)' }}>No playback URL — audio stored locally.</span>
           </div>
@@ -900,7 +899,7 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
                   maxWidth: '80%',
                   padding: '9px 12px',
                   borderRadius: turn.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                  background: turn.role === 'user' ? 'rgba(117,91,227,0.14)' : 'var(--tint-2)',
+                  background: turn.role === 'user' ? 'rgba(117,91,227,0.14)' : 'var(--card-bg-strong)',
                   border: `1px solid ${turn.role === 'user' ? 'rgba(117,91,227,0.28)' : 'var(--border)'}`,
                   fontSize: 13, lineHeight: 1.55, color: 'var(--text-1)',
                 }}>

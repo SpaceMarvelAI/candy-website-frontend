@@ -55,7 +55,7 @@ function TriggerPicker({ edge, x, y, onSelect, onDelete, onClose }: {
   onClose: () => void;
 }) {
   return (
-    <div style={{ position:'absolute', left:x-90, top:y-80, background:'var(--surface)',
+    <div style={{ position:'absolute', left:x-90, top:y-80, background:'var(--card-bg)',
       border:'1px solid var(--border)', borderRadius:10, padding:'10px 12px', zIndex:60,
       boxShadow:'0 8px 32px rgba(0,0,0,0.55)', display:'flex', flexDirection:'column', gap:5,
     }} onClick={e => e.stopPropagation()}>
@@ -800,7 +800,7 @@ export default function FlowsPage() {
             {showWfPicker && (
               <div style={{
                 position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:100,
-                background:'var(--surface)', border:'1px solid var(--border)',
+                background:'var(--card-bg)', border:'1px solid var(--border)',
                 borderRadius:10, padding:6, minWidth:220,
                 boxShadow:'0 8px 32px rgba(0,0,0,0.45)',
               }} onClick={e => e.stopPropagation()}>
@@ -977,7 +977,7 @@ export default function FlowsPage() {
                     markerEnd={`url(#arr-${edge.triggerType})`}/>
                   {/* Badge */}
                   <rect x={mx - labelW/2} y={my-9} width={labelW} height={18} rx={5}
-                    fill="var(--surface)" stroke={color} strokeWidth={0.8} strokeOpacity={0.6}/>
+                    fill="var(--card-bg)" stroke={color} strokeWidth={0.8} strokeOpacity={0.6}/>
                   <text x={mx} y={my+4} textAnchor="middle" fontSize={9} fontWeight={600} fill={color}>
                     {labelText}
                   </text>
@@ -1018,7 +1018,7 @@ export default function FlowsPage() {
                   display:'flex', alignItems:'center', gap:8,
                   padding:'0 10px', height:NODE_H, borderRadius:11,
                   border: `1.5px solid ${isActive ? color : `${color}44`}`,
-                  background: isActive ? `${color}18` : `${color}0c`,
+                  background: isActive ? `${color}10` : `${color}08`,
                   cursor:'pointer', userSelect:'none',
                   boxShadow: isActive ? `0 0 0 3px ${color}30, 0 4px 20px rgba(0,0,0,0.35)` : '0 3px 14px rgba(0,0,0,0.28)',
                   transition:'all 0.15s',
@@ -1149,7 +1149,7 @@ export default function FlowsPage() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }} onClick={() => { setCredModal(null); setConnectingAppId(null); }}>
           <div style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
+            background: 'var(--card-bg)', border: '1px solid var(--border)',
             borderRadius: 14, padding: '24px 28px', width: 'min(380px, 90vw)',
             boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
           }} onClick={e => e.stopPropagation()}>
@@ -1204,13 +1204,13 @@ export default function FlowsPage() {
 // ── Styles ─────────────────────────────────────────────────────────────────────
 const leftPanel: React.CSSProperties = {
   width: 220, flexShrink: 0,
-  background: 'var(--surface)', borderRight: '1px solid var(--border)',
+  background: 'var(--card-bg)', borderRight: '1px solid var(--border)',
   display: 'flex', flexDirection: 'column', overflow: 'hidden',
 };
 
 const toolbar: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 10,
-  height: 44, padding: '0 14px', background: 'var(--surface)',
+  height: 44, padding: '0 14px', background: 'var(--card-bg)',
   borderBottom: '1px solid var(--border)', flexShrink: 0,
 };
 
@@ -1222,7 +1222,7 @@ const canvas: React.CSSProperties = {
 
 const legend: React.CSSProperties = {
   display: 'flex', alignItems: 'center', padding: '6px 14px',
-  background: 'var(--surface)', borderTop: '1px solid var(--border)', flexShrink: 0,
+  background: 'var(--card-bg)', borderTop: '1px solid var(--border)', flexShrink: 0,
 };
 
 function leftTabBtn(active: boolean): React.CSSProperties {

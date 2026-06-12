@@ -13,7 +13,7 @@
 /* ---------- DARK (default) ---------- */
 :root {
   /* Canvas + backgrounds */
-  --bg-0: #111113;                        /* near-black canvas */
+  --bg-0: #000000;                        /* pure black canvas */
   --bg-1: #1d1d1f;                        /* section-alt / sidebar */
   --bg-2: #272729;                        /* card surface */
   --bg-3: #28282a;                        /* elevated card */
@@ -314,8 +314,8 @@ html.theme-transitioning *::after {
   --input-bg-strong: rgba(29, 29, 31, 0.95);
   --surface-soft:    rgba(0, 0, 0, 0.22);
   --hero-bg:         #000000;
-  --card-bg:         #272729;
-  --card-bg-strong:  #1d1d1f;
+  --card-bg:         #0a0a0c;
+  --card-bg-strong:  #060608;
   --sidebar-bg:      #09090b;
   --shadow-deep:     0 20px 40px -10px rgba(0, 0, 0, 0.6);
   --shadow-rail:     8px 0 32px rgba(0, 0, 0, 0.45);

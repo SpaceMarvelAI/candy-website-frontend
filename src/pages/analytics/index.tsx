@@ -115,7 +115,7 @@ function StatCard({ label, value, sub, accent }: {
   return (
     <div
       style={{
-        background: 'var(--surface)',
+        background: 'var(--card-bg)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius)',
         padding: '20px 22px',
@@ -151,7 +151,7 @@ function TableCard({ title, children }: { title: string; children: React.ReactNo
   return (
     <div
       style={{
-        background: 'var(--surface)',
+        background: 'var(--card-bg)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-lg)',
         overflow: 'hidden',
@@ -174,7 +174,7 @@ const TH_STYLE: React.CSSProperties = {
   textTransform: 'uppercase',
   letterSpacing: '0.12em',
   fontWeight: 500,
-  background: 'var(--surface-soft)',
+  background: 'var(--card-bg-strong)',
   borderBottom: '1px solid var(--border)',
 };
 const TD_STYLE: React.CSSProperties = {
@@ -233,7 +233,7 @@ function SessionsByDayChart({ rows }: { rows: { date: string; sessions: number }
   return (
     <div
       style={{
-        background: 'var(--surface)',
+        background: 'var(--card-bg)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius)',
         overflow: 'hidden',
@@ -307,7 +307,7 @@ function ObjectArrayTable({ label, rows }: { label: string; rows: Record<string,
   return (
     <div
       style={{
-        background: 'var(--surface)',
+        background: 'var(--card-bg)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius)',
         overflow: 'hidden',
@@ -330,7 +330,7 @@ function ObjectArrayTable({ label, rows }: { label: string; rows: Record<string,
                     textAlign: 'left', padding: '10px 18px',
                     color: 'var(--text-3)', fontSize: 10.5,
                     textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 500,
-                    background: 'var(--surface-soft)', borderBottom: '1px solid var(--border)',
+                    background: 'var(--card-bg-strong)', borderBottom: '1px solid var(--border)',
                     whiteSpace: 'nowrap',
                   }}
                 >
@@ -378,7 +378,7 @@ function SummaryView({ data, loading }: { data: AnalyticsSummary | null; loading
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 14 }}>
         {[0, 1, 2, 3, 4].map(i => <SkeletonCard key={i} />)}
       </div>
-      <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--surface)' }}>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--card-bg)' }}>
         <SkeletonTable rows={7} cols={['18%', '10%', '8%', '10%', '10%', '12%', '12%']} />
       </div>
     </div>
@@ -424,7 +424,7 @@ function SummaryView({ data, loading }: { data: AnalyticsSummary | null; loading
       {extraPrimitives.length > 0 && (
         <div
           style={{
-            background: 'var(--surface)',
+            background: 'var(--card-bg)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
             padding: '14px 18px',
@@ -606,7 +606,7 @@ function pgBtn(disabled: boolean, active = false): React.CSSProperties {
 // ── Tab: Latency ──────────────────────────────────────────────────────────────
 function LatencyView({ data, loading }: { data: AnalyticsLatency | null; loading: boolean }) {
   if (loading) return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--surface)' }}>
+    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--card-bg)' }}>
       <SkeletonTable rows={5} cols={['30%', '15%', '15%', '15%', '15%']} />
     </div>
   );
@@ -616,7 +616,7 @@ function LatencyView({ data, loading }: { data: AnalyticsLatency | null; loading
   if (data.note && !data.sample_size) {
     return (
       <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)',
+        background: 'var(--card-bg)', border: '1px solid var(--border)',
         borderRadius: 'var(--radius)', padding: '24px 22px',
         color: 'var(--text-3)', fontSize: 13,
       }}>
@@ -638,7 +638,7 @@ function LatencyView({ data, loading }: { data: AnalyticsLatency | null; loading
       <StatCard label="Voice turn samples" value={fmt(data.sample_size)} />
 
       <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)',
+        background: 'var(--card-bg)', border: '1px solid var(--border)',
         borderRadius: 'var(--radius-lg)', overflow: 'hidden',
       }}>
         <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--border)' }}>

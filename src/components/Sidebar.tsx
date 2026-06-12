@@ -73,7 +73,7 @@ function ProfileMenu({
   const flyoutWidth = 190;
   const left   = 8;
   const bottom = window.innerHeight - anchorRect.top + 6;
-  const flyoutLeft = panelWidth + 6;
+  const flyoutLeft = left + menuWidth + 4;
 
   function toggleSub(name: 'appearance' | 'help', e: React.MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
