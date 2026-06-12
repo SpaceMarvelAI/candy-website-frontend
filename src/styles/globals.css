@@ -17,9 +17,9 @@
   --bg-1: #1d1d1f;                        /* section-alt / sidebar */
   --bg-2: #272729;                        /* card surface */
   --bg-3: #28282a;                        /* elevated card */
-  --surface: rgba(29, 29, 31, 0.80);
-  --surface-solid: #1d1d1f;
-  --surface-elev: rgba(39, 39, 41, 0.85);
+  --surface: rgba(10, 10, 12, 0.85);
+  --surface-solid: #0a0a0c;
+  --surface-elev: rgba(10, 10, 12, 0.90);
 
   /* Borders */
   --border: rgba(255, 255, 255, 0.10);
@@ -310,8 +310,8 @@ html.theme-transitioning *::after {
 
 /* ── Surface tokens ── */
 :root {
-  --input-bg:        rgba(29, 29, 31, 0.80);
-  --input-bg-strong: rgba(29, 29, 31, 0.95);
+  --input-bg:        rgba(10, 10, 12, 0.80);
+  --input-bg-strong: #0a0a0c;
   --surface-soft:    rgba(0, 0, 0, 0.22);
   --hero-bg:         #000000;
   --card-bg:         #0a0a0c;

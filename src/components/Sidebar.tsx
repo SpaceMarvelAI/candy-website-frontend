@@ -551,7 +551,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
             </div>
           )}
           {panelExpanded && (
-            <Icon name="more" size={14} style={{ color: 'var(--text-4)', flexShrink: 0 }} />
+            <Icon name="chevronDown" size={14} style={{ color: 'var(--text-4)', flexShrink: 0, transform: profileMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
           )}
         </div>
       </div>

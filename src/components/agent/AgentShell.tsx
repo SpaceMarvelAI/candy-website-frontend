@@ -84,8 +84,7 @@ export default function AgentShell({
           flexWrap: isMobile ? 'wrap' : 'nowrap',
           gap: isMobile ? 0 : 16,
           padding: isMobile ? '10px 14px 0' : '14px 28px',
-          background: 'var(--surface)',
-          backdropFilter: 'blur(20px)',
+          background: 'var(--bg-0)',
           borderBottom: 'none',
         }}
       >

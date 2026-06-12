@@ -65,7 +65,7 @@ function copyBtnStyle(copied: boolean): React.CSSProperties {
     display: 'inline-flex', alignItems: 'center', gap: 4,
     padding: '4px 10px', borderRadius: 7,
     border: copied ? '1px solid rgba(76,175,80,0.4)' : '1px solid var(--border)',
-    background: copied ? 'rgba(76,175,80,0.12)' : 'var(--surface)',
+    background: copied ? 'rgba(76,175,80,0.12)' : 'var(--card-bg)',
     color: copied ? 'var(--green)' : 'var(--text-3)',
     fontSize: 11, fontWeight: 600,
     cursor: 'pointer', transition: 'all 0.15s',

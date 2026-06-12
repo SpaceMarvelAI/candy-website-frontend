@@ -56,6 +56,8 @@ const iconPaths = {
     </>
   ),
   arrowRight: <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>,
+  chevronsUpDown: <><path d="M7 15l5 5 5-5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" fill="none"/><path d="M7 9l5-5 5 5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" fill="none"/></>,
+  chevronDown: <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>,
   cart: (
     <>
       <circle cx="9" cy="21" r="1" fill="currentColor"/>
