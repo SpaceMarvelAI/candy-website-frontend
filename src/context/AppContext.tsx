@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { seedChatMessages } from '../utils/mockData';
-import { loadStoredUser, logout as apiLogout, ssoCallback, type AuthUser } from '../api/auth';
+import { loadStoredUser, logout as apiLogout, fullLogout, ssoCallback, type AuthUser } from '../api/auth';
 import { themeStore } from '../hooks/useTheme';
 import { logger } from '../utils/logger';
 
@@ -82,17 +82,26 @@ export function AppProvider({ children }) {
     navigate('/dashboard');
   }, [navigate]);
 
-  const signOut = useCallback(() => {
-    logger.info('[AppContext] signOut — clearing session and redirecting to /');
-    apiLogout();
-    // Wipe everything — both SSO session and any persisted login data
+  const signOut = useCallback(async () => {
+    logger.info('[AppContext] signOut — full single-logout');
+    // Clear UI state immediately so the app looks logged out right away.
+    setUser(null);
+    // fullLogout() calls the backend logout-everywhere (blocklist + broadcast + token revoke),
+    // wipes local tokens, and navigates the browser to end_session_url to clear the dashboard
+    // cookie. It needs the token, so it captures it before wiping. Best-effort.
+    try {
+      await fullLogout();
+      return; // fullLogout redirects the browser; nothing more to do
+    } catch (err) {
+      logger.warn('[AppContext] fullLogout failed — clearing local state and going home', { error: err });
+    }
+    // Fallback if fullLogout threw before redirecting: wipe + go home.
     try { sessionStorage.clear(); } catch {}
     try {
       localStorage.removeItem('candy.token');
       localStorage.removeItem('candy.user');
       localStorage.removeItem('dashboard_token');
     } catch {}
-    setUser(null);
     navigate('/', { replace: true });
   }, [navigate]);
 
