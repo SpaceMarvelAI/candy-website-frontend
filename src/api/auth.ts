@@ -98,6 +98,23 @@ export function logout() {
   storeSessionUser(null);
 }
 
+/**
+ * Single sign-out across ALL SpaceMarvel apps. Calls the OIDC logout-everywhere
+ * endpoint (with the current Candy token): the backend uses the stored dashboard
+ * token to trigger the dashboard logout, which blocklists this user and broadcasts
+ * a back-channel logout to Candy/Chat/Finixy. Best-effort — local logout proceeds
+ * regardless (e.g. for password-login users who never did OIDC).
+ * MUST be called BEFORE clearing the local token (it needs the token to authenticate).
+ */
+export async function logoutEverywhere(): Promise<void> {
+  try {
+    await api('/v1/auth/sso/oidc/logout-everywhere', { method: 'POST' });
+    logger.info('[auth] logout-everywhere broadcast OK');
+  } catch (e: any) {
+    logger.warn('[auth] logout-everywhere failed — continuing local logout', { error: e });
+  }
+}
+
 export async function ssoCallback(token: string): Promise<{ user: AuthUser }> {
   logger.info('[auth] ssoCallback starting', { tokenPreview: token.slice(0, 12) + '…' });
   try {

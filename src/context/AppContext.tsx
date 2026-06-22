@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { seedChatMessages } from '../utils/mockData';
-import { loadStoredUser, logout as apiLogout, ssoCallback, type AuthUser } from '../api/auth';
+import { loadStoredUser, logout as apiLogout, logoutEverywhere, ssoCallback, type AuthUser } from '../api/auth';
 import { themeStore } from '../hooks/useTheme';
 import { logger } from '../utils/logger';
 
@@ -82,8 +82,11 @@ export function AppProvider({ children }) {
     navigate('/dashboard');
   }, [navigate]);
 
-  const signOut = useCallback(() => {
-    logger.info('[AppContext] signOut — clearing session and redirecting to /');
+  const signOut = useCallback(async () => {
+    logger.info('[AppContext] signOut — broadcasting single-logout, then clearing session');
+    // Broadcast single-logout to all apps FIRST (needs the Candy token to authenticate),
+    // then clear local state. Best-effort: never block local logout on the network call.
+    await logoutEverywhere();
     apiLogout();
     // Wipe everything — both SSO session and any persisted login data
     try { sessionStorage.clear(); } catch {}
