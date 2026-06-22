@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
 import AppLayout   from './layouts/AppLayout';
-import { redirectToSSO } from './utils/sso';
+import { redirectToOIDC } from './utils/sso';
 import { useApp } from './context/AppContext';
 import { RouteErrorBoundary } from './components/ErrorBoundary';
 import { logger } from './utils/logger';
@@ -17,8 +17,9 @@ import {
 } from './components/PageSkeletons';
 
 
-const LandingPage     = lazy(() => import('./pages/landing'));
-const SSOCallbackPage = lazy(() => import('./pages/sso'));
+const LandingPage      = lazy(() => import('./pages/landing'));
+const SSOCallbackPage  = lazy(() => import('./pages/sso'));
+const OIDCCallbackPage = lazy(() => import('./pages/sso/oidc-callback'));
 
 // App-layout pages
 const DashboardPage  = lazy(() => import('./pages/dashboard'));
@@ -96,7 +97,7 @@ function RootRedirect() {
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useApp();
   if (!user) {
-    redirectToSSO();
+    redirectToOIDC();
     return null;
   }
   return <>{children}</>;
@@ -149,6 +150,9 @@ export default function App() {
           } />
 
           <Route path="/sso/callback" element={<SSOCallbackPage />} />
+
+          {/* OIDC callback — backend redirects here with the minted Candy token */}
+          <Route path="/sso/oidc/callback" element={<OIDCCallbackPage />} />
 
           {/* App views — rendered inside AppLayout (sidebar + topbar) */}
           <Route path="/dashboard"      element={<AppRoute skeleton={<DashboardSkeleton />}><DashboardPage /></AppRoute>} />

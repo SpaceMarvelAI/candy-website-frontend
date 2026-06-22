@@ -101,8 +101,8 @@ export function logout() {
   storeSessionUser(null);
 }
 
-/** Full single-logout (mirrors Chat). Call the backend logout-everywhere FIRST (it needs the
- *  token) → it blocklists the user, revokes dashboard OAuth tokens, and broadcasts back-channel
+/** Full single-logout (mirrors Chat/Finixy). Calls the backend logout-everywhere FIRST (it needs
+ *  the token) → it blocklists the user, revokes dashboard OAuth tokens, and broadcasts back-channel
  *  logout to the other apps. It returns end_session_url; navigating the BROWSER there clears the
  *  dashboard session cookie (a server-to-server call can't delete the browser cookie, so without
  *  this the next visit silently re-logs in). Best-effort with a timeout; always wipes local state. */

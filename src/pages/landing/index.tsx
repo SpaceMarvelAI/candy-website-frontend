@@ -1,15 +1,10 @@
 import { useEffect, useState } from 'react';
 import Icon from '../../assets/icons';
+import { API_BASE } from '../../api/client';
 
-const _isLocalhost =
-  window.location.hostname === 'localhost' ||
-  window.location.hostname === '127.0.0.1';
-const _callbackUrl = encodeURIComponent(
-  _isLocalhost
-    ? `${window.location.origin}/sso/callback`
-    : 'https://app.candy.cx/sso/callback'
-);
-const SIGNIN_URL = `https://spacemarvel.ai/login?redirect_uri=${_callbackUrl}`;
+// Sign in via the OIDC Authorization-Code flow: hit the Candy backend's /login, which
+// bounces through the dashboard and redirects back to /sso/oidc/callback with the token.
+const SIGNIN_URL = `${API_BASE}/v1/auth/sso/oidc/login?return_to=${encodeURIComponent(window.location.origin)}`;
 
 export default function LandingPage() {
   const [seconds, setSeconds] = useState(5);
