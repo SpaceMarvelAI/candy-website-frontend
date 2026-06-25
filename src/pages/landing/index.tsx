@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Icon from '../../assets/icons';
 import { API_BASE } from '../../api/client';
 
@@ -7,16 +7,10 @@ import { API_BASE } from '../../api/client';
 const SIGNIN_URL = `${API_BASE}/v1/auth/sso/oidc/login?return_to=${encodeURIComponent(window.location.origin)}`;
 
 export default function LandingPage() {
-  const [seconds, setSeconds] = useState(5);
-
+  // Redirect straight to sign-in — no countdown.
   useEffect(() => {
-    if (seconds <= 0) {
-      window.location.href = SIGNIN_URL;
-      return;
-    }
-    const t = setTimeout(() => setSeconds(s => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [seconds]);
+    window.location.href = SIGNIN_URL;
+  }, []);
 
   return (
     <div
@@ -143,7 +137,7 @@ export default function LandingPage() {
           textAlign: 'center',
         }}
       >
-        Redirecting in {seconds}s — or click above to sign in now.
+        Redirecting to sign in… — or click above to sign in now.
       </p>
     </div>
   );
