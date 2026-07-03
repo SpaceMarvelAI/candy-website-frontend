@@ -46,10 +46,10 @@ export default function OIDCCallbackPage() {
     try { localStorage.clear(); sessionStorage.clear(); } catch {}
     setToken(accessToken);
     storeUser(user);
-
-    // Drop the token out of the address bar before entering the app.
-    window.history.replaceState({}, '', '/#/dashboard');
     signedIn(user);
+
+    // Navigate to dashboard (drops the token out of the address bar).
+    navigate('/dashboard');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
