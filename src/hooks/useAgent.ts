@@ -54,7 +54,7 @@ export interface UseAgentResult {
   setCallDirection: (d: 'inbound' | 'outbound' | 'both') => void;
 }
 
-export function useAgent(slug: string, defaultName: string): UseAgentResult {
+export function useAgent(slug: string, defaultName: string, initialSelectedId?: string | null): UseAgentResult {
   const [agents, setAgents]     = useState<Agent[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading]   = useState(true);
@@ -150,7 +150,10 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
         const matched = all.filter(a => a.use_case_slug === slug);
         setAgents(matched);
         if (matched.length > 0) {
-          setSelectedId(matched[0].id);
+          const wanted = initialSelectedId && matched.some(a => a.id === initialSelectedId)
+            ? initialSelectedId
+            : matched[0].id;
+          setSelectedId(wanted);
         } else {
           logger.info('[useAgent] No existing agents for slug — UI will prompt creation', { slug });
           setLoading(false);

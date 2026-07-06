@@ -129,8 +129,11 @@ export function AppProvider({ children }) {
       hasToken: !!token,
       hasAccessToken: !!accessToken,
     });
-    // Strip all auth params from URL immediately so they can't be replayed
-    window.history.replaceState({}, '', window.location.pathname);
+    // Strip all auth params from URL immediately so they can't be replayed. Keep
+    // window.location.hash — this is a HashRouter app, so the current route (e.g.
+    // "#/dashboard") lives there; dropping it would revert the visible URL to the
+    // bare origin even though the app is still on that page.
+    window.history.replaceState({}, '', window.location.pathname + window.location.hash);
 
     // Wipe previous session before writing new credentials
     apiLogout();

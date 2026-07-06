@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
+import PromptTicketHandler from './components/PromptTicketHandler';
 import AppLayout   from './layouts/AppLayout';
 import { redirectToOIDC } from './utils/sso';
 import { useApp } from './context/AppContext';
@@ -190,6 +191,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      <PromptTicketHandler />
       <ToastHost />
     </>
   );

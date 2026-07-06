@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import Icon from '../../assets/icons';
 import AgentShell from './AgentShell';
 import EmbedModal from './EmbedModal';
@@ -40,6 +41,14 @@ export default function ChatbotWorkspace({
 }: Props) {
   const { addToast } = useApp();
   const isTabletOrMobile = useMediaQuery('(max-width: 1024px)');
+
+  // Prompt Library handoff ("Open in Candy"): PromptTicketHandler / the agent
+  // picker modal navigate here with { selectAgentId, draftRequirements } so this
+  // page opens on the right agent with its Requirements textarea pre-filled.
+  // Never auto-saved — the user still clicks "Save requirements" themselves.
+  const location = useLocation();
+  const navState = location.state as { selectAgentId?: string; draftRequirements?: string } | null;
+  const draftAppliedFor = useRef<string | null>(null);
 
   // Mount / unmount lifecycle
   useEffect(() => {
@@ -128,7 +137,12 @@ export default function ChatbotWorkspace({
           elapsed: `${(performance.now() - t0).toFixed(1)} ms`,
         });
         setAgents(bots);
-        if (bots.length > 0) setSelectedId(bots[0].id);
+        if (bots.length > 0) {
+          const wanted = navState?.selectAgentId && bots.some(a => a.id === navState.selectAgentId)
+            ? navState.selectAgentId
+            : bots[0].id;
+          setSelectedId(wanted);
+        }
       } catch (e: any) {
         if (cancelled) return;
         const msg = e instanceof ApiError
@@ -192,6 +206,21 @@ export default function ChatbotWorkspace({
     })();
     return () => { cancelled = true; };
   }, [selectedId]);
+
+  // Apply the draft prompt only once the requirements fetch above for the
+  // target agent has finished (it also writes promptText from the DB —
+  // applying the draft any earlier would just get clobbered when that fetch
+  // resolves), then open the Requirements panel so the user sees it land.
+  useEffect(() => {
+    if (!navState?.draftRequirements) return;
+    if (loading) return;
+    if (!agent || agent.id !== navState.selectAgentId) return;
+    if (draftAppliedFor.current === agent.id) return;
+    draftAppliedFor.current = agent.id;
+    setPromptText(navState.draftRequirements);
+    setReqOpen(true);
+    addToast('Prompt loaded into Requirements — review and click Save.', 'info');
+  }, [agent, loading, navState, addToast]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   async function createNewAgent(name: string) {

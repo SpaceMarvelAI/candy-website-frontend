@@ -1,15 +1,14 @@
 import { useEffect } from 'react';
 import Icon from '../../assets/icons';
-import { API_BASE } from '../../api/client';
-
-// Sign in via the OIDC Authorization-Code flow: hit the Candy backend's /login, which
-// bounces through the dashboard and redirects back to /sso/oidc/callback with the token.
-const SIGNIN_URL = `${API_BASE}/v1/auth/sso/oidc/login?return_to=${encodeURIComponent(window.location.origin)}`;
+import { redirectToOIDC } from '../../utils/sso';
 
 export default function LandingPage() {
-  // Redirect straight to sign-in — no countdown.
+  // Redirect straight to sign-in — no countdown. Uses redirectToOIDC() (not a
+  // locally-built URL) so a `?ticket=` from the Prompt Library handoff gets stashed
+  // into sessionStorage before we leave for login — see utils/sso.ts for why the
+  // OIDC round-trip alone can't carry it (return_to only preserves the origin).
   useEffect(() => {
-    window.location.href = SIGNIN_URL;
+    redirectToOIDC();
   }, []);
 
   return (
@@ -94,8 +93,8 @@ export default function LandingPage() {
       </p>
 
       {/* CTA */}
-      <a
-        href={SIGNIN_URL}
+      <button
+        onClick={redirectToOIDC}
         className="btn-primary-shimmer"
         style={{
           display: 'inline-flex',
@@ -108,6 +107,8 @@ export default function LandingPage() {
           fontSize: 15,
           fontWeight: 600,
           textDecoration: 'none',
+          border: 'none',
+          cursor: 'pointer',
           boxShadow: '0 12px 36px -10px rgba(117,91,227,0.65)',
           letterSpacing: '0.01em',
           position: 'relative',
@@ -126,7 +127,7 @@ export default function LandingPage() {
         <Icon name="layers" size={16} />
         Sign in with SpaceMarvel
         <Icon name="arrowRight" size={14} />
-      </a>
+      </button>
 
       {/* Footer hint */}
       <p

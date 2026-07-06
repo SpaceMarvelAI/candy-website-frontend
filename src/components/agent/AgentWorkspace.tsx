@@ -3,7 +3,8 @@
  * Layout: TestPanel (left, full height) + accordion config panel (right).
  * Accordion items: Knowledge Base | Languages | Requirements
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import Icon from '../../assets/icons';
 import AgentShell from './AgentShell';
 import EmbedModal from './EmbedModal';
@@ -43,6 +44,14 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
   const { addToast } = useApp();
   const isTabletOrMobile = useMediaQuery('(max-width: 1024px)');
 
+  // Prompt Library handoff ("Open in Candy"): PromptTicketHandler / the agent
+  // picker modal navigate here with { selectAgentId, draftRequirements } so this
+  // page opens on the right agent with its Requirements textarea pre-filled.
+  // Never auto-saved — the user still clicks "Save requirements" themselves.
+  const location = useLocation();
+  const navState = location.state as { selectAgentId?: string; draftRequirements?: string } | null;
+  const draftAppliedFor = useRef<string | null>(null);
+
   // Mount / unmount lifecycle
   useEffect(() => {
     logger.info('[AgentWorkspace] Mounted', { slug, category, tint });
@@ -62,7 +71,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
     supportedCodes, setSupportedCodes,
     multilingual, setMultilingual,
     callDirection, setCallDirection,
-  } = useAgent(slug, `${category} agent`);
+  } = useAgent(slug, `${category} agent`, navState?.selectAgentId ?? null);
 
   const [publishing, setPublishing]         = useState(false);
   const [statusOverride, setStatusOverride] = useState<string | null>(null);
@@ -72,6 +81,22 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
   const [reqOpen,      setReqOpen]      = useState(false);
   const [skillsOpen,   setSkillsOpen]   = useState(false);
   const [skillsCount,  setSkillsCount]  = useState(0);
+
+  // Apply the draft prompt only once useAgent's own requirements fetch for the
+  // target agent has finished (it also writes promptText from the DB — applying
+  // the draft any earlier would just get clobbered when that fetch resolves),
+  // then open the Requirements panel so the user sees it land. Guarded by ref
+  // so it only fires once per handoff even if the effect re-runs.
+  useEffect(() => {
+    if (!navState?.draftRequirements) return;
+    if (loading) return;
+    if (!agent || agent.id !== navState.selectAgentId) return;
+    if (draftAppliedFor.current === agent.id) return;
+    draftAppliedFor.current = agent.id;
+    setPromptText(navState.draftRequirements);
+    setReqOpen(true);
+    addToast('Prompt loaded into Requirements — review and click Save.', 'info');
+  }, [agent, loading, navState, setPromptText, addToast]);
 
   const effectivePrompt = promptText || defaultPrompt;
   const status     = statusOverride || agent?.agent_flow_status || null;
