@@ -26,13 +26,19 @@ export function redirectToSSO(): void {
  * After auth the backend redirects back to this app's /sso/oidc/callback with the
  * minted Candy token. `return_to` tells the backend which frontend origin to come
  * back to (must be allow-listed there) — this lets localhost dev complete the flow.
+ * `?ticket=` is passed to the backend and stashed in a cookie so it survives the
+ * OIDC round-trip (query strings don't).
  */
 export function redirectToOIDC(): void {
-  // Stash a pending prompt ticket before leaving for login — return_to only
-  // preserves the origin, so ?ticket= would otherwise be lost on the round trip.
-  const ticket = new URLSearchParams(window.location.search).get('ticket');
+  const params = new URLSearchParams(window.location.search);
+  const ticket = params.get('ticket');
+
+  // Also stash in sessionStorage as a fallback (in case cookies fail).
   if (ticket) sessionStorage.setItem(PENDING_PROMPT_TICKET_KEY, ticket);
 
   const returnTo = encodeURIComponent(window.location.origin);
-  window.location.href = `${API_BASE}/v1/auth/sso/oidc/login?return_to=${returnTo}`;
+  const loginUrl = new URL(`${API_BASE}/v1/auth/sso/oidc/login`);
+  loginUrl.searchParams.set('return_to', window.location.origin);
+  if (ticket) loginUrl.searchParams.set('ticket', ticket);
+  window.location.href = loginUrl.href;
 }

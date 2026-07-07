@@ -9,7 +9,7 @@
  * pre-fills the Requirements textarea but never auto-saves it (the user
  * still clicks the existing "Save requirements" button there).
  */
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../assets/icons';
 import { listAgents, createAgent, type Agent } from '../../api/agents';
@@ -39,6 +39,8 @@ export default function PromptAgentPickerModal({
   const navigate = useNavigate();
   const { addToast } = useApp();
 
+  console.log('[PromptAgentPickerModal] render', { title: promptTitle, matches: matchingAgents.length });
+
   const [showAll, setShowAll]         = useState(matchingAgents.length === 0);
   const [allAgents, setAllAgents]     = useState<Agent[] | null>(null);
   const [loadingAll, setLoadingAll]   = useState(false);
@@ -47,6 +49,12 @@ export default function PromptAgentPickerModal({
   const [newSlug, setNewSlug]         = useState('cs');
   const [creating, setCreating]       = useState(false);
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
+
+  const readyRef = useRef(false);
+  useEffect(() => {
+    const timer = setTimeout(() => { readyRef.current = true; }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   function goToAgent(agentId: string, route: string | null) {
     if (!route) {
@@ -100,7 +108,14 @@ export default function PromptAgentPickerModal({
   }
 
   function onBackdrop(e: React.MouseEvent<HTMLDivElement>) {
-    if ((e.target as HTMLElement).id === 'prompt-picker-backdrop') onClose();
+    const target = e.target as HTMLElement;
+    console.log('[PromptAgentPickerModal] backdrop click', {
+      ready: readyRef.current,
+      targetId: target.id,
+      targetClass: target.className,
+      willClose: readyRef.current && target.id === 'prompt-picker-backdrop',
+    });
+    if (readyRef.current && target.id === 'prompt-picker-backdrop') onClose();
   }
 
   const visibleList: { id: string; name: string; use_case_slug: string; call_direction: string; agent_flow_status: string }[] =

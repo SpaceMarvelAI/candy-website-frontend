@@ -14,7 +14,7 @@ import { logger } from '../utils/logger';
 const RAW_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8002';
 export const API_BASE = RAW_BASE.replace(/\/$/, '');
 
-const TOKEN_KEY = 'candy.token';
+const TOKEN_KEY = 'access_token';  // Shared across all apps (Chat, Candy, Finixy)
 
 // SSO tokens land in sessionStorage (tab-scoped, cleared on close).
 // Regular login tokens stay in localStorage.

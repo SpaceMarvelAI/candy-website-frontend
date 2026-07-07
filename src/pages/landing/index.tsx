@@ -7,7 +7,19 @@ export default function LandingPage() {
   // locally-built URL) so a `?ticket=` from the Prompt Library handoff gets stashed
   // into sessionStorage before we leave for login — see utils/sso.ts for why the
   // OIDC round-trip alone can't carry it (return_to only preserves the origin).
+  //
+  // MUST NOT fire while AppContext's SSO interceptor is already processing an
+  // incoming ?access_token=/?token= on this exact page load — this page renders
+  // (via RootRedirect, `user` still null pre-hydration) at the SAME time that
+  // interceptor's async exchange is in flight. Firing here launches a SECOND,
+  // fully independent OIDC login cycle carrying the SAME ?ticket=, which lands a
+  // second /prompts/claim call for an already-consumed single-use ticket (404).
+  // Confirmed live: two complete parallel login cycles, one ticket, one 404.
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasIncomingToken =
+      params.has('access_token') || params.has('token') || params.has('sso_token');
+    if (hasIncomingToken) return;
     redirectToOIDC();
   }, []);
 

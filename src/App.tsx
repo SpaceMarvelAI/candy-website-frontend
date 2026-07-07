@@ -3,8 +3,9 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
 import PromptTicketHandler from './components/PromptTicketHandler';
+import PromptAgentPickerModal from './components/agent/PromptAgentPickerModal';
 import AppLayout   from './layouts/AppLayout';
-import { redirectToOIDC } from './utils/sso';
+import { redirectToOIDC, PENDING_PROMPT_TICKET_KEY } from './utils/sso';
 import { useApp } from './context/AppContext';
 import { RouteErrorBoundary } from './components/ErrorBoundary';
 import { logger } from './utils/logger';
@@ -86,8 +87,17 @@ function DefaultContentSkeleton() {
 }
 
 function RootRedirect() {
-  const { user } = useApp();
-  if (user) return <Navigate to="/dashboard" replace />;
+  const { user, claimingPrompt } = useApp();
+  if (user) {
+    // Don't redirect away while a prompt-ticket claim is in flight (AppContext's SSO
+    // interceptor is mid-claim) — otherwise this fires the instant `user` becomes truthy,
+    // unmounting everything before the claim resolves and the picker modal can render.
+    // Also still checked via sessionStorage for the legacy /sso/callback + PromptTicketHandler path.
+    const pendingTicket = typeof window !== 'undefined' ? sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY) : null;
+    if (!pendingTicket && !claimingPrompt) {
+      return <Navigate to="/dashboard" replace />;
+    }
+  }
   return (
     <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
       <LandingPage />
@@ -132,6 +142,7 @@ function AppRoute({
 }
 
 export default function App() {
+  const { claimedPrompt, setClaimedPrompt } = useApp();
   return (
     <>
       <AmbientBg />
@@ -192,6 +203,14 @@ export default function App() {
         </Routes>
       </Suspense>
       <PromptTicketHandler />
+      {claimedPrompt && (
+        <PromptAgentPickerModal
+          promptTitle={claimedPrompt.title}
+          promptContent={claimedPrompt.content}
+          matchingAgents={claimedPrompt.matching_agents}
+          onClose={() => setClaimedPrompt(null)}
+        />
+      )}
       <ToastHost />
     </>
   );

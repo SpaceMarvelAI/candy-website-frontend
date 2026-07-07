@@ -15,7 +15,7 @@ export default function ComposioCallbackPage() {
       );
     } catch {}
 
-    const t = setTimeout(() => { try { window.close(); } catch {} }, 1200);
+    const t = setTimeout(() => { try { window.close(); } catch {} }, 3000);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

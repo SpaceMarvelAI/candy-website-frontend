@@ -10,11 +10,15 @@ type Status = 'loading' | 'error';
 /**
  * OIDC callback landing page.
  *
- * The Candy backend (after the dashboard Authorization-Code flow) redirects the
- * browser here with the already-minted Candy token in the query string:
- *   /sso/oidc/callback?access_token=…&user_id=…&email=…&company_id=…&role=…&via=oidc
- * Unlike the legacy /sso/callback, there's NO extra backend round-trip — the token
- * is final. We just store the session and sign in.
+ * NOTE: confirmed via live testing that this page does NOT mount on a real login —
+ * the backend redirects to a plain path (https://app.candy.cx/sso/oidc/callback?...,
+ * no "#"), and this app uses HashRouter, which resolves that to route "/" (RootRedirect),
+ * not this route. AppContext's own SSO-token interceptor (which reads window.location.search
+ * directly, unrouted) is the code path that actually runs — including the ticket-claim
+ * logic, which used to live here and raced AppContext's claim for the same single-use
+ * ticket (confirmed live: 3 concurrent /prompts/claim calls for one ticket, 2 failed).
+ * Kept as a harmless fallback UI in case this route is ever reached via client-side nav
+ * with a real "#/sso/oidc/callback" (e.g. a hand-typed or bookmarked hash URL).
  */
 export default function OIDCCallbackPage() {
   const [searchParams] = useSearchParams();
@@ -42,13 +46,11 @@ export default function OIDCCallbackPage() {
       full_name:    searchParams.get('name') || null,
     };
 
-    // Fresh OIDC session — wipe any previous session data, then store the new one.
     try { localStorage.clear(); sessionStorage.clear(); } catch {}
+
     setToken(accessToken);
     storeUser(user);
     signedIn(user);
-
-    // Navigate to dashboard (drops the token out of the address bar).
     navigate('/dashboard');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

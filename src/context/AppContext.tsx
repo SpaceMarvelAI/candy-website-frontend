@@ -4,6 +4,8 @@ import { seedChatMessages } from '../utils/mockData';
 import { loadStoredUser, logout as apiLogout, fullLogout, ssoCallback, type AuthUser } from '../api/auth';
 import { themeStore } from '../hooks/useTheme';
 import { logger } from '../utils/logger';
+import { PENDING_PROMPT_TICKET_KEY } from '../utils/sso';
+import { claimPromptTicket, type ClaimedPrompt } from '../api/prompts';
 
 // Bidirectional mapping between legacy view names and URL paths.
 // All existing showView('dashboard') calls keep working unchanged.
@@ -54,6 +56,12 @@ export function AppProvider({ children }) {
   const [chatMessages,setChatMessages] = useState(seedChatMessages);
   const [calls,       setCalls]        = useState([]);
   const [toasts,      setToasts]       = useState([]);
+  const [claimedPrompt, setClaimedPrompt] = useState<ClaimedPrompt | null>(null);
+  // True from the moment a ticket is detected in the OIDC redirect until the claim
+  // resolves (success or failure). RootRedirect must not navigate to /dashboard while
+  // this is true — otherwise it fires the instant `user` becomes truthy (before the
+  // claim below even starts), unmounting everything before the picker can show.
+  const [claimingPrompt, setClaimingPrompt] = useState(false);
   const ssoHandled = useRef(false);
 
   // currentView is now derived from the URL — no separate state needed.
@@ -79,7 +87,11 @@ export function AppProvider({ children }) {
     logger.info('[AppContext] signedIn', { userId: u.user_id, email: u.email, role: u.role, company: u.company_name });
     themeStore.set('light');
     setUser(u);
-    navigate('/dashboard');
+    // If there's a pending prompt ticket, don't navigate — let PromptTicketHandler handle it
+    const pendingTicket = sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY);
+    if (!pendingTicket) {
+      navigate('/dashboard');
+    }
   }, [navigate]);
 
   const signOut = useCallback(async () => {
@@ -115,12 +127,24 @@ export function AppProvider({ children }) {
     return () => window.removeEventListener('candy:auth-expired', onAuthExpired);
   }, []);
 
-  // Intercept ?sso_token= / ?access_token= on ANY page (SpaceMarvel may redirect to /dashboard)
+  // Intercept ?sso_token= / ?access_token= on ANY page (SpaceMarvel may redirect to /dashboard).
+  // CONFIRMED (via live console trace) to be the ONLY code path that actually runs the OIDC
+  // login exchange on a real page load — the backend redirects to a plain path
+  // (https://app.candy.cx/sso/oidc/callback?...) with no "#", so HashRouter never resolves
+  // to OIDCCallbackPage's route on that hard load; it resolves to "/" and this
+  // app-root-level effect (which reads window.location.search directly, unrouted) is what
+  // actually processes the token. OIDCCallbackPage is therefore dead code for this flow.
   useEffect(() => {
     if (ssoHandled.current) return;
+
     const params      = new URLSearchParams(window.location.search);
     const token       = params.get('token') ?? params.get('sso_token') ?? params.get('access_token') ?? null;
     const accessToken = params.get('access_token');
+    // Capture the ticket BEFORE the URL gets stripped below — reading it afterward (as a
+    // previous version of this code did, further down) always found nothing, since the
+    // query string was already gone by then. This was the actual reason "Open in Candy"
+    // silently failed: the ticket that arrived in this exact URL never reached the claim.
+    const ticketFromUrl = params.get('ticket');
 
     if (!token && !accessToken) return;
 
@@ -128,6 +152,7 @@ export function AppProvider({ children }) {
     logger.info('[AppContext] SSO token detected — beginning exchange', {
       hasToken: !!token,
       hasAccessToken: !!accessToken,
+      hasTicket: !!ticketFromUrl,
     });
     // Strip all auth params from URL immediately so they can't be replayed. Keep
     // window.location.hash — this is a HashRouter app, so the current route (e.g.
@@ -145,12 +170,38 @@ export function AppProvider({ children }) {
     // No exchange token — redirect only carried a fresh dashboard_token for an already-signed-in user.
     if (!token) { setSsoLoading(false); return; }
 
+    // Set BEFORE setUser() below — RootRedirect reads this on the very next render
+    // (the same one where `user` first becomes truthy) and must see it already true,
+    // or it navigates to /dashboard before the claim call even starts.
+    if (ticketFromUrl) setClaimingPrompt(true);
+
     ssoCallback(token)
       .then(({ user: u }) => {
         logger.info('[AppContext] SSO exchange succeeded', { userId: u.user_id, email: u.email });
         themeStore.set('light');
         setUser(u);
-        navigate('/dashboard', { replace: true });
+
+        // Claim the ticket directly, right here, right after login succeeds — this is the
+        // exact instant auth is confirmed complete, so there's no separate component/effect
+        // that needs to "notice" a state change later and risk racing a navigate() elsewhere.
+        if (ticketFromUrl) {
+          claimPromptTicket(ticketFromUrl)
+            .then((data) => {
+              logger.info('[AppContext] claimed prompt ticket', {
+                promptId: data.prompt_id,
+                matches: data.matching_agents.length,
+              });
+              setClaimedPrompt(data);
+            })
+            .catch((err) => {
+              logger.warn('[AppContext] prompt ticket claim failed', { error: err });
+              addToast('That prompt link is invalid or has expired.', 'error');
+              navigate('/dashboard', { replace: true });
+            })
+            .finally(() => setClaimingPrompt(false));
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
       })
       .catch((err: any) => {
         const msg = err?.detail
@@ -174,6 +225,8 @@ export function AppProvider({ children }) {
       chatMessages, setChatMessages,
       calls, setCalls,
       toasts, addToast,
+      claimedPrompt, setClaimedPrompt,
+      claimingPrompt,
     }}>
       {children}
     </AppContext.Provider>
