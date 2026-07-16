@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import posthog from 'posthog-js';
 import { seedChatMessages } from '../utils/mockData';
 import { loadStoredUser, logout as apiLogout, fullLogout, ssoCallback, type AuthUser } from '../api/auth';
 import { themeStore } from '../hooks/useTheme';
@@ -98,6 +99,9 @@ export function AppProvider({ children }) {
     logger.info('[AppContext] signOut — full single-logout');
     // Clear UI state immediately so the app looks logged out right away.
     setUser(null);
+    // Clears PostHog's distinct_id + group state — otherwise the next person to use
+    // this browser/device gets misattributed to the previous user/company.
+    posthog.reset();
     // fullLogout() calls the backend logout-everywhere (blocklist + broadcast + token revoke),
     // wipes local tokens, and navigates the browser to end_session_url to clear the dashboard
     // cookie. It needs the token, so it captures it before wiping. Best-effort.
@@ -180,6 +184,8 @@ export function AppProvider({ children }) {
         logger.info('[AppContext] SSO exchange succeeded', { userId: u.user_id, email: u.email });
         themeStore.set('light');
         setUser(u);
+        posthog.identify(u.user_id, { email: u.email, name: u.full_name });
+        if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
 
         // Claim the ticket directly, right here, right after login succeeds — this is the
         // exact instant auth is confirmed complete, so there's no separate component/effect
