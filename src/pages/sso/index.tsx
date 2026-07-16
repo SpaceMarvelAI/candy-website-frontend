@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import posthog from 'posthog-js';
 import { ssoCallback } from '../../api/auth';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
@@ -46,6 +47,9 @@ export default function SSOCallbackPage() {
         if (candyToken) localStorage.setItem('candy.token', candyToken);
         localStorage.setItem('candy.user', JSON.stringify(user));
         if (dashboardToken) localStorage.setItem('dashboard_token', dashboardToken);
+
+        posthog.identify(user.user_id, { email: user.email, name: user.full_name });
+        if (user.company_id) posthog.group('company', user.company_id, { name: user.company_name });
 
         // If the user was trying to reach Metaspace/Finixy before being sent
         // to login, generate an SSO token for that app and redirect there.
