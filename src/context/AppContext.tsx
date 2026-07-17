@@ -9,7 +9,8 @@ import { logger } from '../utils/logger';
 // All existing showView('dashboard') calls keep working unchanged.
 const VIEW_TO_PATH: Record<string, string> = {
   auth:           '/auth',
-  dashboard:      '/dashboard',
+  healthcare_domain: '/healthcare',
+  dashboard:      '/healthcare',   // legacy alias → healthcare domain
   chatbots:       '/chatbots',
   live:           '/live',
   hrchat:         '/hrchat',
@@ -79,7 +80,7 @@ export function AppProvider({ children }) {
     logger.info('[AppContext] signedIn', { userId: u.user_id, email: u.email, role: u.role, company: u.company_name });
     themeStore.set('light');
     setUser(u);
-    navigate('/dashboard');
+    navigate('/healthcare');
   }, [navigate]);
 
   const signOut = useCallback(async () => {
@@ -147,7 +148,7 @@ export function AppProvider({ children }) {
         logger.info('[AppContext] SSO exchange succeeded', { userId: u.user_id, email: u.email });
         themeStore.set('light');
         setUser(u);
-        navigate('/dashboard', { replace: true });
+        navigate('/healthcare', { replace: true });
       })
       .catch((err: any) => {
         const msg = err?.detail
