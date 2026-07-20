@@ -9,6 +9,26 @@ import './styles/globals.css'
 import { GlobalErrorBoundary } from './components/ErrorBoundary'
 import { logger } from './utils/logger'
 
+// Strips access/refresh tokens from any URL PostHog would otherwise capture
+// verbatim (e.g. $current_url on autocaptured events) — the SSO/OIDC callback
+// routes in this app briefly carry raw tokens in the query string/hash.
+const SENSITIVE_URL_PARAMS = ['access_token', 'refresh_token', 'token', 'sso_token', 'code'];
+function stripSensitiveParams(url: string): string {
+  try {
+    const u = new URL(url);
+    let changed = false;
+    for (const p of SENSITIVE_URL_PARAMS) {
+      if (u.searchParams.has(p)) {
+        u.searchParams.set(p, 'REDACTED');
+        changed = true;
+      }
+    }
+    return changed ? u.toString() : url;
+  } catch {
+    return url;
+  }
+}
+
 // Product analytics (PostHog). No-op if the key is unset (e.g. local dev).
 // Max-privacy session replay posture — Candy handles business calls, so mask
 // everything by default rather than opting specific fields out.
@@ -22,6 +42,16 @@ if (posthogKey) {
       maskTextSelector: '*',
     },
     capture_exceptions: true, // error tracking — feeds PostHog's Error Tracking product
+    before_send: (cr) => {
+      if (!cr) return cr;
+      if (typeof cr.properties?.$current_url === 'string') {
+        cr.properties.$current_url = stripSensitiveParams(cr.properties.$current_url);
+      }
+      if (typeof cr.properties?.$referrer === 'string') {
+        cr.properties.$referrer = stripSensitiveParams(cr.properties.$referrer);
+      }
+      return cr;
+    },
   });
 }
 
