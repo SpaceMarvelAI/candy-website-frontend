@@ -70,6 +70,10 @@ export default function SSOCallbackPage() {
                 const target = new URL(pendingIntent);
                 target.searchParams.set('sso_token', ssoToken);
                 target.searchParams.set('access_token', dashboardToken);
+                // Hard redirect below can kill the identify()/group() request above before
+                // it sends. send_instantly + sendBeacon forces it out via the browser's
+                // beacon API, which survives page unload — fire-and-forget, no added latency.
+                posthog.capture('login_completed', undefined, { send_instantly: true, transport: 'sendBeacon' });
                 window.location.href = target.toString();
                 return;
               }
