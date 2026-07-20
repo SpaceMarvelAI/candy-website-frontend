@@ -773,11 +773,11 @@ export default function TestPanel({
                   _ttsToastShown = true;
                   posthog.capture('test_call_tts_failed', { status: _s ?? null });
                   if (_s === 429) {
-                    addToast('TTS quota exceeded — top up ElevenLabs or set DEEPGRAM_API_KEY as fallback.', 'error');
+                    addToast('TTS quota exceeded — top up ElevenLabs or set DEEPGRAM_API_KEY as fallback.', 'error', { skipCapture: true });
                   } else if (_s === 503 || !_s) {
                     addToast('Agent voice isn\'t available — set ELEVENLABS_API_KEY in the backend .env.', 'info');
                   } else {
-                    addToast(`Voice synthesis failed (HTTP ${_s}) — check backend logs.`, 'error');
+                    addToast(`Voice synthesis failed (HTTP ${_s}) — check backend logs.`, 'error', { skipCapture: true });
                   }
                 }
                 console.warn('[TestPanel] sentence TTS failed', err);
@@ -1188,6 +1188,7 @@ export default function TestPanel({
           ? 'Microphone permission denied — allow it in the address-bar lock icon.'
           : 'Could not access the microphone.',
         'error',
+        { skipCapture: true },
       );
       return;
     }
@@ -1576,6 +1577,7 @@ export default function TestPanel({
           ? 'Microphone permission denied — allow it in the address-bar lock icon.'
           : 'Could not access the microphone.',
         'error',
+        { skipCapture: true },
       );
       return;
     }

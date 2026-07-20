@@ -75,9 +75,17 @@ export function AppProvider({ children }) {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [navigate]);
 
-  const addToast = useCallback((msg: string, kind = 'success') => {
+  const addToast = useCallback((msg: string, kind = 'success', opts?: { skipCapture?: boolean }) => {
     const id = Date.now() + Math.random();
     logger.debug('[AppContext] addToast', { msg, kind });
+    if (kind === 'error' && !opts?.skipCapture) {
+      // Single, app-wide capture point for user-facing failures — covers every
+      // component that calls addToast(msg, 'error') without needing its own
+      // posthog.capture() call site. Callers that already fire a more specific,
+      // richer event for the same failure (e.g. TestPanel's mic/TTS errors) pass
+      // skipCapture to avoid double-counting the same failure under two names.
+      posthog.capture('error_toast_shown', { message: msg });
+    }
     setToasts(prev => [...prev, { id, msg, kind }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
