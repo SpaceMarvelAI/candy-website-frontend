@@ -150,7 +150,12 @@ export function useAgent(slug: string, defaultName: string): UseAgentResult {
         const matched = all.filter(a => a.use_case_slug === slug);
         setAgents(matched);
         if (matched.length > 0) {
-          setSelectedId(matched[0].id);
+          // Honor a preferred agent chosen from the use-case picker, if it's
+          // one of this slug's agents; otherwise default to the first.
+          const pref = sessionStorage.getItem('candy.select_agent');
+          if (pref) sessionStorage.removeItem('candy.select_agent');
+          const chosen = pref && matched.some(a => a.id === pref) ? pref : matched[0].id;
+          setSelectedId(chosen);
         } else {
           logger.info('[useAgent] No existing agents for slug — UI will prompt creation', { slug });
           setLoading(false);

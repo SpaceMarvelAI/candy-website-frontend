@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Icon from '../../assets/icons';
 import { useApp } from '../../context/AppContext';
 import {
@@ -7,7 +7,8 @@ import {
   type Direction,
   type HealthcareUseCase,
 } from '../../data/healthcareUseCases';
-import { createHealthcareAgent } from '../../api/healthcare';
+import { createHealthcareAgent, listUseCaseAgents } from '../../api/healthcare';
+import type { Agent } from '../../api/agents';
 
 // Clinical blue/white palette (local to the healthcare surface so we don't
 // disturb other pages' tokens).
@@ -104,6 +105,22 @@ function CreateModal({
   const { showView, addToast } = useApp();
   const [name, setName] = useState(`${uc.title} Agent`);
   const [busy, setBusy] = useState(false);
+  const [existing, setExisting] = useState<Agent[] | null>(null); // null = loading
+
+  // Look for agents this company already has for this use case.
+  useEffect(() => {
+    let cancelled = false;
+    listUseCaseAgents(uc)
+      .then(list => { if (!cancelled) setExisting(list); })
+      .catch(() => { if (!cancelled) setExisting([]); });
+    return () => { cancelled = true; };
+  }, [uc]);
+
+  function openAgent(agentId: string) {
+    // Tell the builder which agent to select, then navigate to it.
+    sessionStorage.setItem('candy.select_agent', agentId);
+    showView('healthcare');
+  }
 
   async function handleCreate() {
     if (busy) return;
@@ -115,8 +132,8 @@ function CreateModal({
       } else {
         addToast(`"${agent.name}" created with ${uc.skills.length} skills`, 'success');
       }
-      // Go to the healthcare builder to customise (prompt, skills, number, publish).
-      showView('healthcare');
+      // Open the just-created agent in the builder.
+      openAgent(agent.id);
     } catch (e) {
       addToast(`Could not create agent: ${(e as Error).message}`, 'error');
       setBusy(false);
@@ -154,7 +171,45 @@ function CreateModal({
           {uc.purpose}
         </p>
 
-        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>Agent name</label>
+        {/* Existing agents for this use case — select instead of re-creating. */}
+        {existing && existing.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em',
+              color: 'var(--text-4)', marginBottom: 8 }}>
+              You already have {existing.length} agent{existing.length > 1 ? 's' : ''} for this use case
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {existing.map(a => (
+                <button
+                  key={a.id}
+                  onClick={() => openAgent(a.id)}
+                  disabled={busy}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 12px', borderRadius: 'var(--radius)',
+                    border: `1px solid ${BLUE_BORDER}`, background: BLUE_SOFT,
+                    cursor: busy ? 'default' : 'pointer', textAlign: 'left', width: '100%',
+                  }}
+                >
+                  <span style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)' }}>{a.name}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-4)' }}>
+                      {a.agent_flow_status === 'published' ? 'Live' : 'Draft'} · {a.call_direction}
+                    </span>
+                  </span>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: BLUE }}>Open →</span>
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--text-4)', margin: '12px 0 0' }}>
+              — or create another below —
+            </div>
+          </div>
+        )}
+
+        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>
+          {existing && existing.length > 0 ? 'New agent name' : 'Agent name'}
+        </label>
         <input
           value={name}
           onChange={e => setName(e.target.value)}
