@@ -8,6 +8,7 @@
  * a visual "listening" state.
  */
 import { useState, useEffect, useRef } from 'react';
+import posthog from 'posthog-js';
 import Icon from '../../assets/icons';
 import { startDemo, streamDemoTurn, prefetchDemoRag } from '../../api/demo';
 import { synthesize } from '../../api/tts';
@@ -767,9 +768,10 @@ export default function TestPanel({
             const primary  = convLangRef.current.split('-')[0] || 'en';
             const promise  = synthesize({ text: sentence, language_code: primary })
               .catch(err => {
+                const _s = (err as any)?.status;
                 if (!_ttsToastShown) {
                   _ttsToastShown = true;
-                  const _s = (err as any)?.status;
+                  posthog.capture('test_call_tts_failed', { status: _s ?? null });
                   if (_s === 429) {
                     addToast('TTS quota exceeded — top up ElevenLabs or set DEEPGRAM_API_KEY as fallback.', 'error');
                   } else if (_s === 503 || !_s) {
@@ -1177,6 +1179,10 @@ export default function TestPanel({
       });
     } catch (e: any) {
       logger.error('[TestPanel] getUserMedia failed', { name: e?.name, message: e?.message, stack: e?.stack });
+      posthog.capture(
+        e?.name === 'NotAllowedError' ? 'test_call_mic_denied' : 'test_call_mic_error',
+        { name: e?.name },
+      );
       addToast(
         e?.name === 'NotAllowedError'
           ? 'Microphone permission denied — allow it in the address-bar lock icon.'
@@ -1329,6 +1335,7 @@ export default function TestPanel({
         if (f.count >= 3 && !useRestSttRef.current) {
           useRestSttRef.current = true;
           console.warn('[TestPanel] streaming STT failing — switching to REST fallback');
+          posthog.capture('test_call_stt_degraded', { fail_count: f.count });
           addToast(
             'Live transcription is having issues — switching to the slower fallback for this session.',
             'info',
@@ -1560,6 +1567,10 @@ export default function TestPanel({
       });
     } catch (e: any) {
       console.error('[TestPanel] session getUserMedia failed', e);
+      posthog.capture(
+        e?.name === 'NotAllowedError' ? 'test_call_mic_denied' : 'test_call_mic_error',
+        { name: e?.name },
+      );
       addToast(
         e?.name === 'NotAllowedError'
           ? 'Microphone permission denied — allow it in the address-bar lock icon.'

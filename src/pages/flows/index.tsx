@@ -6,6 +6,7 @@
  * Right drawer: NodeEditDrawer — type-aware editor for any node
  */
 import { useState, useRef, useEffect } from 'react';
+import posthog from 'posthog-js';
 import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import Icon from '../../assets/icons';
@@ -220,6 +221,7 @@ export default function FlowsPage() {
       : {};
     const newNode: FlowNode = { ...payload, ...extra, id: uid(), x, y };
     setNodes(prev => [...prev, newNode]);
+    posthog.capture('workflow_canvas_node_added', { node_type: payload.type });
     // Auto-open edit drawer for new nodes
     setEditNode(newNode);
   }
@@ -300,6 +302,7 @@ export default function FlowsPage() {
     const triggerType: FlowEdge['triggerType'] =
       (src.type === 'webhook' && tgt.type === 'agent') ? 'webhook_to_agent' : 'escalation';
     setEdges(prev => [...prev, { id: uid(), source: srcId, target: targetId, triggerType }]);
+    posthog.capture('workflow_canvas_edge_connected', { trigger_type: triggerType });
   }
 
   function finishDrawEdge(e: React.MouseEvent, targetId: string) {
@@ -339,6 +342,7 @@ export default function FlowsPage() {
     setNodes(prev => prev.filter(n => n.id !== id));
     setEdges(prev => prev.filter(e => e.source !== id && e.target !== id));
     if (editNode?.id === id) setEditNode(null);
+    posthog.capture('workflow_canvas_node_deleted', {});
   }
 
   // ── Tap-to-add (mobile) — places node at next auto-position ─────────────────
@@ -384,6 +388,7 @@ export default function FlowsPage() {
 
   // ── Save ─────────────────────────────────────────────────────────────────────
   async function saveWorkflow() {
+    posthog.capture('workflow_canvas_save_clicked', { node_count: nodes.length });
     setSaving(true);
     const graph: WorkflowGraph = { nodes, edges };
     try {
@@ -405,6 +410,7 @@ export default function FlowsPage() {
   async function handleConnectApp(app: ComposioApp) {
     const id = composioAppId(app);
     if (connectingAppId === id) return;
+    posthog.capture('connector_connect_clicked', { provider: id });
     setConnectingAppId(id);
     try {
       // Step 1: find out what auth flow this app needs
@@ -453,12 +459,14 @@ export default function FlowsPage() {
             addToast(`${app.name} connected`, 'success');
           } else if (closed && popupClosedAt !== null && Date.now() - popupClosedAt > GRACE_MS) {
             // Grace period expired with no confirmed connection — user likely cancelled
+            posthog.capture('connector_oauth_abandoned', { provider: id });
             clearInterval(appPollRef.current!);
             appPollRef.current = null;
             setConnectingAppId(null);
           }
         } catch {
           if (closed && popupClosedAt !== null && Date.now() - popupClosedAt > GRACE_MS) {
+            posthog.capture('connector_oauth_abandoned', { provider: id });
             clearInterval(appPollRef.current!);
             appPollRef.current = null;
             setConnectingAppId(null);
@@ -865,7 +873,7 @@ export default function FlowsPage() {
             </span>
           )}
           {!isMobile && (
-            <button onClick={() => { setNodes([]); setEdges([]); setEditNode(null); }}
+            <button onClick={() => { setNodes([]); setEdges([]); setEditNode(null); posthog.capture('workflow_canvas_cleared', {}); }}
               style={ghostBtn}>Clear</button>
           )}
           <button onClick={saveWorkflow} disabled={saving} style={{
@@ -1099,6 +1107,7 @@ export default function FlowsPage() {
               onSelect={t => setEdges(prev => prev.map(e =>
                 e.id===selectedEdge.edge.id ? {...e, triggerType:t} : e))}
               onDelete={() => { setEdges(prev => prev.filter(e => e.id!==selectedEdge.edge.id));
+                posthog.capture('workflow_canvas_edge_deleted', {});
                 setSelectedEdge(null); }}
               onClose={() => setSelectedEdge(null)}
             />

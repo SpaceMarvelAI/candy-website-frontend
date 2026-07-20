@@ -7,6 +7,7 @@
  *   'webhook' → generated inbound URL + secret + editable name
  */
 import { useState, useEffect } from 'react';
+import posthog from 'posthog-js';
 import type { FlowNode, FlowNodeData } from '../../api/workflows';
 import type { AppConnection } from '../../api/connections';
 import { createConnection, testConnection, startOAuth, APP_CATALOGUE } from '../../api/connections';
@@ -551,6 +552,7 @@ function AppEditor({
   async function handleOAuth() {
     if (!appMeta) return;
     try {
+      posthog.capture('connector_connect_clicked', { provider: appMeta.type });
       const { auth_url } = await startOAuth(appMeta.type as any, window.location.href);
       window.location.href = auth_url;
     } catch { addToast('Could not start OAuth flow', 'error'); }

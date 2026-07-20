@@ -12,6 +12,7 @@
  *  - Blinking cursor on streaming messages
  */
 import { useEffect, useRef, useState } from 'react';
+import posthog from 'posthog-js';
 import { api } from '../../api/client';
 import { logger } from '../../utils/logger';
 import Icon from '../../assets/icons';
@@ -142,6 +143,7 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
       });
     } catch (e: any) {
       logger.error('[ChatTestPanel] startSession failed', { agentId, error: e, message: e?.message, stack: e?.stack });
+      posthog.capture('test_chat_failed', { stage: 'start_session', agent_id: agentId });
       setError(e?.message || 'Failed to start session');
     } finally {
       setStarting(false);
@@ -176,6 +178,7 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
       });
     } catch (e: any) {
       logger.error('[ChatTestPanel] sendMessage failed', { agentId, sessionId, error: e, message: e?.message, stack: e?.stack });
+      posthog.capture('test_chat_failed', { stage: 'send_message', agent_id: agentId });
       setBusy(false);
       const errText = `Sorry, something went wrong: ${e?.message || 'Unknown error'}`;
       setMessages(m => {
