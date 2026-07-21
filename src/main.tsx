@@ -42,6 +42,7 @@ if (posthogKey) {
       maskTextSelector: '*',
     },
     capture_exceptions: true, // error tracking — feeds PostHog's Error Tracking product
+    capture_heatmaps: true, // feeds PostHog's Heatmaps toolbar (enable_heatmaps is the deprecated alias)
     before_send: (cr) => {
       if (!cr) return cr;
       if (typeof cr.properties?.$current_url === 'string') {
