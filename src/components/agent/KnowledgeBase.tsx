@@ -346,7 +346,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
                 <Icon name="upload" size={14} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500 }}>{name}</div>
+                <div className="ph-mask" style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500 }}>{name}</div>
                 <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>Uploading…</div>
               </div>
             </li>
@@ -374,12 +374,12 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
                   <Icon name="file" size={14} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div className="ph-mask" style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {d.filename}
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>
                     {formatSize(d.size_bytes)} · {statusLabel(d)}
-                    {d.purpose_category ? ` · ${d.purpose_category}` : ''}
+                    {d.purpose_category ? <span className="ph-mask"> · {d.purpose_category}</span> : ''}
                   </div>
                 </div>
                 <button
@@ -486,13 +486,13 @@ function DocViewerModal({
             <Icon name="file" size={16} style={{ color: tint }} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div className="ph-mask" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {doc.filename}
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>
               {formatSize(doc.size_bytes)}
-              {doc.purpose_category ? ` · ${doc.purpose_category}` : ''}
-              {doc.audience ? ` · ${doc.audience}` : ''}
+              {doc.purpose_category ? <span className="ph-mask"> · {doc.purpose_category}</span> : ''}
+              {doc.audience ? <span className="ph-mask"> · {doc.audience}</span> : ''}
             </div>
           </div>
           {/* Download button — only shown when signed URL is available */}
@@ -535,13 +535,13 @@ function DocViewerModal({
             flexShrink: 0,
           }}>
             {doc.version_label && (
-              <span style={metaPill}>v{doc.version_label}</span>
+              <span className="ph-mask" style={metaPill}>v{doc.version_label}</span>
             )}
             {doc.effective_date && (
-              <span style={metaPill}>Effective: {doc.effective_date}</span>
+              <span className="ph-mask" style={metaPill}>Effective: {doc.effective_date}</span>
             )}
             {doc.document_tags?.map(tag => (
-              <span key={tag} style={{ ...metaPill, background: `${tint}14`, borderColor: `${tint}30`, color: tint }}>
+              <span key={tag} className="ph-mask" style={{ ...metaPill, background: `${tint}14`, borderColor: `${tint}30`, color: tint }}>
                 {tag}
               </span>
             ))}
@@ -572,7 +572,7 @@ function DocViewerModal({
             </div>
           ) : doc.content_text ? (
             /* Extracted text fallback */
-            <pre style={{
+            <pre className="ph-mask" style={{
               margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               fontSize: 12.5, lineHeight: 1.7, color: 'var(--text-1)',
               fontFamily: 'inherit',
@@ -600,7 +600,7 @@ function DocViewerModal({
                   color: tint, fontSize: 13, fontWeight: 600, textDecoration: 'none',
                 }}
               >
-                ↓ Download {doc.filename}
+                ↓ Download <span className="ph-mask">{doc.filename}</span>
               </a>
             </div>
           ) : doc.summary ? (
@@ -608,7 +608,7 @@ function DocViewerModal({
               <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-4)', margin: '0 0 10px' }}>
                 Summary
               </p>
-              <p style={{ fontSize: 13.5, lineHeight: 1.75, color: 'var(--text-1)', margin: 0, whiteSpace: 'pre-wrap' }}>
+              <p className="ph-mask" style={{ fontSize: 13.5, lineHeight: 1.75, color: 'var(--text-1)', margin: 0, whiteSpace: 'pre-wrap' }}>
                 {doc.summary}
               </p>
             </>

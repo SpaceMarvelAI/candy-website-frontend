@@ -329,11 +329,11 @@ export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: P
                           <Icon name={meta?.icon ?? 'plug'} size={18} />
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{cfg.display_name}</div>
+                          <div className="ph-mask" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{cfg.display_name}</div>
                           <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
                             <span style={triggerBadge(cfg.trigger_type)}>{TRIGGER_LABELS[cfg.trigger_type]}</span>
                             {' · '}
-                            <span style={{ fontFamily: 'inherit', fontSize: 10.5 }}>
+                            <span className="ph-mask" style={{ fontFamily: 'inherit', fontSize: 10.5 }}>
                               {(cfg.webhook_url ?? '').replace(/^https?:\/\//, '').slice(0, 38)}
                               {(cfg.webhook_url?.length ?? 0) > 45 ? '…' : ''}
                             </span>
@@ -492,7 +492,7 @@ export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: P
                   display: 'flex', alignItems: 'center', gap: 6,
                 }}>
                   <Icon name={testResult.ok ? 'check' : 'x'} size={13} />
-                  {testResult.msg}
+                  <span className="ph-mask">{testResult.msg}</span>
                 </div>
               )}
             </div>

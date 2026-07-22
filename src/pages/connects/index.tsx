@@ -308,7 +308,7 @@ export default function ConnectsPage() {
           color: '#ff8194', fontSize: 13, lineHeight: 1.6,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
         }}>
-          <span>Failed to load integrations — {apiError}</span>
+          <span className="ph-mask">Failed to load integrations — {apiError}</span>
           <button
             onClick={() => loadData()}
             style={{

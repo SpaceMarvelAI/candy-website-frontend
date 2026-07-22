@@ -73,7 +73,7 @@ export default function ToastHost() {
             >
               <Icon name={style.icon} size={12} />
             </div>
-            <span style={{ color: style.fg }}>{t.msg}</span>
+            <span className="ph-mask" style={{ color: style.fg }}>{t.msg}</span>
           </div>
         );
       })}

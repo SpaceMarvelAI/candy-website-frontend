@@ -88,7 +88,7 @@ function DeliveriesPanel({ webhookId }: { webhookId: string }) {
     <div style={{ padding: '16px 22px', color: 'var(--text-3)', fontSize: 13 }}>Loading deliveries…</div>
   );
   if (error) return (
-    <div style={{ padding: '12px 22px', color: 'var(--red)', fontSize: 13 }}>{error}</div>
+    <div className="ph-mask" style={{ padding: '12px 22px', color: 'var(--red)', fontSize: 13 }}>{error}</div>
   );
   if (deliveries.length === 0) return (
     <div style={{ padding: '16px 22px', color: 'var(--text-3)', fontSize: 13 }}>
@@ -153,6 +153,7 @@ function DeliveriesPanel({ webhookId }: { webhookId: string }) {
                           <div style={{ flex: 1, minWidth: 260 }}>
                             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-4)', marginBottom: 6 }}>Response</div>
                             <pre
+                              className="ph-mask"
                               style={{
                                 background: 'var(--bg-3)', border: '1px solid var(--border)',
                                 borderRadius: 8, padding: '10px 14px', fontSize: 11.5,
@@ -559,6 +560,7 @@ export default function WebhooksPage() {
       {error && (
         <div
           role="alert"
+          className="ph-mask"
           style={{
             background: 'rgba(255,90,120,0.1)',
             border: '1px solid rgba(255,90,120,0.4)',
@@ -639,6 +641,7 @@ export default function WebhooksPage() {
                       {/* URL */}
                       <td style={{ padding: '14px 22px', maxWidth: 280 }}>
                         <div
+                          className="ph-mask"
                           style={{
                             fontWeight: 500, color: 'var(--text-1)',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',

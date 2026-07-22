@@ -1980,6 +1980,7 @@ export default function TestPanel({
               }}
             >
               <div
+                className="ph-mask"
                 style={{
                   maxWidth: '85%',
                   padding: '10px 14px',

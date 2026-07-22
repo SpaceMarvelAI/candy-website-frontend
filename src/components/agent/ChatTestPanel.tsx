@@ -314,7 +314,9 @@ export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disa
                   </div>
                 )}
 
-                <div style={{
+                <div
+                  className="ph-mask"
+                  style={{
                   maxWidth: '75%',
                   padding: '10px 14px',
                   borderRadius: msg.role === 'user'

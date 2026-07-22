@@ -121,7 +121,7 @@ export default function CallTable({ calls, flashIds }) {
                       {c.initials}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{c.name}</div>
+                      <div className="ph-mask" style={{ fontWeight: 500, color: 'var(--text-1)' }}>{c.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{c.role}</div>
                     </div>
                   </div>
@@ -129,6 +129,7 @@ export default function CallTable({ calls, flashIds }) {
 
                 {/* Phone */}
                 <td
+                  className="ph-mask"
                   style={{
                     padding: '14px 22px', verticalAlign: 'middle',
                     color: 'var(--text-2)',

@@ -39,7 +39,7 @@ if (posthogKey) {
     person_profiles: 'identified_only',
     session_recording: {
       maskAllInputs: true,
-      maskTextSelector: '*',
+      maskTextSelector: '.ph-mask',
     },
     capture_exceptions: true, // error tracking — feeds PostHog's Error Tracking product
     capture_heatmaps: true, // feeds PostHog's Heatmaps toolbar (enable_heatmaps is the deprecated alias)
