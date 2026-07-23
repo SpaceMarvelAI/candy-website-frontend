@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import Icon from '../assets/icons';
+import ReportIssuesModal from './ReportIssuesModal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 const COLLAPSED_W = 56;
@@ -59,12 +60,13 @@ const SM_API = isLocal
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
   anchorRect, panelWidth, onClose, onSignOut, navigate, addToast,
-  theme, setTheme,
+  theme, setTheme, onReportIssue,
 }: {
   anchorRect: DOMRect; panelWidth: number;
   onClose: () => void; onSignOut: () => void;
   navigate: (p: string) => void; addToast: (m: string, k?: string) => void;
   theme: string; setTheme: (t: 'light' | 'dark') => void;
+  onReportIssue: () => void;
 }) {
   const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
   const [subMenuY, setSubMenuY] = useState(0);
@@ -209,7 +211,7 @@ function ProfileMenu({
       {/* ── Help flyout ── */}
       {subMenu === 'help' && (
         <div style={flyoutStyle}>
-          {menuItem('Report issue',       () => addToast('Report issue — coming soon', 'info'))}
+          {menuItem('Report issue',       () => { onReportIssue(); onClose(); })}
           {menuItem('Terms & conditions', () => window.open('https://spacemarvel.ai/terms', '_blank'))}
           {menuItem('Privacy policy',     () => window.open('https://spacemarvel.ai/privacy', '_blank'))}
           {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
@@ -235,6 +237,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [reportIssuesOpen, setReportIssuesOpen] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
   const [headerHovered, setHeaderHovered] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -567,7 +570,13 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           addToast={addToast}
           theme={theme}
           setTheme={setTheme}
+          onReportIssue={() => setReportIssuesOpen(true)}
         />
+      )}
+
+      {/* ── Report an Issue (portaled) ───────────────────────────────────────── */}
+      {reportIssuesOpen && (
+        <ReportIssuesModal onClose={() => setReportIssuesOpen(false)} />
       )}
 
       {/* ── Flex placeholder — mirrors the panel width so the content area shifts ── */}
