@@ -139,7 +139,7 @@ export async function listMyIssues(userId: string): Promise<ReportedIssue[]> {
 export async function loadAttachment(ticketId: string, relKey: string): Promise<string> {
   const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: `${PREFIX}/${ticketId}/${relKey}` }));
   const bytes = await readBody(resp.Body);
-  return URL.createObjectURL(new Blob([bytes]));
+  return URL.createObjectURL(new Blob([new Uint8Array(bytes)]));
 }
 
 export interface NewIssueInput {

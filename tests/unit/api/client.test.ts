@@ -103,7 +103,7 @@ describe('api() — HTTP error responses', () => {
 
 describe('api() — 401 auth-expiry side-effects', () => {
   beforeEach(() => {
-    localStorage.setItem('candy.token', 'expired-token');
+    localStorage.setItem('access_token', 'expired-token');
     localStorage.setItem('candy.user', JSON.stringify({ user_id: 'u1', email: 'a@b.com' }));
     server.use(
       http.get(`${API_BASE}/v1/secure`, () =>
@@ -120,9 +120,9 @@ describe('api() — 401 auth-expiry side-effects', () => {
     window.removeEventListener('candy:auth-expired', handler);
   });
 
-  it('removes candy.token from localStorage on 401', async () => {
+  it('removes access_token from localStorage on 401', async () => {
     await expect(api('/v1/secure')).rejects.toThrow();
-    expect(localStorage.getItem('candy.token')).toBeNull();
+    expect(localStorage.getItem('access_token')).toBeNull();
   });
 
   it('removes candy.user from localStorage on 401', async () => {
@@ -151,17 +151,17 @@ describe('api() — 401 auth-expiry side-effects', () => {
 describe('getToken / setToken', () => {
   it('setToken stores value in localStorage', () => {
     setToken('hello-world');
-    expect(localStorage.getItem('candy.token')).toBe('hello-world');
+    expect(localStorage.getItem('access_token')).toBe('hello-world');
   });
 
   it('setToken(null) removes the key', () => {
     setToken('some-token');
     setToken(null);
-    expect(localStorage.getItem('candy.token')).toBeNull();
+    expect(localStorage.getItem('access_token')).toBeNull();
   });
 
   it('getToken reads from localStorage', () => {
-    localStorage.setItem('candy.token', 'stored-token');
+    localStorage.setItem('access_token', 'stored-token');
     expect(getToken()).toBe('stored-token');
   });
 

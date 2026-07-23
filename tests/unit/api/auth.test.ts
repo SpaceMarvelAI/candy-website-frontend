@@ -8,7 +8,7 @@ import { login, signup, logout, ssoCallback, loadStoredUser } from '../../../src
 describe('login()', () => {
   it('stores the access token in localStorage on success', async () => {
     await login('admin@acme.com', 'correct-password');
-    expect(localStorage.getItem('candy.token')).toBe('test-jwt-abc123');
+    expect(localStorage.getItem('access_token')).toBe('test-jwt-abc123');
   });
 
   it('stores the user object in localStorage on success', async () => {
@@ -33,7 +33,7 @@ describe('login()', () => {
       )
     );
     await expect(login('bad@email.com', 'wrong')).rejects.toThrow();
-    expect(localStorage.getItem('candy.token')).toBeNull();
+    expect(localStorage.getItem('access_token')).toBeNull();
   });
 
   it('throws and does not store token on 500', async () => {
@@ -43,7 +43,7 @@ describe('login()', () => {
       )
     );
     await expect(login('admin@acme.com', 'pass')).rejects.toThrow();
-    expect(localStorage.getItem('candy.token')).toBeNull();
+    expect(localStorage.getItem('access_token')).toBeNull();
   });
 });
 
@@ -54,7 +54,7 @@ describe('signup()', () => {
 
   it('stores the access token in localStorage on success', async () => {
     await signup(args);
-    expect(localStorage.getItem('candy.token')).toBe('test-jwt-abc123');
+    expect(localStorage.getItem('access_token')).toBe('test-jwt-abc123');
   });
 
   it('returns the token and user objects', async () => {
@@ -76,10 +76,10 @@ describe('signup()', () => {
 // ── logout() ─────────────────────────────────────────────────────────────────
 
 describe('logout()', () => {
-  it('removes candy.token from localStorage', () => {
-    localStorage.setItem('candy.token', 'live-token');
+  it('removes access_token from localStorage', () => {
+    localStorage.setItem('access_token', 'live-token');
     logout();
-    expect(localStorage.getItem('candy.token')).toBeNull();
+    expect(localStorage.getItem('access_token')).toBeNull();
   });
 
   it('removes candy.user from localStorage', () => {
@@ -98,7 +98,7 @@ describe('logout()', () => {
 describe('ssoCallback()', () => {
   it('stores the access token in localStorage', async () => {
     await ssoCallback('sso-temp-token-xyz');
-    expect(localStorage.getItem('candy.token')).toBe('test-jwt-abc123');
+    expect(localStorage.getItem('access_token')).toBe('test-jwt-abc123');
   });
 
   it('stores the user object in localStorage', async () => {

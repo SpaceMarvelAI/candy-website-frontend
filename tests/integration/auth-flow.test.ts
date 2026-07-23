@@ -17,7 +17,7 @@ import { API_BASE } from '../mocks/fixtures';
 
 describe('401 auth-expiry: full side-effect chain', () => {
   it('clears token, clears user, and dispatches candy:auth-expired', async () => {
-    localStorage.setItem('candy.token', 'valid-looking-token');
+    localStorage.setItem('access_token', 'valid-looking-token');
     localStorage.setItem('candy.user', JSON.stringify({ user_id: 'u1', email: 'a@b.com' }));
 
     server.use(
@@ -32,14 +32,14 @@ describe('401 auth-expiry: full side-effect chain', () => {
     await expect(api('/v1/agents')).rejects.toMatchObject({ status: 401 });
 
     expect(expiredHandler).toHaveBeenCalledOnce();
-    expect(localStorage.getItem('candy.token')).toBeNull();
+    expect(localStorage.getItem('access_token')).toBeNull();
     expect(localStorage.getItem('candy.user')).toBeNull();
 
     window.removeEventListener('candy:auth-expired', expiredHandler);
   });
 
   it('fires candy:auth-expired only once even if multiple 401s arrive', async () => {
-    localStorage.setItem('candy.token', 'stale-token');
+    localStorage.setItem('access_token', 'stale-token');
 
     server.use(
       http.get(`${API_BASE}/v1/agents`, () =>
@@ -113,6 +113,6 @@ describe('successful auth flow: token stored and used in subsequent requests', (
     );
 
     await api('/v1/agents', { auth: false });
-    expect(localStorage.getItem('candy.token')).toBeNull();
+    expect(localStorage.getItem('access_token')).toBeNull();
   });
 });
