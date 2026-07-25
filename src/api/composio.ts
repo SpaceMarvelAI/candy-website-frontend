@@ -1,5 +1,6 @@
-const SM_API   = (import.meta as any).env?.VITE_SM_API_URL   || 'https://dashboard-api.spacemarvel.ai';
-const META_API = (import.meta as any).env?.VITE_META_API_URL || 'https://meta-api.spacemarvel.ai';
+const SM_API    = (import.meta as any).env?.VITE_SM_API_URL    || 'https://dashboard-api.spacemarvel.ai';
+const META_API  = (import.meta as any).env?.VITE_META_API_URL  || 'https://meta-api.spacemarvel.ai';
+const META_APP  = (import.meta as any).env?.VITE_META_APP_URL  || 'https://meta.spacemarvel.ai';
 
 let _metaToken: string | null = null;
 let _metaTokenExpiry = 0;
@@ -18,7 +19,7 @@ async function getMetaToken(): Promise<string> {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${dashboardToken}`,
     },
-    body: JSON.stringify({ app_url: 'https://meta.spacemarvel.ai' }),
+    body: JSON.stringify({ app_url: META_APP }),
   });
   if (!ssoRes.ok) throw new Error('COMPOSIO_UNAUTHORIZED');
   const ssoData = await ssoRes.json().catch(() => ({}));

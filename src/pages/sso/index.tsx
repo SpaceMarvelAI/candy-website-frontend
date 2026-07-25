@@ -52,7 +52,7 @@ export default function SSOCallbackPage() {
         if (pendingIntent && dashboardToken) {
           try {
             const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            const smApi   = isLocal ? '/sm-api' : 'https://dashboard-api.spacemarvel.ai';
+            const smApi   = isLocal ? '/sm-api' : ((import.meta as any).env?.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
             const res = await fetch(`${smApi}/api/rbac/auth/sso/generate/`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${dashboardToken}` },
