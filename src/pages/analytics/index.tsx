@@ -522,7 +522,7 @@ function SessionsView({ data, loading }: { data: AnalyticsSession[]; loading: bo
               {slice.map((s, idx) => (
                 <tr key={s.id ?? idx} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={TD_STYLE}>
-                    <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{s.agent_name || '—'}</div>
+                    <div className="ph-mask" style={{ fontWeight: 500, color: 'var(--text-1)' }}>{s.agent_name || '—'}</div>
                   </td>
                   <td style={TD_STYLE}>
                     {s.session_type ? (
@@ -719,9 +719,9 @@ function KnowledgeGapsView({ data, loading }: { data: KnowledgeGap[]; loading: b
               {slice.map((g, idx) => (
                 <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ ...TD_STYLE, maxWidth: 400 }}>
-                    <div style={{ color: 'var(--text-1)', fontWeight: 500 }}>{g.utterance}</div>
+                    <div className="ph-mask" style={{ color: 'var(--text-1)', fontWeight: 500 }}>{g.utterance}</div>
                   </td>
-                  <td style={TD_STYLE}>{g.agent_name || '—'}</td>
+                  <td className="ph-mask" style={TD_STYLE}>{g.agent_name || '—'}</td>
                   <td style={{ ...TD_STYLE, ...MONO }}>
                     <span
                       style={{
@@ -871,7 +871,7 @@ function AgentsView({ data, loading }: { data: AgentStat[]; loading: boolean }) 
               {slice.map((a, idx) => (
                 <tr key={a.agent_id ?? idx} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={TD_STYLE}>
-                    <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{a.name || '—'}</div>
+                    <div className="ph-mask" style={{ fontWeight: 500, color: 'var(--text-1)' }}>{a.name || '—'}</div>
                   </td>
                   <td style={TD_STYLE}>
                     {a.use_case ? (
@@ -987,7 +987,7 @@ function EventsView({ data, loading }: { data: AnalyticsEvent[]; loading: boolea
                 <td style={{ ...TD_STYLE, ...MONO, fontSize: 11.5, color: 'var(--text-3)' }}>
                   {e.agent_id ? `${e.agent_id.slice(0, 8)}…` : '—'}
                 </td>
-                <td style={{ ...TD_STYLE, color: 'var(--text-3)', maxWidth: 360, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: "'Zalando Sans'", fontSize: 11.5 }}>
+                <td className="ph-mask" style={{ ...TD_STYLE, color: 'var(--text-3)', maxWidth: 360, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: "'Zalando Sans'", fontSize: 11.5 }}>
                   {e.payload != null ? JSON.stringify(e.payload).slice(0, 80) : '—'}
                 </td>
               </tr>

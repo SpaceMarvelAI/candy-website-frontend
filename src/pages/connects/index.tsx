@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import posthog from 'posthog-js';
 import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import Icon from '../../assets/icons';
@@ -152,6 +153,7 @@ export default function ConnectsPage() {
   async function handleConnect(app: ComposioApp) {
     const id = appId(app);
     if (connectingId === id) return;
+    posthog.capture('connector_connect_clicked', { provider: id });
     setConnectingId(id);
     try {
       const info = await getAppAuthInfo(id);
@@ -193,11 +195,13 @@ export default function ConnectsPage() {
             setConnectingId(null);
             addToast(`${app.name} connected`, 'success');
           } else if (closed && popupClosedAt !== null && Date.now() - popupClosedAt > GRACE_MS) {
+            posthog.capture('connector_oauth_abandoned', { provider: id });
             stopPoll();
             setConnectingId(null);
           }
         } catch {
           if (closed && popupClosedAt !== null && Date.now() - popupClosedAt > GRACE_MS) {
+            posthog.capture('connector_oauth_abandoned', { provider: id });
             stopPoll();
             setConnectingId(null);
           }
@@ -304,7 +308,7 @@ export default function ConnectsPage() {
           color: '#ff8194', fontSize: 13, lineHeight: 1.6,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
         }}>
-          <span>Failed to load integrations — {apiError}</span>
+          <span className="ph-mask">Failed to load integrations — {apiError}</span>
           <button
             onClick={() => loadData()}
             style={{

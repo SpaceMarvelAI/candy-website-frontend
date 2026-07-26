@@ -507,6 +507,7 @@ function RecordingsTable({
                       </span>
                     </td>
                     <td
+                      className="ph-mask"
                       onClick={() => onView(r)}
                       style={{
                         padding: '14px 22px', color: 'var(--text-3)',
@@ -895,7 +896,9 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
                   animationDelay: `${Math.min(i * 0.08, 0.8)}s`,
                 }}
               >
-                <div style={{
+                <div
+                  className="ph-mask"
+                  style={{
                   maxWidth: '80%',
                   padding: '9px 12px',
                   borderRadius: turn.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
@@ -1012,7 +1015,7 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
                   <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'" }}>
                     {s.message_count}
                   </td>
-                  <td style={{ padding: '14px 22px', color: 'var(--text-3)', fontSize: 12, maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <td className="ph-mask" style={{ padding: '14px 22px', color: 'var(--text-3)', fontSize: 12, maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {s.preview || <em>—</em>}
                   </td>
                   <td style={{ padding: '14px 22px', textAlign: 'right' }}>
@@ -1028,7 +1031,7 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16, maxHeight: 400, overflowY: 'auto' }}>
                           {detail.turns.map((t, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: t.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                              <div style={{
+                              <div className="ph-mask" style={{
                                 maxWidth: '70%', padding: '9px 14px', fontSize: 13, lineHeight: 1.55,
                                 borderRadius: t.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
                                 background: t.role === 'user' ? 'rgba(117,91,227,0.12)' : 'var(--surface-soft)',

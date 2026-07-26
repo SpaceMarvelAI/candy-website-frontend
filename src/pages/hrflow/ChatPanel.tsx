@@ -359,6 +359,7 @@ function Message({ msg }) {
       </div>
       <div>
         <div
+          className="ph-mask"
           style={{
             padding: '12px 16px',
             borderRadius: isUser ? '14px 4px 14px 14px' : '4px 14px 14px 14px',

@@ -13,6 +13,7 @@
  * All three log via logger.error so the crash is traceable from the console.
  */
 import React from 'react';
+import posthog from 'posthog-js';
 import { logger } from '../utils/logger';
 import Icon from '../assets/icons';
 
@@ -48,6 +49,10 @@ class ErrorBoundaryBase extends React.Component<BaseProps, State> {
       stack:          error.stack,
       componentStack: errorInfo.componentStack,
     });
+    // capture_exceptions autocapture only sees window-level errors — React
+    // ErrorBoundary catches render errors before they ever reach window.onerror,
+    // so without this explicit call they'd be invisible to PostHog entirely.
+    posthog.captureException(error, { boundary: label, componentStack: errorInfo.componentStack });
     this.props.onError?.(error, errorInfo);
     this.setState({ errorInfo });
   }

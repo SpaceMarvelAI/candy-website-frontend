@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import posthog from 'posthog-js';
 import { seedChatMessages } from '../utils/mockData';
 import { loadStoredUser, logout as apiLogout, fullLogout, ssoCallback, type AuthUser } from '../api/auth';
 import { themeStore } from '../hooks/useTheme';
@@ -74,9 +75,17 @@ export function AppProvider({ children }) {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [navigate]);
 
-  const addToast = useCallback((msg: string, kind = 'success') => {
+  const addToast = useCallback((msg: string, kind = 'success', opts?: { skipCapture?: boolean }) => {
     const id = Date.now() + Math.random();
     logger.debug('[AppContext] addToast', { msg, kind });
+    if (kind === 'error' && !opts?.skipCapture) {
+      // Single, app-wide capture point for user-facing failures — covers every
+      // component that calls addToast(msg, 'error') without needing its own
+      // posthog.capture() call site. Callers that already fire a more specific,
+      // richer event for the same failure (e.g. TestPanel's mic/TTS errors) pass
+      // skipCapture to avoid double-counting the same failure under two names.
+      posthog.capture('error_toast_shown', { message: msg });
+    }
     setToasts(prev => [...prev, { id, msg, kind }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
@@ -98,6 +107,9 @@ export function AppProvider({ children }) {
     logger.info('[AppContext] signOut — full single-logout');
     // Clear UI state immediately so the app looks logged out right away.
     setUser(null);
+    // Clears PostHog's distinct_id + group state — otherwise the next person to use
+    // this browser/device gets misattributed to the previous user/company.
+    posthog.reset();
     // fullLogout() calls the backend logout-everywhere (blocklist + broadcast + token revoke),
     // wipes local tokens, and navigates the browser to end_session_url to clear the dashboard
     // cookie. It needs the token, so it captures it before wiping. Best-effort.
@@ -180,6 +192,8 @@ export function AppProvider({ children }) {
         logger.info('[AppContext] SSO exchange succeeded', { userId: u.user_id, email: u.email });
         themeStore.set('light');
         setUser(u);
+        posthog.identify(u.user_id, { email: u.email, name: u.full_name });
+        if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
 
         // Claim the ticket directly, right here, right after login succeeds — this is the
         // exact instant auth is confirmed complete, so there's no separate component/effect
