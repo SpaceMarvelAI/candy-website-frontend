@@ -2,7 +2,7 @@
 
 # Candy Frontend - DEV Deployment Script
 # Audit → fix if needed → build → deploy to the DEV S3 bucket → invalidate DEV CloudFront
-# See deploy.sh for the PROD path (different bucket/distribution) — keep BOTH working.
+# See deploy-prod.sh for the PROD path (different bucket/distribution) — keep BOTH working.
 
 BUCKET_NAME="candy-website-frontend-dev"
 REGION="ap-south-1"
@@ -32,7 +32,7 @@ echo "✓ AWS credentials verified."
 # NOTE (dev only): audit-fix failures don't block dev deploys — the one remaining
 # high-severity finding needs `--force` (a breaking react-router-dom downgrade),
 # which is a deliberate call to make separately, not something to force through
-# on a routine deploy. Prod's deploy.sh still enforces this gate — don't remove
+# on a routine deploy. Prod's deploy-prod.sh still enforces this gate — don't remove
 # it there without the same review.
 echo ""
 echo "Running npm audit..."
