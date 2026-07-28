@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
@@ -53,15 +53,27 @@ const MarketingAgent  = lazy(() => import('./pages/marketing'));
 const HRAgent         = lazy(() => import('./pages/hr'));
 
 // Logs every route change so navigation failures are traceable from the console.
+// Tracks the previous route + wall-clock time spent on it, in addition to the
+// existing pathname/search/hash/state fields (unchanged from before).
 function RouteLogger() {
   const location = useLocation();
+  const prevRef = useRef<{ pathname: string; enteredAt: number } | null>(null);
+
   useEffect(() => {
+    const now = performance.now();
+    const prev = prevRef.current;
     logger.info('[Router] Navigation', {
+      from:     prev?.pathname ?? null,
+      to:       location.pathname,
       pathname: location.pathname,
       search:   location.search,
       hash:     location.hash,
       state:    location.state,
     });
+    if (prev) {
+      logger.perf(`[Router] time on ${prev.pathname}`, now - prev.enteredAt);
+    }
+    prevRef.current = { pathname: location.pathname, enteredAt: now };
   }, [location]);
   return null;
 }

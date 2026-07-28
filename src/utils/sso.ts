@@ -1,4 +1,5 @@
 import { API_BASE } from '../api/client';
+import { logger } from './logger';
 
 // Prompt Library handoff ("Open in Candy"): a `?ticket=` may be present on the
 // URL when the user isn't signed in yet. The OIDC login redirect only round-trips
@@ -30,15 +31,27 @@ export function redirectToSSO(): void {
  * OIDC round-trip (query strings don't).
  */
 export function redirectToOIDC(): void {
-  const params = new URLSearchParams(window.location.search);
-  const ticket = params.get('ticket');
+  // Flagged High in debug/AUDIT.md — this is the app's only unauthenticated
+  // entry point (landing page mount + CTA, App.tsx's ProtectedRoute) and had no
+  // error visibility if URL/storage construction throws (e.g. malformed
+  // VITE_API_BASE_URL, storage blocked). Logging only — rethrows unchanged so
+  // callers see the exact same failure as before.
+  try {
+    logger.debug('[redirectToOIDC] start', { origin: window.location.origin, search: window.location.search });
+    const params = new URLSearchParams(window.location.search);
+    const ticket = params.get('ticket');
 
-  // Also stash in sessionStorage as a fallback (in case cookies fail).
-  if (ticket) sessionStorage.setItem(PENDING_PROMPT_TICKET_KEY, ticket);
+    // Also stash in sessionStorage as a fallback (in case cookies fail).
+    if (ticket) sessionStorage.setItem(PENDING_PROMPT_TICKET_KEY, ticket);
 
-  const returnTo = encodeURIComponent(window.location.origin);
-  const loginUrl = new URL(`${API_BASE}/v1/auth/sso/oidc/login`);
-  loginUrl.searchParams.set('return_to', window.location.origin);
-  if (ticket) loginUrl.searchParams.set('ticket', ticket);
-  window.location.href = loginUrl.href;
+    const returnTo = encodeURIComponent(window.location.origin);
+    const loginUrl = new URL(`${API_BASE}/v1/auth/sso/oidc/login`);
+    loginUrl.searchParams.set('return_to', window.location.origin);
+    if (ticket) loginUrl.searchParams.set('ticket', ticket);
+    logger.debug('[redirectToOIDC] navigating', { href: loginUrl.href });
+    window.location.href = loginUrl.href;
+  } catch (error) {
+    logger.error('[redirectToOIDC] failed', { error, stack: (error as Error)?.stack });
+    throw error; // behavior unchanged — callers still see the same throw
+  }
 }
