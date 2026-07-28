@@ -150,8 +150,17 @@ export function useAgent(slug: string, defaultName: string, initialSelectedId?: 
         const matched = all.filter(a => a.use_case_slug === slug);
         setAgents(matched);
         if (matched.length > 0) {
-          const wanted = initialSelectedId && matched.some(a => a.id === initialSelectedId)
-            ? initialSelectedId
+          // Two independent ways to preselect a specific agent on this page load:
+          //  1. initialSelectedId — router location.state (Prompt Library agent picker).
+          //  2. sessionStorage 'candy.select_agent' — set by the healthcare-domain
+          //     use-case picker (doesn't rely on router state surviving the nav).
+          // initialSelectedId wins when both are present — it's the more explicit
+          // signal for this exact page load; the sessionStorage key is single-use either way.
+          const pref = sessionStorage.getItem('candy.select_agent');
+          if (pref) sessionStorage.removeItem('candy.select_agent');
+          const wanted =
+            initialSelectedId && matched.some(a => a.id === initialSelectedId) ? initialSelectedId
+            : pref && matched.some(a => a.id === pref) ? pref
             : matched[0].id;
           setSelectedId(wanted);
         } else {

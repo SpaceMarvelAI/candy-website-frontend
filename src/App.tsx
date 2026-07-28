@@ -31,6 +31,7 @@ const AnalyticsPage  = lazy(() => import('./pages/analytics'));
 const WebhooksPage   = lazy(() => import('./pages/webhooks'));
 const FlowsPage      = lazy(() => import('./pages/flows'));
 const ChatbotsPage   = lazy(() => import('./pages/chatbots'));
+const HealthcareDomainPage = lazy(() => import('./pages/healthcare-domain'));
 
 // Chatbot workspaces
 const ChatbotCS      = lazy(() => import('./pages/chatbot-cs'));
@@ -95,7 +96,7 @@ function RootRedirect() {
     // Also still checked via sessionStorage for the legacy /sso/callback + PromptTicketHandler path.
     const pendingTicket = typeof window !== 'undefined' ? sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY) : null;
     if (!pendingTicket && !claimingPrompt) {
-      return <Navigate to="/dashboard" replace />;
+      return <Navigate to="/healthcare" replace />;
     }
   }
   return (
@@ -166,8 +167,12 @@ export default function App() {
           {/* OIDC callback — backend redirects here with the minted Candy token */}
           <Route path="/sso/oidc/callback" element={<OIDCCallbackPage />} />
 
+          {/* Healthcare domain — the primary landing (15 use cases) */}
+          <Route path="/healthcare"     element={<AppRoute skeleton={<DashboardSkeleton />}><HealthcareDomainPage /></AppRoute>} />
+
           {/* App views — rendered inside AppLayout (sidebar + topbar) */}
-          <Route path="/dashboard"      element={<AppRoute skeleton={<DashboardSkeleton />}><DashboardPage /></AppRoute>} />
+          {/* Legacy Voice-Bots dashboard now redirects into the healthcare domain */}
+          <Route path="/dashboard"      element={<Navigate to="/healthcare" replace />} />
           <Route path="/live"           element={<Navigate to="/live/demo" replace />} />
           <Route path="/live/:tab"      element={<AppRoute skeleton={<LiveCallsSkeleton />}><LiveCallsPage /></AppRoute>} />
           <Route path="/hrchat"         element={<AppRoute><HRFlowPage /></AppRoute>} />

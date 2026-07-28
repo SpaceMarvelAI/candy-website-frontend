@@ -8,6 +8,11 @@ import App from './App'
 import './styles/globals.css'
 import { GlobalErrorBoundary } from './components/ErrorBoundary'
 import { logger } from './utils/logger'
+import { installDevAuth } from './utils/devAuth'
+
+// Localhost-only: seed a dev session before React mounts so the app doesn't
+// bounce to the (production-only) OIDC callback. No-op in production builds.
+installDevAuth()
 
 // Strips access/refresh tokens from any URL PostHog would otherwise capture
 // verbatim (e.g. $current_url on autocaptured events) — the SSO/OIDC callback
