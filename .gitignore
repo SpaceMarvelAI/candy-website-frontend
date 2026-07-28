@@ -8,6 +8,12 @@ dist-ssr
 # test coverage output
 coverage
 
+# playwright e2e/smoke output (screenshots, traces)
+test-results
+playwright-report
+blob-report
+playwright/.cache
+
 # predeploy-check temp results
 .predeploy
 

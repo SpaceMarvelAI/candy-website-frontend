@@ -28,40 +28,12 @@ fi
 echo "✓ AWS credentials verified."
 
 # ── Step 2: npm audit ─────────────────────────────────────────────────────────
-# GHSA-qwww-vcr4-c8h2 (react-router CSRF in RSC/Framework Mode action handling) is a known,
-# accepted exception — this app uses HashRouter (Declarative Mode), which the advisory itself
-# states is NOT affected. No fixed version exists yet in the 7.12.0-8.2.0 flagged range (checked
-# 2026-07-26); downgrading to <7.12.0 to silence the scanner would reintroduce 14+ real, patched
-# vulnerabilities, so that's not an option. Any OTHER high/critical finding still blocks the
-# deploy — this only ignores this one specific, verified-non-applicable advisory ID.
+# scripts/npm-audit-check.mjs carries the one accepted, documented exception
+# (GHSA-qwww-vcr4-c8h2 — see that file for the full investigation) so this
+# script, `npm run audit`, and predeploy-check.mjs can't drift out of sync.
 echo ""
 echo "Running npm audit..."
-AUDIT_JSON=$(npm audit --audit-level=high --json 2>&1)
-OTHER_ADVISORIES=$(echo "$AUDIT_JSON" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-except json.JSONDecodeError:
-    print('PARSE_ERROR')
-    sys.exit(0)
-ids = set()
-for v in d.get('vulnerabilities', {}).values():
-    for via in v.get('via', []):
-        if isinstance(via, dict):
-            url = via.get('url', '')
-            if 'GHSA-qwww-vcr4-c8h2' not in url:
-                ids.add(url or via.get('title', 'unknown'))
-print('\n'.join(ids) if ids else 'NONE')
-")
-
-if [ "$OTHER_ADVISORIES" = "PARSE_ERROR" ]; then
-    fail "npm audit output could not be parsed — investigate manually before deploying"
-elif [ "$OTHER_ADVISORIES" != "NONE" ]; then
-    echo "$OTHER_ADVISORIES"
-    fail "New high/critical vulnerabilities found (beyond the accepted GHSA-qwww-vcr4-c8h2 exception) — investigate before deploying"
-else
-    echo "✓ No high/critical vulnerabilities found beyond the accepted GHSA-qwww-vcr4-c8h2 exception (non-applicable — this app uses HashRouter, not Framework Mode/RSC)."
-fi
+node scripts/npm-audit-check.mjs || fail "npm audit found unaccepted vulnerabilities — investigate before deploying"
 
 # ── Step 3: Build ─────────────────────────────────────────────────────────────
 echo ""

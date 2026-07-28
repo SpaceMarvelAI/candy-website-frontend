@@ -20,11 +20,11 @@ export function installDevAuth(): void {
     // Always (re)seed on localhost when a dev token is configured — this
     // overwrites any stale/expired token left by an earlier SSO attempt that
     // would otherwise 401 and bounce back to the production callback.
-    localStorage.setItem('candy.token', token);
+    localStorage.setItem('access_token', token);
     localStorage.setItem('candy.user', userRaw);
     // SSO paths also read sessionStorage first — clear it so localStorage wins.
     try {
-      sessionStorage.removeItem('candy.token');
+      sessionStorage.removeItem('access_token');
       sessionStorage.removeItem('candy.user');
     } catch { /* ignore */ }
     // eslint-disable-next-line no-console

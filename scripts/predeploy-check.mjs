@@ -2,13 +2,17 @@
 /**
  * predeploy-check orchestrator.
  *
- * Runs the three deployment gates, collects the results of ALL of them
- * (it does not stop at the first failure — we want a complete picture),
- * then prints a single summary report with a SAFE / NOT SAFE verdict.
+ * Runs all deployment gates, collects the results of ALL of them (it does not
+ * stop at the first failure — we want a complete picture), then prints a
+ * single summary report with a SAFE / NOT SAFE verdict.
  *
  *   1. Type safety   — tsc --noEmit
  *   2. Test suite    — vitest run --coverage  (writes coverage-summary.json)
  *   3. Build         — vite build
+ *   4. Smoke test    — npm run test:smoke   (Playwright, boots the dev server)
+ *   5. E2E test      — npm run test:e2e     (Playwright, core user flows)
+ *   6. NPM audit     — npm run audit        (scripts/npm-audit-check.mjs — one documented exception, see that file)
+ *   7. Bucket audit  — npm run audit:bucket-security  (S3 credential blast-radius check)
  *
  * Exit code: 0 when safe to deploy, 1 when any hard gate fails.
  */
@@ -57,7 +61,7 @@ const report = { warnings: [] };
 
 // ── 1. Type safety ────────────────────────────────────────────────────────────
 {
-  const r = run('[1/3] Type-checking (tsc --noEmit)', 'tsc --noEmit');
+  const r = run('[1/7] Type-checking (tsc --noEmit)', 'tsc --noEmit');
   const out = r.stdout + r.stderr;
   const errors = (out.match(/error TS\d+/g) || []).length;
   report.types = { pass: r.code === 0, errors, raw: out.trim() };
@@ -66,7 +70,7 @@ const report = { warnings: [] };
 // ── 2. Test suite + coverage ───────────────────────────────────────────────────
 {
   const r = run(
-    '[2/3] Running tests + coverage (vitest run --coverage)',
+    '[2/7] Running tests + coverage (vitest run --coverage)',
     `vitest run --coverage --reporter=json --outputFile=${TEST_JSON}`
   );
   let total = 0, passed = 0, failed = 0, suites = 0, runOk = false;
@@ -109,7 +113,7 @@ const report = { warnings: [] };
 
 // ── 3. Production build ─────────────────────────────────────────────────────────
 {
-  const r = run('[3/3] Production build (vite build)', 'vite build');
+  const r = run('[3/7] Production build (vite build)', 'vite build');
   const out = r.stdout + r.stderr;
   const modules = Number((out.match(/(\d+)\s+modules transformed/) || [])[1] || 0);
   const buildWarnings = (out.match(/\(!\)|\bwarning\b/gi) || []).length;
@@ -119,10 +123,59 @@ const report = { warnings: [] };
   report.build = { pass: r.code === 0, modules };
 }
 
+// ── 4. Smoke test (Playwright) ──────────────────────────────────────────────────
+{
+  const r = run('[4/7] Smoke test (npm run test:smoke)', 'npm run test:smoke');
+  const out = r.stdout + r.stderr;
+  const passedMatch = out.match(/(\d+)\s+passed/);
+  const failedMatch = out.match(/(\d+)\s+failed/);
+  report.smoke = {
+    pass: r.code === 0,
+    passed: Number(passedMatch?.[1] || 0),
+    failed: Number(failedMatch?.[1] || 0),
+  };
+}
+
+// ── 5. E2E test (Playwright) ────────────────────────────────────────────────────
+{
+  const r = run('[5/7] E2E test (npm run test:e2e)', 'npm run test:e2e');
+  const out = r.stdout + r.stderr;
+  const passedMatch = out.match(/(\d+)\s+passed/);
+  const failedMatch = out.match(/(\d+)\s+failed/);
+  report.e2e = {
+    pass: r.code === 0,
+    passed: Number(passedMatch?.[1] || 0),
+    failed: Number(failedMatch?.[1] || 0),
+  };
+}
+
+// ── 6. NPM audit (dependency vulnerabilities) ───────────────────────────────────
+{
+  const r = run('[6/7] NPM audit (npm run audit)', 'npm run audit');
+  const out = r.stdout + r.stderr;
+  const otherMatch = out.match(/New high\/critical vulnerabilities found[\s\S]*?(?=\n\n|\nInvestigate|$)/i);
+  report.npmAudit = {
+    pass: r.code === 0,
+    unaccepted: otherMatch ? (out.match(/^\s*-\s+/gm) || []).length : 0,
+  };
+}
+
+// ── 7. S3 bucket credential audit ───────────────────────────────────────────────
+{
+  const r = run('[7/7] Bucket security (npm run audit:bucket-security)', 'npm run audit:bucket-security');
+  const out = r.stdout + r.stderr;
+  const overBroadMatch = out.match(/VERDICT:\s*(\d+)\s+over-broad permission/i);
+  report.bucketAudit = {
+    pass: r.code === 0,
+    overBroad: Number(overBroadMatch?.[1] || 0),
+  };
+}
+
 // ── Grade ───────────────────────────────────────────────────────────────────
 // Composite score (0-100): gates are pass/fail signals, coverage is the
 // graded dimension. Each failed hard gate is a heavy penalty.
-const hardFail = !report.types.pass || !report.tests.pass || !report.build.pass;
+const hardFail = !report.types.pass || !report.tests.pass || !report.build.pass
+  || !report.smoke.pass || !report.e2e.pass || !report.npmAudit.pass || !report.bucketAudit.pass;
 let grade, score;
 if (hardFail) {
   grade = { letter: 'F', label: 'Not deployable' };
@@ -154,6 +207,10 @@ console.log(`  1. Type Safety  (tsc)      ${mark(report.types.pass)}   ${dim(rep
 console.log(`  2. Test Suite   (vitest)   ${mark(report.tests.pass)}   ${dim(`${report.tests.passed}/${report.tests.total} passed across ${report.tests.suites} file(s)`)}`);
 if (report.tests.failed > 0) console.log(`     ${bad(`${report.tests.failed} test(s) failing`)}`);
 console.log(`  3. Build        (vite)     ${mark(report.build.pass)}   ${dim(report.build.modules + ' modules transformed')}`);
+console.log(`  4. Smoke Test   (e2e)      ${mark(report.smoke.pass)}   ${dim(`${report.smoke.passed} passed, ${report.smoke.failed} failed`)}`);
+console.log(`  5. E2E Test     (e2e)      ${mark(report.e2e.pass)}   ${dim(`${report.e2e.passed} passed, ${report.e2e.failed} failed`)}`);
+console.log(`  6. NPM Audit    (deps)     ${mark(report.npmAudit.pass)}   ${dim(report.npmAudit.pass ? '0 vulnerabilities' : `${report.npmAudit.unaccepted} unaccepted high/critical vuln(s)`)}`);
+console.log(`  7. Bucket Audit (S3 creds) ${mark(report.bucketAudit.pass)}   ${dim(report.bucketAudit.pass ? 'credential correctly scoped' : `${report.bucketAudit.overBroad} over-broad permission(s)`)}`);
 
 console.log(sub);
 console.log(`  ${c.bold}Coverage${c.reset} ${dim(`(target ${COVERAGE_TARGET}% lines)`)}`);
@@ -185,6 +242,10 @@ if (hardFail) {
     !report.types.pass && 'type errors',
     !report.tests.pass && 'failing tests',
     !report.build.pass && 'build failure',
+    !report.smoke.pass && 'smoke test failure',
+    !report.e2e.pass && 'e2e test failure',
+    !report.npmAudit.pass && 'npm audit findings',
+    !report.bucketAudit.pass && 'bucket credential over-scoped',
   ].filter(Boolean).join(', ');
   console.log(`  ${c.bold}VERDICT: ${bad('🛑 NOT SAFE TO DEPLOY')}${c.reset}`);
   console.log(`  ${dim('Blocked by: ' + broken)}`);

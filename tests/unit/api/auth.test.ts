@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../mocks/server';
-import { login, signup, logout, ssoCallback, loadStoredUser } from '../../../src/api/auth';
+import { login, signup, logout, ssoCallback, loadStoredUser, fullLogout } from '../../../src/api/auth';
+import { setToken } from '../../../src/api/client';
 
 // ── login() ───────────────────────────────────────────────────────────────────
 
@@ -121,5 +122,90 @@ describe('ssoCallback()', () => {
       )
     );
     await expect(ssoCallback('bad-sso-token')).rejects.toThrow();
+  });
+});
+
+// ── loadStoredUser() — malformed data ────────────────────────────────────────
+
+describe('loadStoredUser() — malformed storage', () => {
+  it('returns null instead of throwing when stored JSON is corrupt', () => {
+    localStorage.setItem('candy.user', '{not valid json');
+    expect(() => loadStoredUser()).not.toThrow();
+    expect(loadStoredUser()).toBeNull();
+  });
+});
+
+// ── fullLogout() ─────────────────────────────────────────────────────────────
+// The actual single-logout mechanism used across the whole session's OIDC work:
+// calls logout-everywhere (blocklist + revoke + broadcast) FIRST while the token
+// is still valid, then always wipes local state and navigates the browser to
+// whatever end_session_url it got back (or a same-shape fallback if the call
+// never succeeded) — a server-to-server call alone can't clear the browser's
+// dashboard session cookie.
+
+const originalLocation = window.location;
+function stubLocationForLogout() {
+  const loc = { ...originalLocation, origin: 'https://app.candy.cx', href: '' };
+  Object.defineProperty(window, 'location', { value: loc, writable: true, configurable: true });
+  return loc;
+}
+
+describe('fullLogout()', () => {
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { value: originalLocation, writable: true, configurable: true });
+  });
+
+  it('navigates to the dashboard end_session_url on success and wipes local state', async () => {
+    setToken('live-token');
+    localStorage.setItem('candy.user', JSON.stringify({ email: 'a@b.com' }));
+    server.use(
+      http.post('http://localhost:8002/v1/auth/sso/oidc/logout-everywhere', () =>
+        HttpResponse.json({ end_session_url: 'https://dashboard-api.spacemarvel.ai/o/logout/?done=1' })
+      )
+    );
+    const loc = stubLocationForLogout();
+
+    await fullLogout();
+
+    expect(loc.href).toBe('https://dashboard-api.spacemarvel.ai/o/logout/?done=1');
+    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(localStorage.getItem('candy.user')).toBeNull();
+  });
+
+  it('falls back to the OIDC login URL when there is no token to call logout-everywhere with', async () => {
+    setToken(null);
+    const loc = stubLocationForLogout();
+
+    await fullLogout();
+
+    expect(loc.href).toContain('/v1/auth/sso/oidc/login');
+    expect(decodeURIComponent(loc.href)).toContain('return_to=https://app.candy.cx');
+  });
+
+  it('falls back to the OIDC login URL when logout-everywhere fails — never throws, still wipes state', async () => {
+    setToken('live-token');
+    localStorage.setItem('candy.user', JSON.stringify({ email: 'a@b.com' }));
+    server.use(
+      http.post('http://localhost:8002/v1/auth/sso/oidc/logout-everywhere', () =>
+        HttpResponse.json({ detail: 'boom' }, { status: 500 })
+      )
+    );
+    const loc = stubLocationForLogout();
+
+    await expect(fullLogout()).resolves.toBeUndefined();
+
+    expect(loc.href).toContain('/v1/auth/sso/oidc/login');
+    expect(localStorage.getItem('access_token')).toBeNull();
+  });
+
+  it('falls back to the OIDC login URL when the network call itself throws', async () => {
+    setToken('live-token');
+    server.use(
+      http.post('http://localhost:8002/v1/auth/sso/oidc/logout-everywhere', () => HttpResponse.error())
+    );
+    const loc = stubLocationForLogout();
+
+    await expect(fullLogout()).resolves.toBeUndefined();
+    expect(loc.href).toContain('/v1/auth/sso/oidc/login');
   });
 });
