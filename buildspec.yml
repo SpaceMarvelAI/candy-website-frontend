@@ -1,0 +1,70 @@
+version: 0.2
+
+# Gates-only CI check for candy-website-frontend (Vite/React, static site).
+# Runs on push/manual-trigger against a branch. Does NOT sync to S3 or
+# invalidate CloudFront — deploys stay manual via ./deploy-staging.sh /
+# ./deploy-prod.sh until a decision is made on automating the S3/CloudFront
+# deploy step. No Docker/ECR/ECS anywhere in this repo's pipeline — this is a
+# static site, not a containerized service.
+
+env:
+  variables:
+    NODE_ENV: "production"
+
+cache:
+  paths:
+    - '/root/.npm/**/*'
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+    commands:
+      - echo Installing dependencies...
+      - npm ci
+
+  build:
+    commands:
+      # --- Gate 1: tsc --noEmit (fails build + skips remaining gates on any type error) ---
+      - echo Type-checking...
+      - npx tsc --noEmit
+
+      # --- Gate 2: vitest run --coverage (fails build on any test failure) ---
+      - echo Running tests with coverage...
+      - npx vitest run --coverage
+
+      # --- Gate 3: npm audit, with one scoped documented exception (scripts/check-audit.mjs) ---
+      - echo Running npm audit...
+      - node scripts/check-audit.mjs --audit-level=moderate
+
+      # --- Gate 4: semgrep SAST scan (fails build on any finding) ---
+      - echo Installing and running semgrep...
+      - pip install semgrep
+      - semgrep --config auto --error .
+
+      # --- Gate 5: gitleaks secrets scan (full git history; fails on any NEW detected secret) ---
+      - echo Installing and running gitleaks...
+      - curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")_linux_x64.tar.gz -o gitleaks.tar.gz
+      - tar -xzf gitleaks.tar.gz gitleaks
+      - ./gitleaks detect --source . --config .gitleaks.toml --exit-code 1
+
+      # --- Gate 6: production build + JS bundle-size budget ---
+      - echo Building production bundle...
+      - npx vite build
+      - echo Checking bundle-size budget...
+      - node -e "
+          import('./scripts/lib/bundle-size.mjs').then(({checkBundleSize}) => {
+            const r = checkBundleSize(process.cwd());
+            console.log(r.detail);
+            if (r.status === 'fail') { console.error('Bundle size budget exceeded'); process.exit(1); }
+          });
+        "
+
+  post_build:
+    commands:
+      - |
+        if [ "$CODEBUILD_BUILD_SUCCEEDING" = "0" ]; then
+          echo "Build phase failed — a quality gate blocked this build."
+          exit 1
+        fi
+      - echo "All quality gates passed."

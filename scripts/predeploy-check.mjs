@@ -2,18 +2,23 @@
 /**
  * predeploy-check orchestrator.
  *
- * Runs the three deployment gates, collects the results of ALL of them
+ * Runs the deployment gates, collects the results of ALL of them
  * (it does not stop at the first failure — we want a complete picture),
  * then prints a single summary report with a SAFE / NOT SAFE verdict.
  *
  *   1. Type safety   — tsc --noEmit
  *   2. Test suite    — vitest run --coverage  (writes coverage-summary.json)
- *   3. Build         — vite build
+ *   3. Dependency audit — npm audit (scripts/check-audit.mjs; see that file for
+ *      the one scoped exception)
+ *   4. Build         — vite build
+ *   5. Bundle size   — scripts/lib/bundle-size.mjs (reads dist/assets/ after
+ *      the build gate)
  *
  * Exit code: 0 when safe to deploy, 1 when any hard gate fails.
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { checkBundleSize } from './lib/bundle-size.mjs';
 
 // ── ANSI helpers ──────────────────────────────────────────────────────────────
 const c = {
@@ -29,7 +34,7 @@ const dim  = (s) => `${c.dim}${s}${c.reset}`;
 const RESULTS_DIR = '.predeploy';
 const TEST_JSON   = `${RESULTS_DIR}/test-results.json`;
 const COV_JSON    = 'coverage/coverage-summary.json';
-const COVERAGE_TARGET = 70; // % lines — below this is a warning, not a blocker
+const COVERAGE_TARGET = 90; // % lines — below this is a warning, not a blocker
 
 // Composite-score → letter-grade bands (used for the deployment grade).
 function gradeFor(score) {
@@ -45,7 +50,11 @@ function gradeFor(score) {
 
 function run(label, cmd) {
   process.stdout.write(`${c.cyan}▶${c.reset} ${label}…\n`);
-  const r = spawnSync(cmd, { shell: true, encoding: 'utf8' });
+  // shell: true is required because every caller passes a single command
+  // STRING with flags (e.g. 'vitest run --coverage ...'), which spawnSync
+  // can only parse via a shell. Not a shell-injection risk: every call site
+  // below passes a hardcoded literal string, never external/user input.
+  const r = spawnSync(cmd, { shell: true, encoding: 'utf8' }); // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
   return { code: r.status ?? 1, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
@@ -107,9 +116,15 @@ const report = { warnings: [] };
   }
 }
 
-// ── 3. Production build ─────────────────────────────────────────────────────────
+// ── 3. Dependency audit ──────────────────────────────────────────────────────────
 {
-  const r = run('[3/3] Production build (vite build)', 'vite build');
+  const r = run('[3/5] Dependency audit (npm audit)', 'node scripts/check-audit.mjs --audit-level=moderate');
+  report.audit = { pass: r.code === 0, raw: (r.stdout + r.stderr).trim() };
+}
+
+// ── 4. Production build ─────────────────────────────────────────────────────────
+{
+  const r = run('[4/5] Production build (vite build)', 'vite build');
   const out = r.stdout + r.stderr;
   const modules = Number((out.match(/(\d+)\s+modules transformed/) || [])[1] || 0);
   const buildWarnings = (out.match(/\(!\)|\bwarning\b/gi) || []).length;
@@ -119,10 +134,21 @@ const report = { warnings: [] };
   report.build = { pass: r.code === 0, modules };
 }
 
+// ── 5. Bundle size budget ────────────────────────────────────────────────────────
+// Runs after the build gate — reads the dist/assets/ output that build just produced.
+{
+  process.stdout.write(`${c.cyan}▶${c.reset} [5/5] Bundle size budget (dist/assets/*.js)…\n`);
+  const bundle = checkBundleSize(process.cwd());
+  if (bundle.status === 'warn') {
+    report.warnings.push(`Bundle size: ${bundle.detail}`);
+  }
+  report.bundle = { pass: bundle.status !== 'fail', status: bundle.status, detail: bundle.detail };
+}
+
 // ── Grade ───────────────────────────────────────────────────────────────────
 // Composite score (0-100): gates are pass/fail signals, coverage is the
 // graded dimension. Each failed hard gate is a heavy penalty.
-const hardFail = !report.types.pass || !report.tests.pass || !report.build.pass;
+const hardFail = !report.types.pass || !report.tests.pass || !report.audit.pass || !report.build.pass || !report.bundle.pass;
 let grade, score;
 if (hardFail) {
   grade = { letter: 'F', label: 'Not deployable' };
@@ -153,7 +179,9 @@ console.log(`${c.cyan}${line}${c.reset}`);
 console.log(`  1. Type Safety  (tsc)      ${mark(report.types.pass)}   ${dim(report.types.errors + ' type error(s)')}`);
 console.log(`  2. Test Suite   (vitest)   ${mark(report.tests.pass)}   ${dim(`${report.tests.passed}/${report.tests.total} passed across ${report.tests.suites} file(s)`)}`);
 if (report.tests.failed > 0) console.log(`     ${bad(`${report.tests.failed} test(s) failing`)}`);
-console.log(`  3. Build        (vite)     ${mark(report.build.pass)}   ${dim(report.build.modules + ' modules transformed')}`);
+console.log(`  3. Dep Audit    (npm)      ${mark(report.audit.pass)}`);
+console.log(`  4. Build        (vite)     ${mark(report.build.pass)}   ${dim(report.build.modules + ' modules transformed')}`);
+console.log(`  5. Bundle Size  (dist/)    ${mark(report.bundle.pass)}   ${dim(report.bundle.detail)}`);
 
 console.log(sub);
 console.log(`  ${c.bold}Coverage${c.reset} ${dim(`(target ${COVERAGE_TARGET}% lines)`)}`);
@@ -184,7 +212,9 @@ if (hardFail) {
   const broken = [
     !report.types.pass && 'type errors',
     !report.tests.pass && 'failing tests',
+    !report.audit.pass && 'dependency audit findings',
     !report.build.pass && 'build failure',
+    !report.bundle.pass && 'bundle size over budget',
   ].filter(Boolean).join(', ');
   console.log(`  ${c.bold}VERDICT: ${bad('🛑 NOT SAFE TO DEPLOY')}${c.reset}`);
   console.log(`  ${dim('Blocked by: ' + broken)}`);

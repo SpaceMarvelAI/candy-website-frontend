@@ -1,0 +1,28 @@
+title = "candy-website-frontend gitleaks config"
+
+# Extend the default ruleset rather than replace it.
+[extend]
+useDefault = true
+
+[allowlist]
+  # 1. False positives:
+  #    - src/pages/analytics/index.tsx: `latency_p50_ms`/`latency_p95_ms`/`latency_p99_ms`
+  #      are metric field-name string literals, not credentials — the generic-api-key
+  #      rule just pattern-matches on the shape.
+  #    - src/components/agent/EmbedModal.tsx: `YOUR_ADMIN_JWT` is a placeholder in
+  #      user-facing setup instructions (curl example + a code comment), not a real
+  #      JWT/credential.
+  #    - src/pages/SettingsPage.tsx (file no longer exists in the tree): `sk-ms-...`
+  #      was a hardcoded, fake mockup value for an API-keys settings page UI demo.
+  #    - PostHog project API key (`phc_...`): this key type is designed to be public —
+  #      it's meant to be embedded client-side (PostHog's own docs call it safe to
+  #      expose). It was in .env.development, since removed (dev shouldn't send
+  #      analytics at all) — allowlisted here since it's still in that commit's history.
+  regexes = [
+    '''latency_p50_ms''',
+    '''latency_p95_ms''',
+    '''latency_p99_ms''',
+    '''YOUR_ADMIN_JWT''',
+    '''sk-ms-4d8f2a1b9c7e3f5a6b2d8e4f1a9c7b3d5e2f8a4b6c1d9e3f''',
+    '''phc_taobEqykUztJFQC6LLCjPs9LvSYbLZ7fiXFXdeXqMkMm''',
+  ]

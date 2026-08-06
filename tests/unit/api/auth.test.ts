@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../mocks/server';
-import { login, signup, logout, ssoCallback, loadStoredUser } from '../../../src/api/auth';
+import { login, signup, logout, fullLogout, ssoCallback, loadStoredUser } from '../../../src/api/auth';
+import { setToken } from '../../../src/api/client';
 
 // ── login() ───────────────────────────────────────────────────────────────────
 
@@ -121,5 +122,70 @@ describe('ssoCallback()', () => {
       )
     );
     await expect(ssoCallback('bad-sso-token')).rejects.toThrow();
+  });
+});
+
+// ── fullLogout() ─────────────────────────────────────────────────────────────
+
+describe('fullLogout()', () => {
+  const originalLocation = window.location;
+
+  function stubLocation() {
+    const loc = { ...originalLocation, origin: 'https://app.candy.cx', href: '' };
+    Object.defineProperty(window, 'location', { value: loc, writable: true, configurable: true });
+    return loc;
+  }
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { value: originalLocation, writable: true, configurable: true });
+  });
+
+  it('navigates to the backend end_session_url on success, and wipes local state', async () => {
+    setToken('live-token');
+    localStorage.setItem('candy.user', JSON.stringify({ email: 'a@x.com' }));
+    server.use(
+      http.post('http://localhost:8002/v1/auth/sso/oidc/logout-everywhere', () =>
+        HttpResponse.json({ end_session_url: 'https://spacemarvel.ai/o/logout/' }),
+      ),
+    );
+    const loc = stubLocation();
+    await fullLogout();
+    expect(loc.href).toBe('https://spacemarvel.ai/o/logout/');
+    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(localStorage.getItem('candy.user')).toBeNull();
+  });
+
+  it('falls back to the OIDC login URL when the backend call fails', async () => {
+    setToken('live-token');
+    server.use(
+      http.post('http://localhost:8002/v1/auth/sso/oidc/logout-everywhere', () =>
+        HttpResponse.json({ detail: 'error' }, { status: 500 }),
+      ),
+    );
+    const loc = stubLocation();
+    await fullLogout();
+    expect(loc.href).toContain('/v1/auth/sso/oidc/login');
+    expect(decodeURIComponent(loc.href)).toContain('return_to=https://app.candy.cx');
+  });
+
+  it('goes straight to the fallback URL when there is no token (skips the backend call)', async () => {
+    setToken(null);
+    const loc = stubLocation();
+    await fullLogout();
+    expect(loc.href).toContain('/v1/auth/sso/oidc/login');
+  });
+
+  it('wipes local state even when the backend call throws (e.g. network error/timeout)', async () => {
+    setToken('live-token');
+    localStorage.setItem('candy.user', JSON.stringify({ email: 'a@x.com' }));
+    server.use(
+      http.post('http://localhost:8002/v1/auth/sso/oidc/logout-everywhere', () => {
+        throw new Error('network down');
+      }),
+    );
+    stubLocation();
+    await fullLogout();
+    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(localStorage.getItem('candy.user')).toBeNull();
   });
 });

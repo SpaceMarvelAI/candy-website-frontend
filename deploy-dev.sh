@@ -28,31 +28,59 @@ if ! aws sts get-caller-identity > /dev/null 2>&1; then
 fi
 echo "✓ AWS credentials verified."
 
-# ── Step 2: npm audit ─────────────────────────────────────────────────────────
-# NOTE (dev only): audit-fix failures don't block dev deploys — the one remaining
-# high-severity finding needs `--force` (a breaking react-router-dom downgrade),
-# which is a deliberate call to make separately, not something to force through
-# on a routine deploy. Prod's deploy-prod.sh still enforces this gate — don't remove
-# it there without the same review.
+# ── Step 2: Type check ────────────────────────────────────────────────────────
+echo ""
+echo "Type-checking..."
+npx tsc --noEmit
+if [ $? -ne 0 ]; then
+    fail "Type errors found — fix them and retry"
+fi
+echo "✓ No type errors."
+
+# ── Step 3: Tests + coverage ──────────────────────────────────────────────────
+echo ""
+echo "Running tests..."
+npx vitest run --coverage
+if [ $? -ne 0 ]; then
+    fail "Tests failed — fix them and retry"
+fi
+echo "✓ All tests passed."
+
+# ── Step 4: npm audit (scripts/check-audit.mjs — one scoped, documented exception) ──
 echo ""
 echo "Running npm audit..."
-npm audit --audit-level=high 2>&1
-
+node scripts/check-audit.mjs --audit-level=moderate
 if [ $? -ne 0 ]; then
-    echo ""
-    echo "Vulnerabilities found — running npm audit fix..."
-    npm audit fix
-    if [ $? -ne 0 ]; then
-        echo "⚠ npm audit fix couldn't clear everything (likely needs --force / a breaking change)."
-        echo "⚠ Continuing anyway — this is a DEV deploy. Do not skip this gate for prod."
-    else
-        echo "✓ Audit fix applied."
-    fi
-else
-    echo "✓ No high/critical vulnerabilities found."
+    fail "npm audit found new vulnerabilities beyond the accepted exception — investigate before deploying"
 fi
 
-# ── Step 3: Build ─────────────────────────────────────────────────────────────
+# ── Step 5: semgrep SAST scan ─────────────────────────────────────────────────
+echo ""
+echo "Running semgrep..."
+if ! command -v semgrep &> /dev/null; then
+    echo "⚠ semgrep not installed locally — skipping (CI enforces this gate; install semgrep to run it here too)."
+else
+    semgrep --config auto --error .
+    if [ $? -ne 0 ]; then
+        fail "semgrep found a blocking finding — investigate before deploying"
+    fi
+    echo "✓ No semgrep findings."
+fi
+
+# ── Step 6: gitleaks secrets scan (full git history) ──────────────────────────
+echo ""
+echo "Running gitleaks..."
+if ! command -v gitleaks &> /dev/null; then
+    echo "⚠ gitleaks not installed locally — skipping (CI enforces this gate; install gitleaks to run it here too)."
+else
+    gitleaks detect --source . --config .gitleaks.toml --exit-code 1
+    if [ $? -ne 0 ]; then
+        fail "gitleaks detected a secret — investigate before deploying"
+    fi
+    echo "✓ No secrets detected."
+fi
+
+# ── Step 7: Build ─────────────────────────────────────────────────────────────
 # --mode development picks up .env.development (dev-subdomain backend URLs) instead
 # of the base .env (prod URLs) — without this flag the dev site was silently built
 # against production backends. Fixed 2026-07-25.
@@ -64,12 +92,26 @@ if [ $? -ne 0 ]; then
 fi
 echo "✓ Build complete."
 
-# ── Step 4: Verify dist exists ────────────────────────────────────────────────
+# ── Step 8: Bundle size budget ────────────────────────────────────────────────
+echo ""
+echo "Checking bundle size..."
+node -e "
+  import('./scripts/lib/bundle-size.mjs').then(({checkBundleSize}) => {
+    const r = checkBundleSize(process.cwd());
+    console.log(r.detail);
+    if (r.status === 'fail') process.exit(1);
+  });
+"
+if [ $? -ne 0 ]; then
+    fail "Bundle size budget exceeded — investigate before deploying"
+fi
+
+# ── Step 9: Verify dist exists ────────────────────────────────────────────────
 if [ ! -d "$DIST_FOLDER" ]; then
     fail "dist/ folder missing after build"
 fi
 
-# ── Step 5: Sync dist to S3 ───────────────────────────────────────────────────
+# ── Step 10: Sync dist to S3 ──────────────────────────────────────────────────
 echo ""
 echo "Uploading files to S3 (DEV bucket)..."
 aws s3 sync $DIST_FOLDER "s3://$BUCKET_NAME" --delete --region $REGION
@@ -78,7 +120,7 @@ if [ $? -ne 0 ]; then
 fi
 echo "✓ Upload complete."
 
-# ── Step 6: Invalidate CloudFront cache ───────────────────────────────────────
+# ── Step 11: Invalidate CloudFront cache ──────────────────────────────────────
 echo ""
 echo "Invalidating CloudFront cache (DEV distribution)..."
 aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID --paths "/*" > /dev/null
