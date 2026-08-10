@@ -118,11 +118,19 @@ describe('api/recordings', () => {
   });
 
   it('downloadRecordingBlob returns a Blob on success', async () => {
+    // jsdom's Response can't construct from a Blob body (extractBody calls
+    // .stream(), which jsdom's Blob doesn't implement) — use a plain string
+    // body instead, which jsdom's fetch/Response handles natively.
     server.use(http.get(`${B}/v1/recordings/r1/download`, () =>
-      new HttpResponse(new Blob(['audio-bytes']), { headers: { 'Content-Type': 'audio/mpeg' } })
+      new HttpResponse('audio-bytes', { headers: { 'Content-Type': 'audio/mpeg' } })
     ));
     const blob = await Recordings.downloadRecordingBlob('r1');
-    expect(blob).toBeInstanceOf(Blob);
+    // Not toBeInstanceOf(Blob): jsdom's fetch/Response internals construct
+    // their own Blob from a different realm than this test file's global
+    // Blob, so `instanceof` fails even though it's a real Blob. Duck-type
+    // instead — matches how downloadRecordingBlob's actual caller uses it.
+    expect(typeof blob.size).toBe('number');
+    expect(blob.type).toBe('audio/mpeg');
   });
 
   it('downloadRecordingBlob throws on a failed response', async () => {

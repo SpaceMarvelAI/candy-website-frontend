@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Candy Frontend - DEV Deployment Script
-# Audit → fix if needed → build → deploy to the DEV S3 bucket → invalidate DEV CloudFront
+# Candy Frontend - STAGING Deployment Script
+# Audit → fix if needed → build → deploy to the STAGING S3 bucket → invalidate STAGING CloudFront
 # See deploy-prod.sh for the PROD path (different bucket/distribution) — keep BOTH working.
 
-BUCKET_NAME="candy-website-frontend-dev"
+BUCKET_NAME="candy-website-frontend-staging"
 REGION="ap-south-1"
-CF_DISTRIBUTION_ID="EVLANPTONCWM9"
+CF_DISTRIBUTION_ID="E3BS248I02OW2P"
 DIST_FOLDER="dist"
 
 function fail() {
@@ -81,12 +81,11 @@ else
 fi
 
 # ── Step 7: Build ─────────────────────────────────────────────────────────────
-# --mode development picks up .env.development (dev-subdomain backend URLs) instead
-# of the base .env (prod URLs) — without this flag the dev site was silently built
-# against production backends. Fixed 2026-07-25.
+# --mode staging picks up .env.staging (staging-subdomain backend URLs) instead
+# of the base .env (prod URLs) or .env.development (dev URLs).
 echo ""
-echo "Building (mode=development)..."
-npm run build -- --mode development
+echo "Building (mode=staging)..."
+npm run build -- --mode staging
 if [ $? -ne 0 ]; then
     fail "Build failed — fix TypeScript/Vite errors and retry"
 fi
@@ -113,7 +112,7 @@ fi
 
 # ── Step 10: Sync dist to S3 ──────────────────────────────────────────────────
 echo ""
-echo "Uploading files to S3 (DEV bucket)..."
+echo "Uploading files to S3 (STAGING bucket)..."
 aws s3 sync $DIST_FOLDER "s3://$BUCKET_NAME" --delete --region $REGION
 if [ $? -ne 0 ]; then
     fail "S3 upload failed — check AWS permissions"
@@ -122,7 +121,7 @@ echo "✓ Upload complete."
 
 # ── Step 11: Invalidate CloudFront cache ──────────────────────────────────────
 echo ""
-echo "Invalidating CloudFront cache (DEV distribution)..."
+echo "Invalidating CloudFront cache (STAGING distribution)..."
 aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID --paths "/*" > /dev/null
 if [ $? -ne 0 ]; then
     fail "CloudFront invalidation failed — check IAM permissions"
@@ -132,10 +131,10 @@ echo "✓ Cache invalidated."
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════╗"
-echo "║      DEV DEPLOYMENT SUCCESSFUL ✓                 ║"
+echo "║      STAGING DEPLOYMENT SUCCESSFUL ✓             ║"
 echo "╠══════════════════════════════════════════════════╣"
-echo "║  URL   : https://dev.candy.cx                    ║"
-echo "║  Bucket: s3://candy-website-frontend-dev         ║"
+echo "║  URL   : https://staging.candy.cx                ║"
+echo "║  Bucket: s3://candy-website-frontend-staging     ║"
 echo "║  Region: ap-south-1                              ║"
 echo "║  CDN   : CloudFront cache cleared                ║"
 echo "╠══════════════════════════════════════════════════╣"

@@ -93,6 +93,10 @@ function setErrorReporter(fn: ErrorReporter | null) {
 
 // ── Primitive helpers ────────────────────────────────────────────────────────
 
+// console.info/warn/error/debug don't interpolate %-style format specifiers
+// from a string argument the way util.format does, and `label` is always a
+// hardcoded literal at every call site in this app (e.g. logger.info('[useAgent]
+// bootstrap', ...)) — never attacker-controlled data. Reviewed false positive.
 function _info(label: string, ...args: any[]) {
   emit(console.info, 'INFO', '#3b82f6', label, args);
 }
