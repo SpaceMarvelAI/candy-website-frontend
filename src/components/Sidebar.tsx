@@ -33,22 +33,21 @@ const NAV_SECTIONS = [
   {
     label: 'Main',
     items: [
-      { id: 'dashboard', label: 'Voice Bots',  icon: 'voicebot', path: '/dashboard' },
-      { id: 'chatbots',  label: 'Chatbots',   icon: 'chat',     path: '/chatbots' },
-      { id: 'voice',     label: 'Live Calls', icon: 'livecall', path: '/live' },
-      { id: 'analytics', label: 'Analytics',  icon: 'chart',    path: '/analytics' },
-      { id: 'flows',     label: 'Flows',      icon: 'flowsnav', path: '/flows' },
+      { id: 'healthcare', label: 'Healthcare', icon: 'bulb',     path: '/healthcare' },
+      { id: 'voice',      label: 'Live Calls', icon: 'livecall', path: '/live' },
+      { id: 'analytics',  label: 'Analytics',  icon: 'chart',    path: '/analytics' },
+      { id: 'flows',      label: 'Flows',      icon: 'flowsnav', path: '/flows' },
     ],
   },
 ];
 
 const PATH_TO_NAV: [string, string][] = [
-  ['/dashboard', 'dashboard'],
-  ['/chatbots',  'chatbots'],
-  ['/live',      'voice'],
-  ['/analytics', 'analytics'],
-  ['/flows',     'flows'],
-  ['/connects',  'connectors'],
+  ['/healthcare', 'healthcare'],
+  ['/dashboard',  'healthcare'],
+  ['/live',       'voice'],
+  ['/analytics',  'analytics'],
+  ['/flows',      'flows'],
+  ['/connects',   'connectors'],
 ];
 
 const isLocal = typeof window !== 'undefined' &&

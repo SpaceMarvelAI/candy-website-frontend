@@ -12,7 +12,8 @@ import { claimPromptTicket, type ClaimedPrompt } from '../api/prompts';
 // All existing showView('dashboard') calls keep working unchanged.
 const VIEW_TO_PATH: Record<string, string> = {
   auth:           '/auth',
-  dashboard:      '/dashboard',
+  healthcare_domain: '/healthcare',
+  dashboard:      '/healthcare',   // legacy alias → healthcare domain
   chatbots:       '/chatbots',
   live:           '/live',
   hrchat:         '/hrchat',
@@ -99,7 +100,7 @@ export function AppProvider({ children }) {
     // If there's a pending prompt ticket, don't navigate — let PromptTicketHandler handle it
     const pendingTicket = sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY);
     if (!pendingTicket) {
-      navigate('/dashboard');
+      navigate('/healthcare');
     }
   }, [navigate]);
 
@@ -210,11 +211,11 @@ export function AppProvider({ children }) {
             .catch((err) => {
               logger.warn('[AppContext] prompt ticket claim failed', { error: err });
               addToast('That prompt link is invalid or has expired.', 'error');
-              navigate('/dashboard', { replace: true });
+              navigate('/healthcare', { replace: true });
             })
             .finally(() => setClaimingPrompt(false));
         } else {
-          navigate('/dashboard', { replace: true });
+          navigate('/healthcare', { replace: true });
         }
       })
       .catch((err: any) => {

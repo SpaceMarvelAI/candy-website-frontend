@@ -81,7 +81,8 @@ export default function LiveCallsPage() {
     }
     if (downloadingId === rec.recording_id) return;
     setDownloadingId(rec.recording_id);
-    const filename = `${(rec.agent_name || 'recording').replace(/\s+/g, '_')}_${rec.created_at.slice(0, 19).replace(/[:/\s]/g, '-')}.wav`;
+    const ext = rec.s3_key.match(/\.([a-zA-Z0-9]+)$/)?.[1] || rec.mime_type?.split('/')[1]?.split(';')[0] || 'bin';
+    const filename = `${(rec.agent_name || 'recording').replace(/\s+/g, '_')}_${rec.created_at.slice(0, 19).replace(/[:/\s]/g, '-')}.${ext}`;
 
     function triggerBlobDownload(blob: Blob) {
       const url = URL.createObjectURL(blob);

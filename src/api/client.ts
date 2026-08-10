@@ -9,7 +9,7 @@
  *  • Emits structured [API REQUEST / RESPONSE / ERROR] console logs so every
  *    network call is traceable from the browser devtools.
  */
-import { logger } from '../utils/logger';
+import { logger, truncateForLog } from '../utils/logger';
 
 const RAW_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8002';
 export const API_BASE = RAW_BASE.replace(/\/$/, '');
@@ -72,7 +72,7 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
   logger.api('req', label, {
     url,
     method,
-    payload:  isForm ? '[FormData]' : (body ?? null),
+    payload:  isForm ? '[FormData]' : truncateForLog(body ?? null),
     // Redact the token value but confirm whether auth is attached.
     headers:  { ...finalHeaders, Authorization: finalHeaders.Authorization ? '[Bearer ****]' : undefined },
     hasToken: !!getToken(),
@@ -139,7 +139,7 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
       status:   res.status,
       message:  typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail),
       duration: `${duration.toFixed(1)} ms`,
-      data:     parsed,
+      data:     truncateForLog(parsed),
     });
 
     throw new ApiError(res.status, parsed);
@@ -151,7 +151,7 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
     method,
     status:   res.status,
     duration: `${duration.toFixed(1)} ms`,
-    data:     parsed,
+    data:     truncateForLog(parsed),
   });
 
   return parsed as T;

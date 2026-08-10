@@ -14,7 +14,7 @@
  * any per-test stub can take effect.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { logger } from '../../../src/utils/logger';
+import { logger, VERBOSE_HOSTS } from '../../../src/utils/logger';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -29,10 +29,14 @@ describe('logger.warn — always emits', () => {
   });
 
   it('includes extra args in the call', () => {
+    // The colored-badge format prepends two %c style args before any data args
+    // (format string, badge CSS, namespace-color CSS, ...args) — meta is still
+    // passed through untouched, just at a later position in the call.
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const meta = { retries: 3 };
     logger.warn('[test] warn with meta', meta);
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining('[test] warn with meta'), meta);
+    expect(spy.mock.calls[0][0]).toContain('[test] warn with meta');
+    expect(spy.mock.calls[0]).toContain(meta);
   });
 });
 
@@ -44,11 +48,14 @@ describe('logger.error — always emits', () => {
     expect(spy.mock.calls[0][0]).toContain('[test] crash happened');
   });
 
-  it('timestamp prefix is in HH:MM:SS.mmm format', () => {
+  it('timestamp in HH:MM:SS.mmm format is present in the badge line', () => {
+    // Format is now `%c ERROR %c<timestamp> <label>` (colored badge prefix)
+    // rather than a leading bracketed timestamp — the timestamp itself is
+    // still HH:MM:SS.mmm, just positioned after the badge.
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     logger.error('[test] timed error');
     const label: string = spy.mock.calls[0][0];
-    expect(label).toMatch(/^\[\d{2}:\d{2}:\d{2}\.\d{3}\]/);
+    expect(label).toMatch(/\d{2}:\d{2}:\d{2}\.\d{3}/);
   });
 });
 
@@ -76,22 +83,24 @@ describe('logger.debug — emits in dev mode', () => {
 // ── Performance tier labels ───────────────────────────────────────────────────
 
 describe('logger.performance — tier classification', () => {
-  it('emits ⚡ FAST for durations < 500 ms', () => {
+  // Tier labels are now colored badges (FAST=green/MED=amber/SLOW=red via %c)
+  // instead of emoji prefixes — same three tiers, same thresholds, new display.
+  it('emits a FAST badge for durations < 500 ms', () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     logger.performance('[api] fast', 200);
-    expect(spy.mock.calls[0][0]).toContain('⚡ FAST');
+    expect(spy.mock.calls[0][0]).toContain('FAST');
   });
 
-  it('emits ⏱ MED for durations between 500 ms and 2 s', () => {
+  it('emits a MED badge for durations between 500 ms and 2 s', () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     logger.performance('[api] medium', 800);
-    expect(spy.mock.calls[0][0]).toContain('⏱ MED');
+    expect(spy.mock.calls[0][0]).toContain('MED');
   });
 
-  it('emits 🐢 SLOW for durations > 2 s', () => {
+  it('emits a SLOW badge for durations > 2 s', () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     logger.performance('[api] slow', 3500);
-    expect(spy.mock.calls[0][0]).toContain('🐢 SLOW');
+    expect(spy.mock.calls[0][0]).toContain('SLOW');
   });
 
   it('reports the duration in ms', () => {
@@ -134,6 +143,55 @@ describe('logger.performance — with meta object', () => {
     logger.performance('[api] with meta', 120, { rows: 3 });
     expect(groupSpy).toHaveBeenCalledOnce();
     expect(logSpy).toHaveBeenCalledWith({ rows: 3 });
+  });
+});
+
+// ── Hostname/kill-switch gating (the core of this session's ask: verbose on
+// localhost + dev.candy.cx even in a deployed build, quiet on app.candy.cx) ──
+// Vitest runs with DEV=true, so isVerbose() would be true regardless of
+// hostname via that branch alone — these tests stub `localStorage['debug']`
+// to force the OTHER branches (override on/off) so hostname/kill-switch logic
+// is actually exercised independent of the DEV flag.
+
+describe('logger.isVerbose — runtime kill switch', () => {
+  afterEach(() => localStorage.removeItem('debug'));
+
+  it('is true by default in this test env (vite dev mode)', () => {
+    expect(logger.isVerbose()).toBe(true);
+  });
+
+  it('localStorage debug="off" forces silence even when otherwise verbose', () => {
+    localStorage.setItem('debug', 'off');
+    expect(logger.isVerbose()).toBe(false);
+  });
+
+  it('localStorage debug="on" forces verbose (this is the deployed-prod escape hatch)', () => {
+    localStorage.setItem('debug', 'on');
+    expect(logger.isVerbose()).toBe(true);
+  });
+
+  it('debug="off" actually silences logger.info at the console level', () => {
+    localStorage.setItem('debug', 'off');
+    const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    logger.info('[test] should not print');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('warn/error still emit even with debug="off" (always-on tier is untouched)', () => {
+    localStorage.setItem('debug', 'off');
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    logger.error('[test] still visible');
+    expect(spy).toHaveBeenCalledOnce();
+  });
+
+  // NOTE: the hostname branch itself (localhost/dev.candy.cx verbose, app.candy.cx
+  // quiet, when IS_DEV=false — i.e. a real deployed build) can't be exercised
+  // end-to-end here for the same reason IS_DEV can't be flipped per-test (see
+  // this file's header comment) — Vitest runs with DEV=true, which short-circuits
+  // isVerbose() to true before the hostname check is ever reached. This at least
+  // pins the exact allowlist so a future edit can't silently drop dev.candy.cx.
+  it('the verbose-hosts allowlist is exactly localhost, 127.0.0.1, and dev.candy.cx', () => {
+    expect(VERBOSE_HOSTS).toEqual(['localhost', '127.0.0.1', 'dev.candy.cx']);
   });
 });
 

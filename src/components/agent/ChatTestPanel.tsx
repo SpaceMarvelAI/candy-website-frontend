@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 import posthog from 'posthog-js';
 import { api } from '../../api/client';
 import { logger } from '../../utils/logger';
+import { useDebugLifecycle } from '../../utils/useDebugLifecycle';
 import Icon from '../../assets/icons';
 
 const tintColor: Record<string, string> = {
@@ -87,6 +88,9 @@ function animateMessage(
 }
 
 export default function ChatTestPanel({ tint = 'purple', agentId, disabled, disabledHint }: Props) {
+  // Flagged High in debug/AUDIT.md — agent-switch races where a stale
+  // startSession/sendMessage response can land after the agent changed.
+  useDebugLifecycle('ChatTestPanel', [agentId]);
   const [messages, setMessages]   = useState<Message[]>([]);
   const [input, setInput]         = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);

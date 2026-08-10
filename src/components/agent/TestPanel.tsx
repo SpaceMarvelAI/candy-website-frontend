@@ -17,6 +17,7 @@ import { uploadRecording } from '../../api/recordings';
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { logger } from '../../utils/logger';
+import { useDebugLifecycle } from '../../utils/useDebugLifecycle';
 
 // MediaRecorder is what we now use to capture mic audio. We send the
 // recorded blob to /v1/stt/transcribe (Deepgram with detect_language=true)
@@ -484,6 +485,9 @@ export default function TestPanel({
   supportedLangs = [],
 }: Props) {
   const { addToast } = useApp();
+  // Flagged High in debug/AUDIT.md — agent-switch races (stale transcript,
+  // duplicate session creation) and an unmount/MediaRecorder cleanup race.
+  useDebugLifecycle('TestPanel', [agentId]);
   const [listening, setListening] = useState(false);
   const [input, setInput] = useState('');
   const [transcript, setTranscript] = useState<Msg[]>([

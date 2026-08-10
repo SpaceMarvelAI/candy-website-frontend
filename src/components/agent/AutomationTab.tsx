@@ -16,6 +16,7 @@ import {
   type CreateAutomationBody, type TriggerType, type AuthType,
 } from '../../api/automations';
 import { useApp } from '../../context/AppContext';
+import { useDebugLifecycle } from '../../utils/useDebugLifecycle';
 
 // ── App catalogue ─────────────────────────────────────────────────────────────
 // These are shown in the left panel. app_type must match backend preset keys.
@@ -54,6 +55,9 @@ interface Props {
 
 export default function AutomationTab({ agentId, agentSlug, tint = 'purple' }: Props) {
   const { addToast } = useApp();
+  // Flagged in debug/AUDIT.md — reload() race on fast agent switching, and the
+  // api/automations.ts double-JSON-encoding bug this component's save/test flows hit.
+  useDebugLifecycle('AutomationTab', [agentId]);
 
   const [configs,  setConfigs]  = useState<AutomationConfig[]>([]);
   const [presets,  setPresets]  = useState<AutomationPreset[]>([]);

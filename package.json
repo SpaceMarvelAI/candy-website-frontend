@@ -16,7 +16,11 @@
     "check:build": "vite build",
     "predeploy-check": "node scripts/predeploy-check.mjs",
     "test:report-issues": "node scripts/report-issues-smoke-test.mjs",
-    "audit:bucket-security": "node scripts/report-issues-security-audit.mjs"
+    "audit:bucket-security": "node scripts/report-issues-security-audit.mjs",
+    "test:smoke": "playwright test tests/e2e/smoke.spec.ts",
+    "test:e2e": "playwright test tests/e2e/core-flows.spec.ts",
+    "audit": "node scripts/npm-audit-check.mjs",
+    "security": "npm run audit; s1=$?; npm run audit:bucket-security; s2=$?; exit $(( s1 > s2 ? s1 : s2 ))"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1093.0",
@@ -26,6 +30,7 @@
     "react-router-dom": "^7.18.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

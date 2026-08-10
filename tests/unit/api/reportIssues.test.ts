@@ -1,7 +1,13 @@
 /**
- * Tests for src/api/reportIssues.ts — Report Issue direct-to-S3 client
- * (shared `report-issues/` bucket prefix with MetaSpace/Finixy). The AWS SDK
- * is mocked so no real S3 calls happen.
+ * Tests for src/api/reportIssues.ts — the direct-to-S3 Report Issue client
+ * (shared `report-issues/` bucket prefix with MetaSpace/Finixy, no Candy backend
+ * involved). The AWS SDK is mocked so these run fully offline — no real bucket,
+ * no real credentials, no network.
+ *
+ * Schema correctness (ticket ID format, attachment key format, field shapes) is
+ * also verified for real against the live bucket by
+ * scripts/report-issues-smoke-test.mjs and tests/e2e/core-flows.spec.ts — this
+ * file covers the pure logic instead: validation, filtering, sorting, pagination.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -45,6 +51,22 @@ function issueBody(record: Record<string, unknown>) {
   return { transformToByteArray: async () => new TextEncoder().encode(JSON.stringify(record)) };
 }
 
+function fullRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'MSP-20260101-AAAA',
+    platform: 'candy',
+    title: 'title',
+    description: 'desc',
+    email: 'a@candy.internal',
+    status: 'open',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    attachments: [],
+    client_context: { user_id: 'u1' },
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   mockSend.mockReset();
 });
@@ -57,9 +79,9 @@ describe('listMyIssues', () => {
       }
       if (cmd.__type === 'get') {
         if (cmd.input.Key.includes('MSP-1')) {
-          return { Body: issueBody({ id: 'MSP-1', platform: 'candy', title: 'A', description: 'a', email: 'a@x.com', status: 'open', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', attachments: [], client_context: { user_id: 'u1' } }) };
+          return { Body: issueBody(fullRecord({ id: 'MSP-1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' })) };
         }
-        return { Body: issueBody({ id: 'MSP-2', platform: 'candy', title: 'B', description: 'b', email: 'b@x.com', status: 'open', created_at: '2026-02-01T00:00:00Z', updated_at: '2026-02-01T00:00:00Z', attachments: [], client_context: { user_id: 'u1' } }) };
+        return { Body: issueBody(fullRecord({ id: 'MSP-2', created_at: '2026-02-01T00:00:00Z', updated_at: '2026-02-01T00:00:00Z' })) };
       }
       throw new Error('unexpected command');
     });
@@ -72,7 +94,17 @@ describe('listMyIssues', () => {
   it('excludes issues belonging to a different user', async () => {
     mockSend.mockImplementation(async (cmd: any) => {
       if (cmd.__type === 'list') return { Contents: [{ Key: 'report-issues/MSP-1/issue.json' }] };
-      return { Body: issueBody({ id: 'MSP-1', platform: 'metaspace', title: 'A', description: 'a', email: 'a@x.com', status: 'open', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', attachments: [], client_context: { user_id: 'someone-else' } }) };
+      return { Body: issueBody(fullRecord({ id: 'MSP-1', platform: 'metaspace', client_context: { user_id: 'someone-else' } })) };
+    });
+    const issues = await listMyIssues('u1');
+    expect(issues).toHaveLength(0);
+  });
+
+  it('ignores records with no client_context (unattributable)', async () => {
+    mockSend.mockImplementation(async (cmd: any) => {
+      if (cmd.__type === 'list') return { Contents: [{ Key: 'report-issues/NOCTX/issue.json' }] };
+      const { client_context, ...rest } = fullRecord({ id: 'NOCTX' });
+      return { Body: issueBody(rest) };
     });
     const issues = await listMyIssues('u1');
     expect(issues).toHaveLength(0);
@@ -87,7 +119,7 @@ describe('listMyIssues', () => {
         return { Contents: [{ Key: 'report-issues/MSP-2/issue.json' }] };
       }
       const id = cmd.input.Key.includes('MSP-1') ? 'MSP-1' : 'MSP-2';
-      return { Body: issueBody({ id, platform: 'candy', title: id, description: 'd', email: 'a@x.com', status: 'open', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', attachments: [], client_context: { user_id: 'u1' } }) };
+      return { Body: issueBody(fullRecord({ id })) };
     });
     const issues = await listMyIssues('u1');
     expect(listCalls).toBe(2);
@@ -98,7 +130,7 @@ describe('listMyIssues', () => {
     mockSend.mockImplementation(async (cmd: any) => {
       if (cmd.__type === 'list') return { Contents: [{ Key: 'report-issues/MSP-1/issue.json' }, { Key: 'report-issues/MSP-2/issue.json' }] };
       if (cmd.input.Key.includes('MSP-1')) throw new Error('corrupt object');
-      return { Body: issueBody({ id: 'MSP-2', platform: 'candy', title: 'B', description: 'b', email: 'b@x.com', status: 'open', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', attachments: [], client_context: { user_id: 'u1' } }) };
+      return { Body: issueBody(fullRecord({ id: 'MSP-2' })) };
     });
     const issues = await listMyIssues('u1');
     expect(issues).toHaveLength(1);
@@ -155,6 +187,13 @@ describe('createIssue', () => {
     expect(result.attachmentKeys).toEqual([]);
   });
 
+  it('trims the title and description before saving', async () => {
+    mockSend.mockResolvedValue({});
+    const result = await createIssue({ ...baseInput, title: '  spaced  ', description: '  also spaced  ' });
+    expect(result.title).toBe('spaced');
+    expect(result.description).toBe('also spaced');
+  });
+
   it('uploads each attachment before writing issue.json', async () => {
     const calls: string[] = [];
     mockSend.mockImplementation(async (cmd: any) => { calls.push(cmd.__type); return {}; });
@@ -163,5 +202,17 @@ describe('createIssue', () => {
     expect(calls).toEqual(['put', 'put']); // 1 attachment upload + 1 issue.json write
     expect(result.attachmentKeys).toHaveLength(1);
     expect(result.attachmentKeys[0]).toMatch(/^attachments\/\d+-[a-z0-9]{4}\.png$/);
+  });
+
+  it('writes client_context.user_id into issue.json for cross-product filtering', async () => {
+    const puts: any[] = [];
+    mockSend.mockImplementation(async (cmd: any) => {
+      if (cmd.__type === 'put') puts.push(cmd.input);
+      return {};
+    });
+    await createIssue({ ...baseInput, userId: 'u-42' });
+    const issueJsonPut = puts.find((p) => p.Key.endsWith('/issue.json'));
+    const body = JSON.parse(issueJsonPut.Body);
+    expect(body.client_context.user_id).toBe('u-42');
   });
 });

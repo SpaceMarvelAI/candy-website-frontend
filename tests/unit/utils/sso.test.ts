@@ -12,7 +12,6 @@ function stubLocation(hostname: string, search = '') {
 afterEach(() => {
   Object.defineProperty(window, 'location', { value: originalLocation, writable: true, configurable: true });
   vi.restoreAllMocks();
-  sessionStorage.clear();
 });
 
 describe('redirectToSSO', () => {
@@ -39,21 +38,26 @@ describe('redirectToSSO', () => {
 describe('redirectToOIDC', () => {
   beforeEach(() => sessionStorage.clear());
 
-  it('navigates to the backend OIDC login with return_to set to the current origin', () => {
+  it('navigates to the backend OIDC /login endpoint with return_to=this origin', () => {
     const loc = stubLocation('app.candy.cx');
     redirectToOIDC();
     expect(loc.href).toContain('/v1/auth/sso/oidc/login');
     expect(decodeURIComponent(loc.href)).toContain('return_to=https://app.candy.cx');
   });
 
-  it('forwards a ?ticket= query param to the backend and stashes it in sessionStorage', () => {
-    const loc = stubLocation('app.candy.cx', '?ticket=abc-123');
+  it('forwards ?ticket= from the current URL as a query param', () => {
+    const loc = stubLocation('app.candy.cx', '?ticket=abc123');
     redirectToOIDC();
-    expect(decodeURIComponent(loc.href)).toContain('ticket=abc-123');
-    expect(sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY)).toBe('abc-123');
+    expect(loc.href).toContain('ticket=abc123');
   });
 
-  it('does not add a ticket param or touch sessionStorage when none is present', () => {
+  it('stashes the ticket in sessionStorage as a cookie-failure fallback', () => {
+    stubLocation('app.candy.cx', '?ticket=abc123');
+    redirectToOIDC();
+    expect(sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY)).toBe('abc123');
+  });
+
+  it('omits the ticket param and sessionStorage write when no ticket is present', () => {
     const loc = stubLocation('app.candy.cx');
     redirectToOIDC();
     expect(loc.href).not.toContain('ticket=');
