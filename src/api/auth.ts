@@ -103,19 +103,25 @@ export function logout() {
 
 /** Full single-logout (mirrors Chat/Finixy). Calls the backend logout-everywhere FIRST (it needs
  *  the token) → it blocklists the user, revokes dashboard OAuth tokens, and broadcasts back-channel
- *  logout to the other apps. It returns end_session_url; navigating the BROWSER there clears the
- *  dashboard session cookie (a server-to-server call can't delete the browser cookie, so without
- *  this the next visit silently re-logs in). Best-effort with a timeout; always wipes local state. */
+ *  logout to the other apps. On success it returns end_session_url — navigating the BROWSER there
+ *  (a real top-level request, not a hidden iframe: browsers block third-party cookie access inside
+ *  iframes, which silently left the SSO session alive and let the IDP auto-reauth the user right
+ *  after "signing out") clears the dashboard's httpOnly session cookie, which a server-to-server
+ *  call alone can't touch. We only navigate when the backend confirmed success — if the call itself
+ *  failed (unreachable/5xx), we skip navigating instead of guessing a URL on a host we already know
+ *  is down (that guessed-fallback redirect was the earlier "must click sign-out multiple times" bug).
+ *  Local state (every key in localStorage/sessionStorage, not just the known auth ones — a
+ *  hand-maintained key list is exactly how a stale token survives a "complete" sign-out) is wiped
+ *  unconditionally before any of that, so the app is logged out immediately either way. */
 export async function fullLogout() {
   logger.info('[auth] fullLogout — initiating single-logout across all apps');
 
   // 1. Capture the token + origin BEFORE wiping anything (the backend call needs the token).
   const token = getToken();
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const fallbackUrl = `${API_BASE}/v1/auth/sso/oidc/login?return_to=${encodeURIComponent(origin)}`;
 
-  // 2. Call logout-everywhere (6s timeout). Capture the redirect target.
-  let redirectUrl = fallbackUrl;
+  // 2. Call logout-everywhere (6s timeout). Capture the end-session target, if any.
+  let endSessionUrl: string | null = null;
   if (token) {
     try {
       const controller = new AbortController();
@@ -128,16 +134,25 @@ export async function fullLogout() {
       clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json().catch(() => ({} as any));
-        redirectUrl = data.end_session_url ?? data.login_url ?? fallbackUrl;
+        endSessionUrl = data.end_session_url ?? data.login_url ?? null;
       }
     } catch (err) {
       logger.warn('[auth] logout-everywhere failed (clearing local state anyway)', { error: err });
     }
   }
 
-  // 3. Wipe local state, then navigate the browser to clear the dashboard cookie.
-  logout();
-  if (typeof window !== 'undefined') window.location.href = redirectUrl;
+  // 3. Wipe EVERYTHING in local/session storage — not a curated list of "known" keys.
+  try { localStorage.clear(); } catch {}
+  try { sessionStorage.clear(); } catch {}
+  // Tell devAuth (localhost-only auto-login) to skip its next reseed — otherwise a dev
+  // machine with VITE_DEV_TOKEN set silently logs the user back in on the next page load.
+  // Set AFTER the clear() above, which would otherwise wipe this flag too.
+  try { localStorage.setItem('candy.dev_logout', '1'); } catch {}
+
+  // 4. Only now, with local state already gone, attempt the real cookie-clearing redirect.
+  if (endSessionUrl && typeof window !== 'undefined') {
+    window.location.href = endSessionUrl;
+  }
 }
 
 export async function ssoCallback(token: string): Promise<{ user: AuthUser }> {

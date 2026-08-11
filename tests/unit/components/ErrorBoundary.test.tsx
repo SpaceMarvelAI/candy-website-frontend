@@ -60,6 +60,27 @@ describe('GlobalErrorBoundary', () => {
     );
     expect(screen.queryByText('Safe content')).not.toBeInTheDocument();
   });
+
+  it('calls window.location.reload when the Reload page button is clicked', async () => {
+    suppressErrors();
+    const originalLocation = window.location;
+    const reloadMock = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { ...originalLocation, reload: reloadMock },
+      writable: true,
+      configurable: true,
+    });
+
+    render(
+      <GlobalErrorBoundary>
+        <ThrowChild />
+      </GlobalErrorBoundary>
+    );
+    await userEvent.click(screen.getByRole('button', { name: /reload page/i }));
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(window, 'location', { value: originalLocation, writable: true, configurable: true });
+  });
 });
 
 // ── RouteErrorBoundary ────────────────────────────────────────────────────────

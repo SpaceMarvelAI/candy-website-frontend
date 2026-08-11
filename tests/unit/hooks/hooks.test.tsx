@@ -65,11 +65,78 @@ describe('useTheme + themeStore', () => {
 
     act(() => result.current.toggleTheme());
     expect(result.current.theme).toBe('light');
+
+    act(() => result.current.toggleTheme()); // toggle the other direction too
+    expect(result.current.theme).toBe('dark');
   });
 
   it('setting the same theme is a no-op (no throw)', () => {
     themeStore.set('light');
     expect(() => themeStore.set('light')).not.toThrow();
     expect(themeStore.get()).toBe('light');
+  });
+
+  it('clears an in-flight transition timer when the theme changes again quickly', () => {
+    themeStore.set('light');
+    themeStore.set('dark'); // starts the 400ms transition timer
+    expect(() => themeStore.set('light')).not.toThrow(); // hits the pending-timer branch
+    expect(themeStore.get()).toBe('light');
+  });
+
+  it('removes the theme-transitioning class after the transition duration elapses', () => {
+    vi.useFakeTimers();
+    themeStore.set('light');
+    themeStore.set('dark');
+    expect(document.documentElement.classList.contains('theme-transitioning')).toBe(true);
+    vi.advanceTimersByTime(400);
+    expect(document.documentElement.classList.contains('theme-transitioning')).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('skips DOM updates when document is unavailable (SSR-safe)', () => {
+    themeStore.set('light');
+    vi.stubGlobal('document', undefined);
+    expect(() => themeStore.set('dark')).not.toThrow();
+    vi.unstubAllGlobals();
+    expect(themeStore.get()).toBe('dark');
+    themeStore.set('light'); // reset for subsequent tests
+  });
+});
+
+// ── getInitialTheme() — module-load-time branches ────────────────────────────
+// getInitialTheme() only runs once, at module import, so exercising its other
+// branches requires a fresh module instance via vi.resetModules() + dynamic
+// import — the statically-imported `useTheme`/`themeStore` above are unaffected.
+describe('getInitialTheme (module load)', () => {
+  afterEach(() => {
+    localStorage.removeItem('theme');
+    vi.unstubAllGlobals();
+  });
+
+  it('picks up a valid "dark" theme saved before the module loads', async () => {
+    vi.resetModules();
+    localStorage.setItem('theme', 'dark');
+    const mod = await import('../../../src/hooks/useTheme');
+    expect(mod.themeStore.get()).toBe('dark');
+  });
+
+  it('picks up a valid "light" theme saved before the module loads', async () => {
+    vi.resetModules();
+    localStorage.setItem('theme', 'light');
+    const mod = await import('../../../src/hooks/useTheme');
+    expect(mod.themeStore.get()).toBe('light');
+  });
+
+  it('falls back to light when window is undefined (SSR)', async () => {
+    vi.resetModules();
+    vi.stubGlobal('window', undefined);
+    const mod = await import('../../../src/hooks/useTheme');
+    expect(mod.themeStore.get()).toBe('light');
+  });
+
+  it('does not touch the DOM at module load when document is unavailable (SSR)', async () => {
+    vi.resetModules();
+    vi.stubGlobal('document', undefined);
+    await expect(import('../../../src/hooks/useTheme')).resolves.toBeDefined();
   });
 });

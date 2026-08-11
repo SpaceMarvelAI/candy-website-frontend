@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
@@ -31,6 +31,7 @@ const AnalyticsPage  = lazy(() => import('./pages/analytics'));
 const WebhooksPage   = lazy(() => import('./pages/webhooks'));
 const FlowsPage      = lazy(() => import('./pages/flows'));
 const ChatbotsPage   = lazy(() => import('./pages/chatbots'));
+const HealthcareDomainPage = lazy(() => import('./pages/healthcare-domain'));
 
 // Chatbot workspaces
 const ChatbotCS      = lazy(() => import('./pages/chatbot-cs'));
@@ -52,15 +53,27 @@ const MarketingAgent  = lazy(() => import('./pages/marketing'));
 const HRAgent         = lazy(() => import('./pages/hr'));
 
 // Logs every route change so navigation failures are traceable from the console.
+// Tracks the previous route + wall-clock time spent on it, in addition to the
+// existing pathname/search/hash/state fields (unchanged from before).
 function RouteLogger() {
   const location = useLocation();
+  const prevRef = useRef<{ pathname: string; enteredAt: number } | null>(null);
+
   useEffect(() => {
+    const now = performance.now();
+    const prev = prevRef.current;
     logger.info('[Router] Navigation', {
+      from:     prev?.pathname ?? null,
+      to:       location.pathname,
       pathname: location.pathname,
       search:   location.search,
       hash:     location.hash,
       state:    location.state,
     });
+    if (prev) {
+      logger.perf(`[Router] time on ${prev.pathname}`, now - prev.enteredAt);
+    }
+    prevRef.current = { pathname: location.pathname, enteredAt: now };
   }, [location]);
   return null;
 }
@@ -95,7 +108,7 @@ function RootRedirect() {
     // Also still checked via sessionStorage for the legacy /sso/callback + PromptTicketHandler path.
     const pendingTicket = typeof window !== 'undefined' ? sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY) : null;
     if (!pendingTicket && !claimingPrompt) {
-      return <Navigate to="/dashboard" replace />;
+      return <Navigate to="/healthcare" replace />;
     }
   }
   return (
@@ -166,8 +179,12 @@ export default function App() {
           {/* OIDC callback — backend redirects here with the minted Candy token */}
           <Route path="/sso/oidc/callback" element={<OIDCCallbackPage />} />
 
+          {/* Healthcare domain — the primary landing (15 use cases) */}
+          <Route path="/healthcare"     element={<AppRoute skeleton={<DashboardSkeleton />}><HealthcareDomainPage /></AppRoute>} />
+
           {/* App views — rendered inside AppLayout (sidebar + topbar) */}
-          <Route path="/dashboard"      element={<AppRoute skeleton={<DashboardSkeleton />}><DashboardPage /></AppRoute>} />
+          {/* Legacy Voice-Bots dashboard now redirects into the healthcare domain */}
+          <Route path="/dashboard"      element={<Navigate to="/healthcare" replace />} />
           <Route path="/live"           element={<Navigate to="/live/demo" replace />} />
           <Route path="/live/:tab"      element={<AppRoute skeleton={<LiveCallsSkeleton />}><LiveCallsPage /></AppRoute>} />
           <Route path="/hrchat"         element={<AppRoute><HRFlowPage /></AppRoute>} />

@@ -1,8 +1,11 @@
 import { useEffect } from 'react';
 import Icon from '../../assets/icons';
 import { redirectToOIDC } from '../../utils/sso';
+import { useDebugLifecycle } from '../../utils/useDebugLifecycle';
 
 export default function LandingPage() {
+  // Flagged High in debug/AUDIT.md — the app's only unauthenticated entry point.
+  useDebugLifecycle('LandingPage');
   // Redirect straight to sign-in — no countdown. Uses redirectToOIDC() (not a
   // locally-built URL) so a `?ticket=` from the Prompt Library handoff gets stashed
   // into sessionStorage before we leave for login — see utils/sso.ts for why the
