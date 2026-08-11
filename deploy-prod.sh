@@ -156,6 +156,7 @@ GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DEPLOYER="${USER:-unknown}"
 python3 scripts/build_scorecard.py prod "$DEPLOY_TAG" "$GIT_SHA" "$DEPLOYER" "$ALARMS_RESULT" \
   || echo "  (scorecard build failed — non-fatal, the deploy above already succeeded)"
+echo "Report saved to S3: s3://smai-deploy-scorecards/candy-website-frontend-prod/$(date -u +%Y)/$DEPLOY_TAG.json"
 
 if [ "$ALARMS_RESULT" = "fail" ]; then
     echo "⚠ WARNING: an alarm is firing or suppressed — investigate."
