@@ -142,3 +142,12 @@ echo "╠═══════════════════════�
 echo "║  Live in ~1-5 mins after cache propagation.      ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
+
+# ── Post-deploy: deployment scorecard (report only, no alarms for dev per direction) ──
+echo "Building deployment scorecard..."
+DEPLOY_TAG="candy-website-frontend-dev-$(date -u +%Y-%m-%d-%H%M)"
+GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+DEPLOYER="${USER:-unknown}"
+python3 scripts/build_scorecard.py dev "$DEPLOY_TAG" "$GIT_SHA" "$DEPLOYER" "not run" \
+  || echo "  (scorecard build failed — non-fatal, the deploy above already succeeded)"
+echo ""
