@@ -15,7 +15,7 @@ backend metrics — this repo has none of those).
 distribution itself serves from or where its S3 origin lives.** Confirmed directly.
 
 Usage:
-    python3 scripts/build_scorecard.py <environment> <deploy_id> [git_sha] [deployer]
+    python3 scripts/build_scorecard.py <environment> <deploy_id> [git_sha] [deployer] [alarms_result] [--version=X.Y]
     python3 scripts/build_scorecard.py staging candy-website-frontend-staging-2026-08-11-1400 abc1234 raju
 """
 import json
@@ -128,19 +128,31 @@ def get_baseline(env):
 
 
 def main():
-    if len(sys.argv) < 3:
+    # --version=X.Y is an optional flag (not a positional arg) so it doesn't disturb any
+    # existing positional call sites across the different repos' deploy scripts. Deploy
+    # scripts compute the next version from the repo's VERSION file but deliberately do NOT
+    # commit it themselves (kept as a manual step) — this just records whatever they pass.
+    version = "unknown"
+    args = []
+    for a in sys.argv[1:]:
+        if a.startswith("--version="):
+            version = a.split("=", 1)[1]
+        else:
+            args.append(a)
+
+    if len(args) < 2:
         print(__doc__)
         sys.exit(1)
 
-    env = sys.argv[1]
+    env = args[0]
     if env not in ENV_CONFIG:
         print(f"Unknown environment {env!r} — expected one of {list(ENV_CONFIG)}")
         sys.exit(1)
 
-    deploy_id = sys.argv[2]
-    git_sha = sys.argv[3] if len(sys.argv) > 3 else "unknown"
-    deployer = sys.argv[4] if len(sys.argv) > 4 else "unknown"
-    alarms_result = sys.argv[5] if len(sys.argv) > 5 else "not run"
+    deploy_id = args[1]
+    git_sha = args[2] if len(args) > 2 else "unknown"
+    deployer = args[3] if len(args) > 3 else "unknown"
+    alarms_result = args[4] if len(args) > 4 else "not run"
 
     baseline = get_baseline(env)
     stages = build_stages(env, deploy_id, git_sha, deployer)
@@ -153,6 +165,7 @@ def main():
     scorecard = {
         "schema_version": "1.0",
         "deploy_id": deploy_id,
+        "version": version,
         "service": f"{SERVICE_NAME}-{env}",
         "surface": "frontend-static",
         "git_sha": git_sha,

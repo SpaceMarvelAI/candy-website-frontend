@@ -151,12 +151,19 @@ echo "Running post-deploy checks (alarms, scorecard)..."
 ALARMS_RESULT="pass"
 python3 scripts/check_alarms_ok.py candy-website-frontend-prod || ALARMS_RESULT="fail"
 
+# ── Version (only bumped/reported after a successful deploy — this line is only reached
+# once every gate + the deploy itself has already succeeded, since `fail()` exits earlier
+# otherwise). NOT committed automatically — bump the VERSION file yourself when ready.
+CURRENT_VERSION=$(cat VERSION 2>/dev/null || echo "1.0")
+NEXT_VERSION=$(awk -F. '{print $1"."($2+1)}' <<< "$CURRENT_VERSION")
+echo "Version: $CURRENT_VERSION -> $NEXT_VERSION (not committed — update VERSION yourself when ready)"
+
 DEPLOY_TAG="candy-website-frontend-prod-$(date -u +%Y-%m-%d-%H%M)"
 GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DEPLOYER="${USER:-unknown}"
-python3 scripts/build_scorecard.py prod "$DEPLOY_TAG" "$GIT_SHA" "$DEPLOYER" "$ALARMS_RESULT" \
+python3 scripts/build_scorecard.py prod "$DEPLOY_TAG" "$GIT_SHA" "$DEPLOYER" "$ALARMS_RESULT" --version="$NEXT_VERSION" \
   || echo "  (scorecard build failed — non-fatal, the deploy above already succeeded)"
-echo "Report saved to S3: s3://smai-deploy-scorecards/candy-website-frontend-prod/$(date -u +%Y)/$DEPLOY_TAG.json"
+echo "Report saved to S3: s3://smai-deploy-scorecards/candy-website-frontend-prod/$(date -u +%Y)/$DEPLOY_TAG.json (version $NEXT_VERSION)"
 
 if [ "$ALARMS_RESULT" = "fail" ]; then
     echo "⚠ WARNING: an alarm is firing or suppressed — investigate."
