@@ -50,6 +50,17 @@ describe('api/stt — transcribe', () => {
     const blob = new Blob(['x'], { type: 'audio/webm' });
     await expect(STT.transcribe(blob)).rejects.toMatchObject({ status: 422 });
   });
+
+  it('omits the Authorization header when no token is set', async () => {
+    setToken(null);
+    server.use(http.post(`${B}/v1/stt/transcribe`, ({ request }) => {
+      expect(request.headers.get('authorization')).toBeNull();
+      return HttpResponse.json({ transcript: 'hi', detected_language: null, confidence: null, duration_ms: 100 });
+    }));
+    const blob = new Blob(['x'], { type: 'audio/webm' });
+    const r = await STT.transcribe(blob);
+    expect(r.transcript).toBe('hi');
+  });
 });
 
 describe('api/recordings', () => {
@@ -136,5 +147,76 @@ describe('api/recordings', () => {
   it('downloadRecordingBlob throws on a failed response', async () => {
     server.use(http.get(`${B}/v1/recordings/r1/download`, () => HttpResponse.json({ detail: 'not found' }, { status: 404 })));
     await expect(Recordings.downloadRecordingBlob('r1')).rejects.toThrow();
+  });
+
+  it('downloadRecordingBlob falls back to res.text() when the error body is not JSON', async () => {
+    // Non-JSON body sends res.json() into its catch, exercising the res.text()
+    // fallback branch (regardless of the exact error surfaced afterward).
+    server.use(http.get(`${B}/v1/recordings/r1/download`, () => new HttpResponse('plain text error', { status: 500 })));
+    await expect(Recordings.downloadRecordingBlob('r1')).rejects.toThrow();
+  });
+
+  it('downloadRecordingBlob falls back to a default HTTP message when the JSON body has no detail field', async () => {
+    server.use(http.get(`${B}/v1/recordings/r1/download`, () => HttpResponse.json({}, { status: 500 })));
+    await expect(Recordings.downloadRecordingBlob('r1')).rejects.toThrow('HTTP 500');
+  });
+
+  it('uploadRecording detects mpeg audio and uses the .mp3 extension', async () => {
+    // MSW/undici can't parse a jsdom Blob's multipart part server-side, so we
+    // don't inspect the FormData here — just exercise the mpeg branch of the
+    // ext ternary and confirm the call still completes.
+    server.use(http.post(`${B}/v1/agents/a1/demo/s1/recording`, () => HttpResponse.json({ id: 'r3' })));
+    const audio = new Blob(['x'], { type: 'audio/mpeg' });
+    const r = await Recordings.uploadRecording({ agentId: 'a1', sessionId: 's1', role: 'user', turnIndex: 0, audio });
+    expect(r.id).toBe('r3');
+  });
+
+  it('listAllRecordings throws ApiError on failure', async () => {
+    server.use(http.get(`${B}/v1/recordings`, () => HttpResponse.json({ detail: 'server error' }, { status: 500 })));
+    await expect(Recordings.listAllRecordings()).rejects.toMatchObject({ status: 500 });
+  });
+
+  it('works without a token set (no Authorization header sent)', async () => {
+    setToken(null);
+    server.use(
+      http.post(`${B}/v1/agents/a1/demo/s1/recording`, ({ request }) => {
+        expect(request.headers.get('authorization')).toBeNull();
+        return HttpResponse.json({ id: 'r4' });
+      }),
+    );
+    const audio = new Blob(['x'], { type: 'audio/webm' });
+    await Recordings.uploadRecording({ agentId: 'a1', sessionId: 's1', role: 'user', turnIndex: 0, audio });
+
+    server.use(
+      http.get(`${B}/v1/agents/a1/demo/s1/recordings`, ({ request }) => {
+        expect(request.headers.get('authorization')).toBeNull();
+        return HttpResponse.json([]);
+      }),
+    );
+    await Recordings.listRecordings('a1', 's1');
+
+    server.use(
+      http.delete(`${B}/v1/recordings/r1`, ({ request }) => {
+        expect(request.headers.get('authorization')).toBeNull();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    await Recordings.deleteRecording('r1');
+
+    server.use(
+      http.get(`${B}/v1/recordings`, ({ request }) => {
+        expect(request.headers.get('authorization')).toBeNull();
+        return HttpResponse.json([]);
+      }),
+    );
+    await Recordings.listAllRecordings();
+
+    server.use(
+      http.get(`${B}/v1/recordings/r1/download`, ({ request }) => {
+        expect(request.headers.get('authorization')).toBeNull();
+        return new HttpResponse('bytes');
+      }),
+    );
+    await Recordings.downloadRecordingBlob('r1');
   });
 });

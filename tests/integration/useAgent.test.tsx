@@ -271,6 +271,54 @@ describe('useAgent — reloadAgents()', () => {
   });
 });
 
+describe('useAgent — agent preselection precedence', () => {
+  // Two independent ways to preselect an agent on bootstrap: initialSelectedId
+  // (router location.state, from the Prompt Library picker) and sessionStorage
+  // 'candy.select_agent' (set by the healthcare-domain use-case picker). Added
+  // when merging the healthcare branch into DEV — both must keep working, with
+  // initialSelectedId taking precedence when both are present.
+  const second = { ...mockAgent, id: 'agent_002', use_case_slug: 'ecommerce', name: 'Second Agent' };
+  const third  = { ...mockAgent, id: 'agent_003', use_case_slug: 'ecommerce', name: 'Third Agent' };
+
+  beforeEach(() => {
+    server.use(http.get(`${API_BASE}/v1/agents`, () => HttpResponse.json([mockAgent, second, third])));
+    sessionStorage.removeItem('candy.select_agent');
+  });
+
+  it('selects initialSelectedId when it matches an agent in this slug', async () => {
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent', 'agent_002'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.agent?.id).toBe('agent_002');
+  });
+
+  it('falls back to sessionStorage candy.select_agent when initialSelectedId is absent', async () => {
+    sessionStorage.setItem('candy.select_agent', 'agent_003');
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.agent?.id).toBe('agent_003');
+  });
+
+  it('consumes the sessionStorage pref (single-use — removed after read)', async () => {
+    sessionStorage.setItem('candy.select_agent', 'agent_003');
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(sessionStorage.getItem('candy.select_agent')).toBeNull();
+  });
+
+  it('initialSelectedId wins when both initialSelectedId and sessionStorage pref are present', async () => {
+    sessionStorage.setItem('candy.select_agent', 'agent_003');
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent', 'agent_002'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.agent?.id).toBe('agent_002');
+  });
+
+  it('falls back to the first agent when neither preference matches this slug', async () => {
+    const { result } = renderHook(() => useAgent('ecommerce', 'My Agent', 'agent_from_another_slug'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.agent?.id).toBe('agent_001');
+  });
+});
+
 describe('useAgent — field setters', () => {
   it('exposes working setters for editable fields', async () => {
     const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));

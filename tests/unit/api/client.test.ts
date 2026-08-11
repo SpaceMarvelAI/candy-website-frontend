@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../mocks/server';
-import { api, ApiError, setToken, getToken } from '../../../src/api/client';
+import { api, ApiError, setToken, getToken, setSessionToken } from '../../../src/api/client';
 import { API_BASE } from '../../mocks/fixtures';
 
 // ── Successful responses ──────────────────────────────────────────────────────
@@ -55,6 +55,32 @@ describe('api() — successful responses', () => {
     await api('/v1/data', { method: 'POST', body: { name: 'test' } });
     expect(contentType).toContain('application/json');
   });
+
+  it('uses the path as-is when it is already an absolute URL', async () => {
+    server.use(http.get('http://localhost:9999/external', () => HttpResponse.json({ ok: true })));
+    const result = await api('http://localhost:9999/external');
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('omits the JSON Content-Type and forwards FormData bodies untouched', async () => {
+    let contentType = '';
+    server.use(
+      http.post(`${API_BASE}/v1/upload`, ({ request }) => {
+        contentType = request.headers.get('Content-Type') ?? '';
+        return HttpResponse.json({ ok: true });
+      })
+    );
+    const form = new FormData();
+    form.append('file', 'contents');
+    await api('/v1/upload', { method: 'POST', body: form });
+    expect(contentType).toContain('multipart/form-data');
+  });
+
+  it('returns the raw text when a non-204 response has an empty body', async () => {
+    server.use(http.get(`${API_BASE}/v1/empty`, () => new HttpResponse('', { status: 200 })));
+    const result = await api('/v1/empty');
+    expect(result).toBe('');
+  });
 });
 
 // ── Error responses ───────────────────────────────────────────────────────────
@@ -82,6 +108,55 @@ describe('api() — HTTP error responses', () => {
   it('throws ApiError with status 0 on network failure', async () => {
     server.use(http.get(`${API_BASE}/v1/offline`, () => HttpResponse.error()));
     await expect(api('/v1/offline')).rejects.toMatchObject({ status: 0 });
+  });
+
+  it('falls back to a generic network-error message when the thrown error has no message', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error(''));
+    try {
+      await api('/v1/no-message');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect((e as ApiError).status).toBe(0);
+      expect((e as ApiError).message).toContain('Network error — is the backend running on');
+    }
+    fetchSpy.mockRestore();
+  });
+
+  it('uses the raw response text as the error detail when the body is not JSON', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/plaintext-error`, () => new HttpResponse('Internal Server Error', { status: 500 }))
+    );
+    try {
+      await api('/v1/plaintext-error');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect((e as ApiError).detail).toBe('Internal Server Error');
+      expect((e as ApiError).message).toBe('Internal Server Error');
+    }
+  });
+
+  it('falls back to "HTTP <status>" when a JSON error body has no detail field', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/no-detail-field`, () => HttpResponse.json({ message: 'oops' }, { status: 400 }))
+    );
+    try {
+      await api('/v1/no-detail-field');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect((e as ApiError).message).toBe('HTTP 400');
+    }
+  });
+
+  it('handles a nested object as the detail field', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/nested-detail`, () =>
+        HttpResponse.json({ detail: { field: 'email', msg: 'invalid' } }, { status: 422 })
+      )
+    );
+    await expect(api('/v1/nested-detail')).rejects.toMatchObject({
+      status: 422,
+      detail: { detail: { field: 'email', msg: 'invalid' } },
+    });
   });
 
   it('ApiError.message contains the server detail string', async () => {
@@ -167,5 +242,30 @@ describe('getToken / setToken', () => {
 
   it('getToken returns null when nothing is stored', () => {
     expect(getToken()).toBeNull();
+  });
+
+  it('prefers a sessionStorage token over a localStorage token', () => {
+    localStorage.setItem('access_token', 'local-token');
+    sessionStorage.setItem('access_token', 'session-token');
+    expect(getToken()).toBe('session-token');
+  });
+
+  it('getToken returns null instead of throwing when storage access throws', () => {
+    const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    expect(getToken()).toBeNull();
+    spy.mockRestore();
+  });
+
+  it('setSessionToken stores value in sessionStorage', () => {
+    setSessionToken('sess-abc');
+    expect(sessionStorage.getItem('access_token')).toBe('sess-abc');
+  });
+
+  it('setSessionToken(null) removes the key from sessionStorage', () => {
+    setSessionToken('sess-abc');
+    setSessionToken(null);
+    expect(sessionStorage.getItem('access_token')).toBeNull();
   });
 });

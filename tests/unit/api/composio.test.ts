@@ -84,6 +84,48 @@ describe('composio API calls (with mocked SSO exchange)', () => {
     );
   });
 
+  // These getMetaToken failure-path tests must run before any test below succeeds
+  // and caches the module-level meta-token — once cached, getMetaToken short-circuits
+  // and never re-runs the SSO exchange this block is exercising.
+
+  it('throws COMPOSIO_UNAUTHORIZED when the SM_API SSO-generate hop is not ok', async () => {
+    server.use(http.post(`${SM_API}/api/rbac/auth/sso/generate/`, () => new HttpResponse(null, { status: 500 })));
+    await expect(Composio.getComposioApps()).rejects.toThrow('COMPOSIO_UNAUTHORIZED');
+  });
+
+  it('throws COMPOSIO_UNAUTHORIZED when the SSO-generate response has no sso_token', async () => {
+    server.use(http.post(`${SM_API}/api/rbac/auth/sso/generate/`, () => HttpResponse.json({})));
+    await expect(Composio.getComposioApps()).rejects.toThrow('COMPOSIO_UNAUTHORIZED');
+  });
+
+  it('throws COMPOSIO_UNAUTHORIZED when the SSO-generate response body is not valid JSON', async () => {
+    server.use(http.post(`${SM_API}/api/rbac/auth/sso/generate/`, () => new HttpResponse('not-json', { status: 200 })));
+    await expect(Composio.getComposioApps()).rejects.toThrow('COMPOSIO_UNAUTHORIZED');
+  });
+
+  it('throws COMPOSIO_UNAUTHORIZED when the META_API SSO-callback hop is not ok', async () => {
+    server.use(http.get(`${META_API}/api/sso/callback`, () => new HttpResponse(null, { status: 500 })));
+    await expect(Composio.getComposioApps()).rejects.toThrow('COMPOSIO_UNAUTHORIZED');
+  });
+
+  it('throws COMPOSIO_UNAUTHORIZED when the SSO-callback response has no access_token', async () => {
+    server.use(http.get(`${META_API}/api/sso/callback`, () => HttpResponse.json({})));
+    await expect(Composio.getComposioApps()).rejects.toThrow('COMPOSIO_UNAUTHORIZED');
+  });
+
+  it('throws COMPOSIO_UNAUTHORIZED when the SSO-callback response body is not valid JSON', async () => {
+    server.use(http.get(`${META_API}/api/sso/callback`, () => new HttpResponse('not-json', { status: 200 })));
+    await expect(Composio.getComposioApps()).rejects.toThrow('COMPOSIO_UNAUTHORIZED');
+  });
+
+  it('defaults the meta-token lifetime to 3600s when expires_in is omitted', async () => {
+    server.use(
+      http.get(`${META_API}/api/sso/callback`, () => HttpResponse.json({ access_token: 'meta-default' })),
+      http.get(`${META_API}/api/composio/apps`, () => HttpResponse.json([])),
+    );
+    await expect(Composio.getComposioApps()).resolves.toEqual([]);
+  });
+
   it('getComposioApps unwraps an array response', async () => {
     server.use(http.get(`${META_API}/api/composio/apps`, () => HttpResponse.json([{ name: 'slack' }])));
     const apps = await Composio.getComposioApps();
@@ -131,5 +173,25 @@ describe('composio API calls (with mocked SSO exchange)', () => {
     await Composio.getComposioConnections();
     // Token cached from an earlier test in this block → SSO not re-run here.
     expect(ssoHits).toBeLessThanOrEqual(1);
+  });
+
+  it('clears the cached meta-token and throws COMPOSIO_UNAUTHORIZED on a 401 from a Composio endpoint', async () => {
+    server.use(http.get(`${META_API}/api/composio/apps`, () => new HttpResponse(null, { status: 401 })));
+    await expect(Composio.getComposioApps()).rejects.toThrow('COMPOSIO_UNAUTHORIZED');
+  });
+
+  it('throws a generic error containing the status and body text on a non-401 failure', async () => {
+    server.use(http.get(`${META_API}/api/composio/apps`, () => new HttpResponse('boom', { status: 500 })));
+    await expect(Composio.getComposioApps()).rejects.toThrow('500: boom');
+  });
+
+  it('getComposioApps falls back to [] when the envelope has no apps field', async () => {
+    server.use(http.get(`${META_API}/api/composio/apps`, () => HttpResponse.json({})));
+    await expect(Composio.getComposioApps()).resolves.toEqual([]);
+  });
+
+  it('getComposioConnections falls back to [] when the envelope has no connections field', async () => {
+    server.use(http.get(`${META_API}/api/composio/connections`, () => HttpResponse.json({})));
+    await expect(Composio.getComposioConnections()).resolves.toEqual([]);
   });
 });

@@ -12,7 +12,8 @@ import { claimPromptTicket, type ClaimedPrompt } from '../api/prompts';
 // All existing showView('dashboard') calls keep working unchanged.
 const VIEW_TO_PATH: Record<string, string> = {
   auth:           '/auth',
-  dashboard:      '/dashboard',
+  healthcare_domain: '/healthcare',
+  dashboard:      '/healthcare',   // legacy alias → healthcare domain
   chatbots:       '/chatbots',
   live:           '/live',
   hrchat:         '/hrchat',
@@ -99,7 +100,7 @@ export function AppProvider({ children }) {
     // If there's a pending prompt ticket, don't navigate — let PromptTicketHandler handle it
     const pendingTicket = sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY);
     if (!pendingTicket) {
-      navigate('/dashboard');
+      navigate('/healthcare');
     }
   }, [navigate]);
 
@@ -111,21 +112,18 @@ export function AppProvider({ children }) {
     // this browser/device gets misattributed to the previous user/company.
     posthog.reset();
     // fullLogout() calls the backend logout-everywhere (blocklist + broadcast + token revoke),
-    // wipes local tokens, and navigates the browser to end_session_url to clear the dashboard
-    // cookie. It needs the token, so it captures it before wiping. Best-effort.
+    // wipes every localStorage/sessionStorage key, and — only on confirmed backend success —
+    // navigates the tab to end_session_url to clear the dashboard's httpOnly SSO cookie (a
+    // real top-level request; nothing less can touch that cookie). If the backend call itself
+    // failed, it skips that redirect instead of guessing a URL, so we always still navigate
+    // home in the SPA below on this same click.
     try {
       await fullLogout();
-      return; // fullLogout redirects the browser; nothing more to do
     } catch (err) {
-      logger.warn('[AppContext] fullLogout failed — clearing local state and going home', { error: err });
+      logger.warn('[AppContext] fullLogout failed — clearing local state anyway', { error: err });
+      try { localStorage.clear(); } catch {}
+      try { sessionStorage.clear(); } catch {}
     }
-    // Fallback if fullLogout threw before redirecting: wipe + go home.
-    try { sessionStorage.clear(); } catch {}
-    try {
-      localStorage.removeItem('candy.token');
-      localStorage.removeItem('candy.user');
-      localStorage.removeItem('dashboard_token');
-    } catch {}
     navigate('/', { replace: true });
   }, [navigate]);
 
@@ -166,11 +164,14 @@ export function AppProvider({ children }) {
       hasAccessToken: !!accessToken,
       hasTicket: !!ticketFromUrl,
     });
-    // Strip all auth params from URL immediately so they can't be replayed. Keep
-    // window.location.hash — this is a HashRouter app, so the current route (e.g.
-    // "#/dashboard") lives there; dropping it would revert the visible URL to the
-    // bare origin even though the app is still on that page.
-    window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+    // Strip all auth params from URL immediately so they can't be replayed. Also reset
+    // pathname to '/' — the backend's redirect lands on a real path like /sso/oidc/callback
+    // (no "#"), and since this is a HashRouter app that path is never part of routing, just
+    // dead weight stuck in the address bar forever (e.g. "/sso/oidc/callback#/healthcare").
+    // Keep window.location.hash — that's where the current route (e.g. "#/dashboard")
+    // actually lives; dropping it would revert the visible URL to the bare origin even
+    // though the app is still on that page.
+    window.history.replaceState({}, '', '/' + window.location.hash);
 
     // Wipe previous session before writing new credentials
     apiLogout();
@@ -210,11 +211,11 @@ export function AppProvider({ children }) {
             .catch((err) => {
               logger.warn('[AppContext] prompt ticket claim failed', { error: err });
               addToast('That prompt link is invalid or has expired.', 'error');
-              navigate('/dashboard', { replace: true });
+              navigate('/healthcare', { replace: true });
             })
             .finally(() => setClaimingPrompt(false));
         } else {
-          navigate('/dashboard', { replace: true });
+          navigate('/healthcare', { replace: true });
         }
       })
       .catch((err: any) => {

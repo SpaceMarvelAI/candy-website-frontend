@@ -12,7 +12,7 @@ npm run preview   # serve dist/ locally on port 3000
 
 There is no test runner, linter, or working `typecheck` script (`tsc` binary is broken in this environment — use `npm run build` to catch transpile errors instead).
 
-Backend is expected at `http://localhost:8001` (set via `VITE_API_BASE_URL` in `.env`).
+`VITE_API_BASE_URL` is set per Vite mode: `.env` (base/fallback) → `https://api.candy.cx`, `.env.development` (used by `npm run dev`) → `https://dev-api.candy.cx`, `.env.staging` → `https://staging-api.candy.cx`, `.env.production` (used by `npm run build`) → `https://api.candy.cx`.
 
 ## Architecture
 
