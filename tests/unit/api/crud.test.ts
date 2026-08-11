@@ -89,6 +89,16 @@ describe('api/skills', () => {
     server.use(http.delete(`${B}/v1/agents/a1/skills/verify-otp`, () => new HttpResponse(null, { status: 204 })));
     await expect(Skills.detachSkill('a1', 'verify-otp')).resolves.toBeUndefined();
   });
+
+  it('attachSkill defaults config to an empty object when omitted', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/skills/verify-otp`, async ({ request }) => {
+      const body = await request.json() as any;
+      expect(body.config).toEqual({});
+      return HttpResponse.json({ id: 's1', skill_slug: 'verify-otp' });
+    }));
+    const s = await Skills.attachSkill('a1', 'verify-otp');
+    expect(s.skill_slug).toBe('verify-otp');
+  });
 });
 
 // ── webhooks ──────────────────────────────────────────────────────────────────
@@ -297,6 +307,16 @@ describe('api/knowledge', () => {
     const r = await Knowledge.uploadKnowledgeFile('a1', file);
     expect(r[0].filename).toBe('doc.pdf');
   });
+
+  it('uploadKnowledgeFile defaults mime_type to octet-stream when the file has no type', async () => {
+    // MSW/undici can't parse a jsdom File's multipart part server-side, so we
+    // don't inspect the FormData here — just exercise the `file.type || ...`
+    // fallback branch and confirm the call still completes.
+    server.use(http.post(`${B}/v1/agents/a1/knowledge/uploads`, json([{ kb_document_id: 'u2', filename: 'doc.bin', status: 'queued' }])));
+    const file = new File(['hello'], 'doc.bin', { type: '' });
+    const r = await Knowledge.uploadKnowledgeFile('a1', file);
+    expect(r[0].filename).toBe('doc.bin');
+  });
 });
 
 // ── agents ────────────────────────────────────────────────────────────────────
@@ -398,6 +418,54 @@ describe('api/analytics', () => {
     }));
     await Analytics.getAnalyticsSummary({ range: '7d' });
   });
+
+  it('getAnalyticsSessions passes query params through', async () => {
+    server.use(http.get(`${B}/v1/analytics/sessions`, ({ request }) => {
+      expect(new URL(request.url).searchParams.get('range')).toBe('7d');
+      return HttpResponse.json([]);
+    }));
+    await Analytics.getAnalyticsSessions({ range: '7d' });
+  });
+
+  it('getAnalyticsLatency passes query params through', async () => {
+    server.use(http.get(`${B}/v1/analytics/latency`, ({ request }) => {
+      expect(new URL(request.url).searchParams.get('range')).toBe('7d');
+      return HttpResponse.json({ p50: 0 });
+    }));
+    await Analytics.getAnalyticsLatency({ range: '7d' });
+  });
+
+  it('getAnalyticsKnowledgeGaps passes query params through', async () => {
+    server.use(http.get(`${B}/v1/analytics/knowledge-gaps`, ({ request }) => {
+      expect(new URL(request.url).searchParams.get('range')).toBe('7d');
+      return HttpResponse.json([]);
+    }));
+    await Analytics.getAnalyticsKnowledgeGaps({ range: '7d' });
+  });
+
+  it('getAnalyticsLanguages passes query params through', async () => {
+    server.use(http.get(`${B}/v1/analytics/languages`, ({ request }) => {
+      expect(new URL(request.url).searchParams.get('range')).toBe('7d');
+      return HttpResponse.json([]);
+    }));
+    await Analytics.getAnalyticsLanguages({ range: '7d' });
+  });
+
+  it('getAnalyticsAgents passes query params through', async () => {
+    server.use(http.get(`${B}/v1/analytics/agents`, ({ request }) => {
+      expect(new URL(request.url).searchParams.get('range')).toBe('7d');
+      return HttpResponse.json([]);
+    }));
+    await Analytics.getAnalyticsAgents({ range: '7d' });
+  });
+
+  it('getAnalyticsEvents passes query params through', async () => {
+    server.use(http.get(`${B}/v1/analytics/events`, ({ request }) => {
+      expect(new URL(request.url).searchParams.get('range')).toBe('7d');
+      return HttpResponse.json([]);
+    }));
+    await Analytics.getAnalyticsEvents({ range: '7d' });
+  });
 });
 
 // ── demo ──────────────────────────────────────────────────────────────────────
@@ -494,5 +562,83 @@ describe('api/demo', () => {
     });
     expect(sentences).toEqual(['ok']);
     expect(done).toBe(true);
+  });
+
+  it('prefetchDemoRag resolves normally on success (no error swallowed)', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/prefetch`, json({})));
+    await expect(Demo.prefetchDemoRag('a1', 'd1', 'partial')).resolves.toBeUndefined();
+  });
+
+  it('sendDemoTurn passes fast=0 when fast is explicitly false', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/turn`, ({ request }) => {
+      expect(new URL(request.url).searchParams.get('fast')).toBe('0');
+      return HttpResponse.json({ agent_response: 'Hi', latency_ms: 50 });
+    }));
+    await Demo.sendDemoTurn('a1', 'd1', 'hello', false);
+  });
+
+  it('streamDemoTurn works with no callbacks object passed (uses the default {})', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/turn/stream`, () =>
+      new HttpResponse(
+        sseStream(['data: {"sentence":"hi"}\n\n', 'data: {"done":true}\n\n']),
+        { headers: { 'Content-Type': 'text/event-stream' } }
+      )
+    ));
+    await expect(Demo.streamDemoTurn('a1', 'd1', 'hi')).resolves.toBeUndefined();
+  });
+
+  it('streamDemoTurn sends a custom languageCode instead of the "en" default', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/turn/stream`, async ({ request }) => {
+      const body = await request.json() as any;
+      expect(body.language_code).toBe('hi');
+      return new HttpResponse(sseStream(['data: {"done":true}\n\n']), { headers: { 'Content-Type': 'text/event-stream' } });
+    }));
+    await Demo.streamDemoTurn('a1', 'd1', 'hi', {}, undefined, 'hi');
+  });
+
+  it('streamDemoTurn calls onError when the stream errors mid-read', async () => {
+    const throwingStream = new ReadableStream({
+      pull() {
+        throw new Error('stream read failed');
+      },
+    });
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/turn/stream`, () =>
+      new HttpResponse(throwingStream, { headers: { 'Content-Type': 'text/event-stream' } })
+    ));
+    let err: Error | null = null;
+    await Demo.streamDemoTurn('a1', 'd1', 'hi', { onError: (e) => { err = e; } });
+    expect(err).toBeInstanceOf(Error);
+  });
+
+  it('streamDemoTurn works without a token (no Authorization header sent)', async () => {
+    setToken(null);
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/turn/stream`, ({ request }) => {
+      expect(request.headers.get('authorization')).toBeNull();
+      return new HttpResponse(sseStream(['data: {"done":true}\n\n']), { headers: { 'Content-Type': 'text/event-stream' } });
+    }));
+    await Demo.streamDemoTurn('a1', 'd1', 'hi');
+  });
+
+  it('streamDemoTurn skips non-"data:" lines and blank data lines, and breaks cleanly when the stream just ends', async () => {
+    server.use(http.post(`${B}/v1/agents/a1/demo/d1/turn/stream`, () =>
+      new HttpResponse(
+        // "event:" line is skipped (not a data: line), "data:" with no payload is
+        // skipped too, then the stream closes with no `done` frame — exercising
+        // reader.read() returning { done: true } naturally.
+        sseStream([
+          'event: ping\ndata: {"sentence":"hi"}\n\n',
+          'data:\n\n',
+        ]),
+        { headers: { 'Content-Type': 'text/event-stream' } }
+      )
+    ));
+    const sentences: string[] = [];
+    let done = false;
+    await Demo.streamDemoTurn('a1', 'd1', 'hi', {
+      onSentence: (s) => sentences.push(s),
+      onDone: () => { done = true; },
+    });
+    expect(sentences).toEqual(['hi']);
+    expect(done).toBe(false);
   });
 });

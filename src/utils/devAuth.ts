@@ -13,6 +13,14 @@ export function installDevAuth(): void {
     const isLocal = host === 'localhost' || host === '127.0.0.1';
     if (!isLocal) return;
 
+    // Respect an explicit sign-out for this one page load, then resume normal reseeding —
+    // otherwise fullLogout()'s local wipe gets silently undone the moment the page reloads.
+    if (localStorage.getItem('candy.dev_logout')) {
+      localStorage.removeItem('candy.dev_logout');
+      console.info('[devAuth] skipping reseed — user just signed out');
+      return;
+    }
+
     const token = import.meta.env.VITE_DEV_TOKEN as string | undefined;
     const userRaw = import.meta.env.VITE_DEV_USER as string | undefined;
     if (!token || !userRaw) return;

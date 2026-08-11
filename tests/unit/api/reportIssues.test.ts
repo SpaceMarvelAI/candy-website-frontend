@@ -145,6 +145,26 @@ describe('listMyIssues', () => {
     const issues = await listMyIssues('u1');
     expect(issues).toEqual([]);
   });
+
+  it('treats a missing Contents array as an empty page instead of throwing', async () => {
+    mockSend.mockImplementation(async (cmd: any) => {
+      if (cmd.__type === 'list') return {}; // no Contents key at all
+      throw new Error('should not GET anything');
+    });
+    const issues = await listMyIssues('u1');
+    expect(issues).toEqual([]);
+  });
+
+  it('defaults attachmentKeys to [] when the record has no attachments field', async () => {
+    mockSend.mockImplementation(async (cmd: any) => {
+      if (cmd.__type === 'list') return { Contents: [{ Key: 'report-issues/MSP-1/issue.json' }] };
+      const { attachments, ...rest } = fullRecord({ id: 'MSP-1' });
+      return { Body: issueBody(rest) };
+    });
+    const issues = await listMyIssues('u1');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].attachmentKeys).toEqual([]);
+  });
 });
 
 describe('loadAttachment', () => {
@@ -214,5 +234,37 @@ describe('createIssue', () => {
     const issueJsonPut = puts.find((p) => p.Key.endsWith('/issue.json'));
     const body = JSON.parse(issueJsonPut.Body);
     expect(body.client_context.user_id).toBe('u-42');
+  });
+
+  it('writes the provided organizationId and companyName into client_context', async () => {
+    const puts: any[] = [];
+    mockSend.mockImplementation(async (cmd: any) => {
+      if (cmd.__type === 'put') puts.push(cmd.input);
+      return {};
+    });
+    await createIssue({ ...baseInput, organizationId: 'org-1', companyName: 'Acme Corp' });
+    const issueJsonPut = puts.find((p) => p.Key.endsWith('/issue.json'));
+    const body = JSON.parse(issueJsonPut.Body);
+    expect(body.client_context.organization_id).toBe('org-1');
+    expect(body.client_context.company_name).toBe('Acme Corp');
+  });
+
+  it('falls back to .bin for an attachment with no file extension', async () => {
+    mockSend.mockResolvedValue({});
+    const file = new File(['x'], 'noext');
+    const result = await createIssue({ ...baseInput, files: [file] });
+    expect(result.attachmentKeys[0]).toMatch(/^attachments\/\d+-[a-z0-9]{4}\.bin$/);
+  });
+
+  it('falls back to application/octet-stream when a file has no type', async () => {
+    const puts: any[] = [];
+    mockSend.mockImplementation(async (cmd: any) => {
+      if (cmd.__type === 'put') puts.push(cmd.input);
+      return {};
+    });
+    const file = new File(['x'], 'shot.png', { type: '' });
+    await createIssue({ ...baseInput, files: [file] });
+    const attachmentPut = puts.find((p) => p.Key.includes('/attachments/'));
+    expect(attachmentPut.ContentType).toBe('application/octet-stream');
   });
 });

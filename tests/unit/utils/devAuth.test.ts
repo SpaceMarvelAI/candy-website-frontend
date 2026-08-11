@@ -82,4 +82,17 @@ describe('installDevAuth', () => {
     expect(() => installDevAuth()).not.toThrow();
     spy.mockRestore();
   });
+
+  it('skips reseeding and clears the one-shot dev_logout flag, even when a dev token/user are configured', () => {
+    setHostname('localhost');
+    localStorage.setItem('candy.dev_logout', '1');
+    (import.meta.env as any).VITE_DEV_TOKEN = 'dev-token-abc';
+    (import.meta.env as any).VITE_DEV_USER = JSON.stringify({ email: 'dev@candy.internal' });
+
+    installDevAuth();
+
+    expect(localStorage.getItem('candy.dev_logout')).toBeNull();
+    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(localStorage.getItem('candy.user')).toBeNull();
+  });
 });

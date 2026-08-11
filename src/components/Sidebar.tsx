@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import Icon from '../assets/icons';
-import ReportIssuesModal from './ReportIssuesModal';
+
+// Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
+const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
 
 // ─────────────────────────────────────────────────────────────────────────────
 const COLLAPSED_W = 56;
@@ -575,7 +577,9 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
       {/* ── Report an Issue (portaled) ───────────────────────────────────────── */}
       {reportIssuesOpen && (
-        <ReportIssuesModal onClose={() => setReportIssuesOpen(false)} />
+        <Suspense fallback={null}>
+          <ReportIssuesModal onClose={() => setReportIssuesOpen(false)} />
+        </Suspense>
       )}
 
       {/* ── Flex placeholder — mirrors the panel width so the content area shifts ── */}
