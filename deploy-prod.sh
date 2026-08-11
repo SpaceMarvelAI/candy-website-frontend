@@ -143,3 +143,21 @@ echo "╠═══════════════════════�
 echo "║  Live in ~1-5 mins after cache propagation.      ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
+
+# ── Post-deploy: alarms check + deployment scorecard ──────────────────────────
+# Re-run scripts/build_scorecard.py manually 15-30 min later for a metrics-accurate read —
+# same propagation-delay caveat as the staging script.
+echo "Running post-deploy checks (alarms, scorecard)..."
+ALARMS_RESULT="pass"
+python3 scripts/check_alarms_ok.py candy-website-frontend-prod || ALARMS_RESULT="fail"
+
+DEPLOY_TAG="candy-website-frontend-prod-$(date -u +%Y-%m-%d-%H%M)"
+GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+DEPLOYER="${USER:-unknown}"
+python3 scripts/build_scorecard.py prod "$DEPLOY_TAG" "$GIT_SHA" "$DEPLOYER" "$ALARMS_RESULT" \
+  || echo "  (scorecard build failed — non-fatal, the deploy above already succeeded)"
+
+if [ "$ALARMS_RESULT" = "fail" ]; then
+    echo "⚠ WARNING: an alarm is firing or suppressed — investigate."
+fi
+echo ""
