@@ -143,11 +143,19 @@ echo "║  Live in ~1-5 mins after cache propagation.      ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 
-# ── Post-deploy: deployment scorecard (report only, no alarms for dev per direction) ──
-echo "Building deployment scorecard..."
+# ── Post-deploy: alarms check + deployment scorecard ──────────────────────────
+echo "Running post-deploy checks (alarms, scorecard)..."
+ALARMS_RESULT="pass"
+python3 scripts/check_alarms_ok.py candy-website-frontend-dev || ALARMS_RESULT="fail"
+
 DEPLOY_TAG="candy-website-frontend-dev-$(date -u +%Y-%m-%d-%H%M)"
 GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DEPLOYER="${USER:-unknown}"
-python3 scripts/build_scorecard.py dev "$DEPLOY_TAG" "$GIT_SHA" "$DEPLOYER" "not run" \
+python3 scripts/build_scorecard.py dev "$DEPLOY_TAG" "$GIT_SHA" "$DEPLOYER" "$ALARMS_RESULT" \
   || echo "  (scorecard build failed — non-fatal, the deploy above already succeeded)"
+echo "Report saved to S3: s3://smai-deploy-scorecards/candy-website-frontend-dev/$(date -u +%Y)/$DEPLOY_TAG.json"
+
+if [ "$ALARMS_RESULT" = "fail" ]; then
+    echo "⚠ WARNING: an alarm is firing or suppressed — investigate."
+fi
 echo ""
