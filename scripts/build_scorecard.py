@@ -26,6 +26,12 @@ from datetime import datetime, timedelta, timezone
 
 S3_BUCKET = "smai-reports"  # renamed from smai-deploy-scorecards 2026-08-19 — bucket now holds more than deployment scorecards (perf/scalability + strix too)
 SERVICE_NAME = "candy-website-frontend"
+
+# S3 layout standardized 2026-08-19: {product}/{component}/deployment/{env}/...
+# instead of the old flat {service}-{env}/... scheme. Old data stays at its old paths
+# (no migration) — only new uploads go here.
+S3_PRODUCT = "candy"
+S3_COMPONENT = "frontend"
 CLOUDFRONT_REGION = "us-east-1"  # metrics only exist here, not the distribution's own region
 
 ENV_CONFIG = {
@@ -116,7 +122,7 @@ def _site_responds(base_url):
 
 def get_baseline(env):
     out = subprocess.run(
-        ["aws", "s3", "cp", f"s3://{S3_BUCKET}/{SERVICE_NAME}-{env}/latest-pass.json", "-"],
+        ["aws", "s3", "cp", f"s3://{S3_BUCKET}/{S3_PRODUCT}/{S3_COMPONENT}/deployment/{env}/latest-pass.json", "-"],
         capture_output=True, text=True,
     )
     if out.returncode != 0:
@@ -180,7 +186,7 @@ def main():
 
     print(json.dumps(scorecard, indent=2))
 
-    key = f"{SERVICE_NAME}-{env}/{datetime.now(timezone.utc).year}/{deploy_id}.json"
+    key = f"{S3_PRODUCT}/{S3_COMPONENT}/deployment/{env}/{datetime.now(timezone.utc).year}/{deploy_id}.json"
     local_path = f"/tmp/{deploy_id}.json"
     with open(local_path, "w") as f:
         json.dump(scorecard, f, indent=2)
@@ -189,7 +195,7 @@ def main():
     print(f"\nUploaded to s3://{S3_BUCKET}/{key}")
 
     if verdict == "PASS":
-        _run_aws(["s3", "cp", local_path, f"s3://{S3_BUCKET}/{SERVICE_NAME}-{env}/latest-pass.json"])
+        _run_aws(["s3", "cp", local_path, f"s3://{S3_BUCKET}/{S3_PRODUCT}/{S3_COMPONENT}/deployment/{env}/latest-pass.json"])
         print(f"Updated s3://{S3_BUCKET}/{SERVICE_NAME}-{env}/latest-pass.json (verdict=PASS)")
 
     os.remove(local_path)
