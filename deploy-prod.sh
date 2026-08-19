@@ -163,7 +163,7 @@ GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DEPLOYER="${USER:-unknown}"
 python3 scripts/build_scorecard.py prod "$DEPLOY_TAG" "$GIT_SHA" "$DEPLOYER" "$ALARMS_RESULT" --version="$NEXT_VERSION" \
   || echo "  (scorecard build failed — non-fatal, the deploy above already succeeded)"
-echo "Report saved to S3: s3://smai-deploy-scorecards/candy-website-frontend-prod/$(date -u +%Y)/$DEPLOY_TAG.json (version $NEXT_VERSION)"
+echo "Report saved to S3: s3://smai-reports/candy/frontend/deployment/prod/$(date -u +%Y)/$DEPLOY_TAG.json (version $NEXT_VERSION)"
 echo "NOTE: metrics above may reflect the OLD version / restart noise, not steady-state traffic. Re-run scripts/build_scorecard.py again in ~30 min for an accurate p95/p99/error-rate read (CloudWatch metrics take 15-20 min to fully propagate, plus traffic needs to settle post-deploy)."
 
 if [ "$ALARMS_RESULT" = "fail" ]; then

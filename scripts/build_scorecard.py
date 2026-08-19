@@ -24,7 +24,7 @@ import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 
-S3_BUCKET = "smai-deploy-scorecards"
+S3_BUCKET = "smai-reports"  # renamed from smai-deploy-scorecards 2026-08-19 — bucket now holds more than deployment scorecards (perf/scalability + strix too)
 SERVICE_NAME = "candy-website-frontend"
 CLOUDFRONT_REGION = "us-east-1"  # metrics only exist here, not the distribution's own region
 
