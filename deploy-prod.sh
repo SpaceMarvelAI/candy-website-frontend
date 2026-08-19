@@ -160,7 +160,12 @@ echo "Version: $CURRENT_VERSION -> $NEXT_VERSION (not committed — update VERSI
 
 DEPLOY_TAG="candy-website-frontend-prod-$(date -u +%Y-%m-%d-%H%M)"
 GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-DEPLOYER="${USER:-unknown}"
+# Real deployer identity from whoever's AWS CLI is configured right now — this account's
+# IAM usernames are real email addresses (e.g. raju.kumar@spacemarvel.ai), so this reflects
+# who actually ran the deploy, not the OS username ($USER, which was just "apple"/etc and
+# didn't identify anyone). Falls back to $USER if AWS CLI isn't configured for some reason.
+DEPLOYER=$(aws sts get-caller-identity --query "Arn" --output text 2>/dev/null | awk -F'/' '{print $NF}')
+DEPLOYER="${DEPLOYER:-${USER:-unknown}}"
 python3 scripts/build_scorecard.py prod "$DEPLOY_TAG" "$GIT_SHA" "$DEPLOYER" "$ALARMS_RESULT" --version="$NEXT_VERSION" \
   || echo "  (scorecard build failed — non-fatal, the deploy above already succeeded)"
 echo "Report saved to S3: s3://smai-reports/candy/frontend/deployment/prod/$(date -u +%Y)/$DEPLOY_TAG.json (version $NEXT_VERSION)"
