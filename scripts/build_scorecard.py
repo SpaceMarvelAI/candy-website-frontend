@@ -196,7 +196,7 @@ def main():
 
     if verdict == "PASS":
         _run_aws(["s3", "cp", local_path, f"s3://{S3_BUCKET}/{S3_PRODUCT}/{S3_COMPONENT}/deployment/{env}/latest-pass.json"])
-        print(f"Updated s3://{S3_BUCKET}/{SERVICE_NAME}-{env}/latest-pass.json (verdict=PASS)")
+        print(f"Updated s3://{S3_BUCKET}/{S3_PRODUCT}/{S3_COMPONENT}/deployment/{env}/latest-pass.json (verdict=PASS)")
 
     os.remove(local_path)
 
