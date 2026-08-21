@@ -31,17 +31,24 @@ const IS_DEV = import.meta.env.DEV === true;
 export const VERBOSE_HOSTS = ['localhost', '127.0.0.1', 'dev.candy.cx'];
 
 function isVerbose(): boolean {
+  const onVerboseHost =
+    IS_DEV
+    || import.meta.env.VITE_DEBUG === 'true'
+    || (typeof window !== 'undefined' && VERBOSE_HOSTS.includes(window.location.hostname));
+
   try {
     const override = localStorage.getItem('debug');
+    // 'off' always wins — turning logging DOWN is never a risk.
     if (override === 'off') return false;
-    if (override === 'on') return true;
+    // 'on' only works where verbose logging is already sanctioned. Previously
+    // anyone could run localStorage.setItem('debug','on') in production devtools
+    // and switch on full request/response logging for a live session. Production
+    // debugging now needs a deliberate build with VITE_DEBUG=true.
+    if (override === 'on') return onVerboseHost;
   } catch {
     // localStorage may throw in private mode / sandboxed iframes — fall through
   }
-  if (import.meta.env.VITE_DEBUG === 'true') return true;
-  if (IS_DEV) return true;
-  if (typeof window !== 'undefined' && VERBOSE_HOSTS.includes(window.location.hostname)) return true;
-  return false;
+  return onVerboseHost;
 }
 
 function ts(): string {
@@ -209,17 +216,53 @@ export const logger = {
 export default logger;
 
 /** Shortens large objects/strings before they hit the console — used by API logging so a 2 MB response body doesn't flood devtools. Purely a display truncation; never mutates the real value flowing through the app. */
+/**
+ * Keys whose VALUES must never reach a console, a log sink, or `_errorReporter`.
+ *
+ * This exists because `client.ts` logs every request body and `auth.ts` posts
+ * `{ email, password }` — so the plaintext login password was printed whenever
+ * `isVerbose()` was true, which is *always* on `dev.candy.cx`. Matching on the
+ * key rather than the value catches signup, password-change and token payloads
+ * without having to remember every call site.
+ */
+const REDACT_KEYS =
+  /^(password|passwd|pwd|new_password|current_password|confirm_password|old_password|token|access_token|refresh_token|id_token|sso_token|dashboard_token|secret|client_secret|api_key|apikey|authorization|auth|credential|credentials|private_key|ticket|prompt_ticket|webhook_secret|signing_secret)$/i;
+
+/**
+ * Deep copy with sensitive values masked.
+ *
+ * MUST NOT mutate its input. The value passed in is frequently the live request
+ * body about to be sent — redacting in place would strip the password before it
+ * reached the server and silently break login.
+ */
+function redactDeep(value: any, seen: WeakSet<object> = new WeakSet()): any {
+  if (value === null || typeof value !== 'object') return value;
+  if (seen.has(value)) return '[circular]';
+  seen.add(value);
+  if (Array.isArray(value)) return value.map(v => redactDeep(v, seen));
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(value)) {
+    out[k] = REDACT_KEYS.test(k) ? '[redacted]' : redactDeep(v, seen);
+  }
+  return out;
+}
+
 export function truncateForLog(value: any, maxLen = 2000): any {
   try {
     if (typeof value === 'string') {
       return value.length > maxLen ? `${value.slice(0, maxLen)}… [truncated, ${value.length} chars total]` : value;
     }
-    const str = JSON.stringify(value);
+    // Redact BEFORE serialising, so a secret cannot surface in the preview string
+    // either.
+    const safe = redactDeep(value);
+    const str = JSON.stringify(safe);
     if (str && str.length > maxLen) {
       return { __truncated__: true, preview: str.slice(0, maxLen) + '…', totalLength: str.length };
     }
-    return value;
+    return safe;
   } catch {
-    return value; // circular ref or non-serializable — log it as-is rather than throw
+    // Non-serialisable even after redaction: return the masked copy if we can
+    // build one, never the raw value, which could carry a secret.
+    try { return redactDeep(value); } catch { return '[unloggable]'; }
   }
 }

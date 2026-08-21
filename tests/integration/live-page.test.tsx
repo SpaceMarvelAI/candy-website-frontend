@@ -15,6 +15,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
+import { ConfirmProvider } from '../../src/components/ConfirmDialog';
 import { setToken } from '../../src/api/client';
 import { API_BASE } from '../mocks/fixtures';
 
@@ -59,12 +60,16 @@ const session = {
 };
 
 function renderPage(tab = 'demo') {
+  // LiveCallsPage uses useConfirm() for the destructive recording delete, so it
+  // must render inside ConfirmProvider — App.tsx supplies this in the real tree.
   return render(
-    <MemoryRouter initialEntries={[`/live/${tab}`]}>
-      <Routes>
-        <Route path="/live/:tab" element={<LiveCallsPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <ConfirmProvider>
+      <MemoryRouter initialEntries={[`/live/${tab}`]}>
+        <Routes>
+          <Route path="/live/:tab" element={<LiveCallsPage />} />
+        </Routes>
+      </MemoryRouter>
+    </ConfirmProvider>,
   );
 }
 

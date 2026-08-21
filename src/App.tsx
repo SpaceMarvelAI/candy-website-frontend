@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
+import { ConfirmProvider } from './components/ConfirmDialog';
 import PromptTicketHandler from './components/PromptTicketHandler';
 import PromptAgentPickerModal from './components/agent/PromptAgentPickerModal';
 import AppLayout   from './layouts/AppLayout';
@@ -166,7 +167,9 @@ function AppRoute({
 export default function App() {
   const { claimedPrompt, setClaimedPrompt } = useApp();
   return (
-    <>
+    // Supplies useConfirm() to the destructive-delete call sites. Wraps the whole
+    // tree so the dialog renders above every route and layout.
+    <ConfirmProvider>
       <AmbientBg />
       <RouteLogger />
       <Suspense fallback={<PageLoader />}>
@@ -238,6 +241,6 @@ export default function App() {
         />
       )}
       <ToastHost />
-    </>
+    </ConfirmProvider>
   );
 }

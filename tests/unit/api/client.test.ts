@@ -130,8 +130,11 @@ describe('api() — HTTP error responses', () => {
       await api('/v1/plaintext-error');
       expect.fail('should have thrown');
     } catch (e) {
+      // The raw body is preserved for logging…
       expect((e as ApiError).detail).toBe('Internal Server Error');
-      expect((e as ApiError).message).toBe('Internal Server Error');
+      // …but a 5xx must not surface server internals to the user. This backend
+      // has handlers that put raw exception text in the response body.
+      expect((e as ApiError).message).toBe('Something went wrong on our end. Please try again.');
     }
   });
 

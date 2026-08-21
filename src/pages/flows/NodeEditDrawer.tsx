@@ -37,45 +37,12 @@ function Field({ label, children }: { label: string; children: (id: string) => R
   );
 }
 
-const FOCUSABLE =
-  'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-
-/**
- * Dialog keyboard contract: Escape closes, focus moves into the dialog on open
- * and back to the opener on close, and (for a true modal) Tab cycles inside it.
- *
- * `trapFocus` must be true only for dialogs that really do block the rest of
- * the page — trapping focus in a non-modal side panel would strand the user.
- * Lives here rather than in src/hooks/ only because this remediation pass owns
- * just the two flow-builder files; move it out when that constraint lifts.
- */
-export function useDialogA11y(
-  ref: React.RefObject<HTMLElement | null>,
-  onClose: () => void,
-  trapFocus = false,
-) {
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    ref.current?.focus();
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') { onClose(); return; }
-      if (!trapFocus || e.key !== 'Tab' || !ref.current) return;
-      const els = Array.from(ref.current.querySelectorAll<HTMLElement>(FOCUSABLE))
-        .filter(el => el.offsetParent !== null);
-      if (els.length === 0) return;
-      const first = els[0], last = els[els.length - 1];
-      if (e.shiftKey && document.activeElement === first)      { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    }
-
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      opener?.focus?.();
-    };
-  }, [ref, onClose, trapFocus]);
-}
+// Moved to src/hooks/useDialogA11y.ts so shared components (ConfirmDialog) can
+// use it without importing from a page — the relocation the previous comment here
+// asked for. Imported (this file uses it too) and re-exported, because
+// flows/index.tsx has imported it from this module since before the move.
+import { useDialogA11y } from '../../hooks/useDialogA11y';
+export { useDialogA11y };
 
 /** Failed-to-load notice with a retry — distinct from a genuinely empty list.
  *  Exported for the flow page's panels; same caveat as useDialogA11y about

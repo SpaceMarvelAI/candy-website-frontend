@@ -16,6 +16,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
+import { ConfirmProvider } from '../../src/components/ConfirmDialog';
 import { setToken } from '../../src/api/client';
 import { API_BASE } from '../mocks/fixtures';
 
@@ -54,7 +55,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('WebhooksPage — jsonb event_types', () => {
   it('renders the event pills without crashing when event_types is a JSON string', async () => {
-    render(<WebhooksPage />);
+    render(<ConfirmProvider><WebhooksPage /></ConfirmProvider>);
     expect(await screen.findByText('session.started')).toBeInTheDocument();
     expect(screen.getByText('session.ended')).toBeInTheDocument();
     expect(screen.getByText('turn.completed')).toBeInTheDocument();
@@ -63,20 +64,27 @@ describe('WebhooksPage — jsonb event_types', () => {
   });
 
   it('lists the event types in the delete confirmation instead of throwing', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    render(<WebhooksPage />);
+    // Was a window.confirm() spy. Deletes now use the in-app ConfirmDialog, so
+    // this asserts the rendered dialog — which still proves .join() on the jsonb
+    // string no longer throws.
+    render(<ConfirmProvider><WebhooksPage /></ConfirmProvider>);
     await screen.findByText('session.started');
     await userEvent.click(screen.getByTitle('Delete webhook'));
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
-    expect(confirmSpy.mock.calls[0][0]).toContain(
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.textContent).toContain(
       'session.started, session.ended, turn.completed, agent.published',
     );
+    // Cancel exists as the safe default, so Return cannot delete.
+    expect(within(dialog).getByRole('button', { name: /cancel/i })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: /delete webhook/i })).toBeTruthy();
   });
 });
 
 describe('WebhooksPage — event selector accessibility', () => {
   it('exposes each event as a keyboard-operable checkbox', async () => {
-    render(<WebhooksPage />);
+    render(<ConfirmProvider><WebhooksPage /></ConfirmProvider>);
     await screen.findByText('session.started');
     await userEvent.click(screen.getByTitle('Edit webhook'));
 
@@ -107,7 +115,7 @@ describe('WebhooksPage — saving a partial PATCH response', () => {
       description: 'primary',
     })));
 
-    render(<WebhooksPage />);
+    render(<ConfirmProvider><WebhooksPage /></ConfirmProvider>);
     await screen.findByText('session.started');
 
     const createdBefore = screen.getByRole('row', { name: /example\.com\/hook/ });
@@ -128,7 +136,7 @@ describe('WebhooksPage — ping honesty', () => {
     server.use(http.post(`${B}/v1/webhooks/wh_00000001/ping`, () =>
       HttpResponse.json({ queued: true, event_type: 'ping' })));
 
-    render(<WebhooksPage />);
+    render(<ConfirmProvider><WebhooksPage /></ConfirmProvider>);
     await screen.findByText('session.started');
     await userEvent.click(screen.getByTitle('Ping webhook'));
 

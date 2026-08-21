@@ -16,6 +16,7 @@ import { errorMessage } from '../../utils/apiError';
 import { ApiError, API_BASE } from '../../api/client';
 import { SkeletonBox } from '../Skeleton';
 import { sectionHeader as sharedSectionHeader, sectionTitle, sectionPill } from '../../styles/tokens';
+import { useConfirm } from '../ConfirmDialog';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
@@ -47,6 +48,7 @@ export default function AgentPicker({
   agents, loading = false, selectedId, onSelect, onCreate, onDelete, onReload,
 }: Props) {
   const { user, addToast } = useApp();
+  const confirm = useConfirm();
   const [creating, setCreating]     = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,9 +70,12 @@ export default function AgentPicker({
     if (ev) { ev.preventDefault(); ev.stopPropagation(); }
     if (!onDelete) return;
     if (deletingId) return;
-    if (!window.confirm(
-      `Delete "${a.name}" permanently?\n\nThis removes the agent and ALL of its knowledge base, recordings, prompt history, and demo sessions. This cannot be undone.`,
-    )) return;
+    if (!await confirm({
+      title: `Delete "${a.name}"?`,
+      body: 'This removes the agent and everything attached to it.',
+      consequence: 'Knowledge base, recordings, prompt history and demo sessions are all deleted. This cannot be undone.',
+      confirmLabel: 'Delete agent',
+    })) return;
     setDeletingId(a.id);
     try {
       await onDelete(a.id);

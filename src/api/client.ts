@@ -65,6 +65,12 @@ export function purgeLegacyAuthStorage(): void {
  *   • { detail: [ { loc, msg }, … ] }         → the first msg (422 validation)
  */
 function apiErrorMessage(status: number, body: any): string {
+  // 5xx bodies are server internals, not something a user can act on — and this
+  // backend has handlers that put raw exception text in `detail`. Show a fixed
+  // message; the real body stays on `.detail`/`.payload` for logging and for
+  // gateInfo(), which keys off status/code rather than message. 4xx is different:
+  // those messages ARE actionable ("email already in use"), so they pass through.
+  if (status >= 500) return 'Something went wrong on our end. Please try again.';
   if (typeof body === 'string' && body) return body;
   const d = body?.detail;
   if (typeof d === 'string' && d) return d;

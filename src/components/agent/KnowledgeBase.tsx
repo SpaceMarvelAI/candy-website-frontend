@@ -15,6 +15,7 @@ import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { logger } from '../../utils/logger';
 import { sectionHeader, sectionTitle, sectionPill } from '../../styles/tokens';
+import { useConfirm } from '../ConfirmDialog';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
@@ -92,6 +93,7 @@ interface Props {
 
 export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshDocs }: Props) {
   const { addToast } = useApp();
+  const confirm = useConfirm();
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState<string[]>([]);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -258,7 +260,12 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
   async function deleteAll() {
     if (!agentId || bulkDeleting) return;
     if (docs.length === 0) return;
-    if (!window.confirm(`Delete all ${docs.length} files from this agent's knowledge base?`)) return;
+    if (!await confirm({
+      title: `Delete all ${docs.length} knowledge base file${docs.length === 1 ? '' : 's'}?`,
+      body: 'The agent will lose everything it has been taught from these documents.',
+      consequence: 'Uploaded files and their embeddings are removed permanently. This cannot be undone.',
+      confirmLabel: `Delete ${docs.length} file${docs.length === 1 ? '' : 's'}`,
+    })) return;
     logger.info('[KnowledgeBase] deleteAll start', { agentId, count: docs.length });
     setBulkDeleting(true);
     let ok = 0, fail = 0;

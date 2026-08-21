@@ -21,6 +21,7 @@ import { listAgents, type Agent } from '../../api/agents';
 import { listAllRecordings, deleteRecording, downloadRecordingBlob, type RecordingRow } from '../../api/recordings';
 import { listChatSessions, getChatSession, type ChatSessionRow, type ChatSessionDetail } from '../../api/chat-sessions';
 import { getToken } from '../../api/client';
+import { useConfirm } from '../../components/ConfirmDialog';
 
 type Tab = 'demo' | 'live' | 'chat' | 'agents';
 
@@ -57,6 +58,7 @@ const VALID_TABS: Tab[] = ['demo', 'live', 'chat', 'agents'];
 
 export default function LiveCallsPage() {
   const { addToast } = useApp();
+  const confirm = useConfirm();
   const { tab: rawTab } = useParams<{ tab: string }>();
   const navigate = useNavigate();
   const tab: Tab = (VALID_TABS.includes(rawTab as Tab) ? rawTab : 'demo') as Tab;
@@ -255,9 +257,12 @@ export default function LiveCallsPage() {
 
   async function remove(rec: RecordingRow) {
     if (deletingId) return;
-    if (!window.confirm(
-      `Delete this recording permanently?\n\nAgent: ${rec.agent_name || '—'}\nCaptured: ${rec.created_at}\nDuration: ${formatDuration(rec.duration_ms)}`,
-    )) return;
+    if (!await confirm({
+      title: 'Delete this recording?',
+      body: `Agent: ${rec.agent_name || '—'}\nCaptured: ${rec.created_at}\nDuration: ${formatDuration(rec.duration_ms)}`,
+      consequence: 'The audio and its transcript are removed permanently.',
+      confirmLabel: 'Delete recording',
+    })) return;
     setDeletingId(rec.recording_id);
     if (playerRec?.recording_id === rec.recording_id) closePlayer();
     try {

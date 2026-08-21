@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
 import { ApiError } from '../../api/client';
 import { SkeletonTable } from '../../components/Skeleton';
+import { useConfirm } from '../../components/ConfirmDialog';
 import {
   listWebhooks,
   createWebhook,
@@ -432,6 +433,7 @@ function WebhookDrawer({ existing, onSave, onClose }: DrawerProps) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function WebhooksPage() {
   const { addToast } = useApp();
+  const confirm = useConfirm();
 
   const [webhooks,    setWebhooks]    = useState<Webhook[]>([]);
   const [loading,     setLoading]     = useState(true);
@@ -497,7 +499,12 @@ export default function WebhooksPage() {
 
   async function handleDelete(w: Webhook) {
     if (deletingId) return;
-    if (!window.confirm(`Delete this webhook permanently?\n\nURL: ${w.url}\nEvents: ${w.event_types.join(', ')}`)) return;
+    if (!await confirm({
+      title: 'Delete this webhook?',
+      body: `URL: ${w.url}\nEvents: ${w.event_types.join(', ')}`,
+      consequence: 'Candy will stop sending events to this endpoint. Delivery history is removed too.',
+      confirmLabel: 'Delete webhook',
+    })) return;
     setDeletingId(w.id);
     try {
       await deleteWebhook(w.id);

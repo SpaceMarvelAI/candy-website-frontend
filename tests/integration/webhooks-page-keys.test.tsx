@@ -13,6 +13,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
+import { ConfirmProvider } from '../../src/components/ConfirmDialog';
 import { setToken } from '../../src/api/client';
 import { API_BASE } from '../mocks/fixtures';
 
@@ -39,7 +40,7 @@ beforeEach(() => {
 describe('WebhooksPage — list reconciliation keys', () => {
   it('renders webhook rows and delivery rows without React key warnings', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    render(<WebhooksPage />);
+    render(<ConfirmProvider><WebhooksPage /></ConfirmProvider>);
 
     await screen.findByText('https://a.example/hook');
     // Expand a row so the second keyless map (deliveries) also renders.

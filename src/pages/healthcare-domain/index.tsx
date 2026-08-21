@@ -1,4 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+/**
+ * First unused name in the `base`, `base 2`, `base 3`… series.
+ *
+ * The create dialog used to pre-fill the same default every time, so repeatedly
+ * clicking "Create & customise" produced a stack of agents with identical names
+ * that no picker could tell apart. Suggesting the next free name makes the
+ * duplicate obvious before it is created, without blocking anyone who genuinely
+ * wants two agents for one use case.
+ */
+export function nextAvailableName(base: string, taken: { name: string }[]): string {
+  const names = new Set(taken.map(a => a.name.trim().toLowerCase()));
+  if (!names.has(base.trim().toLowerCase())) return base;
+  for (let n = 2; n < 100; n++) {
+    const candidate = `${base} ${n}`;
+    if (!names.has(candidate.toLowerCase())) return candidate;
+  }
+  return base;
+}
 import Icon from '../../assets/icons';
 import { useApp } from '../../context/AppContext';
 import {
@@ -105,13 +124,22 @@ function CreateModal({
   const { showView, addToast } = useApp();
   const [name, setName] = useState(`${uc.title} Agent`);
   const [busy, setBusy] = useState(false);
+  const creatingRef = useRef(false);
   const [existing, setExisting] = useState<Agent[] | null>(null); // null = loading
 
   // Look for agents this company already has for this use case.
   useEffect(() => {
     let cancelled = false;
     listUseCaseAgents(uc)
-      .then(list => { if (!cancelled) setExisting(list); })
+      .then(list => {
+        if (cancelled) return;
+        setExisting(list);
+        // Suggest a distinct name when this use case already has agents. The
+        // field used to pre-fill the same default every time, so clicking
+        // "Create & customise" repeatedly produced several agents with identical
+        // names that were impossible to tell apart in any picker.
+        setName(nextAvailableName(`${uc.title} Agent`, list));
+      })
       .catch(() => { if (!cancelled) setExisting([]); });
     return () => { cancelled = true; };
   }, [uc]);
@@ -123,7 +151,12 @@ function CreateModal({
   }
 
   async function handleCreate() {
-    if (busy) return;
+    // Ref, not state: `setBusy(true)` does not apply until the next render, so a
+    // fast double-click slipped past `if (busy)` and created a second identical
+    // agent. Creating one is 4 sequential round trips (create + 3 attachSkill),
+    // which feels unresponsive — exactly when people click again.
+    if (creatingRef.current || busy) return;
+    creatingRef.current = true;
     setBusy(true);
     try {
       const { agent, failed } = await createHealthcareAgent(uc, name);
@@ -136,6 +169,7 @@ function CreateModal({
       openAgent(agent.id);
     } catch (e) {
       addToast(`Could not create agent: ${(e as Error).message}`, 'error');
+      creatingRef.current = false;   // allow a retry after a genuine failure
       setBusy(false);
     }
   }
@@ -195,6 +229,9 @@ function CreateModal({
                     <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)' }}>{a.name}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-4)' }}>
                       {a.agent_flow_status === 'published' ? 'Live' : 'Draft'} · {a.call_direction}
+                      {/* Short id so same-named agents are actually distinguishable —
+                          matches how AgentPicker labels them. */}
+                      {' · '}<span style={{ fontFamily: 'ui-monospace, monospace' }}>{a.id.slice(0, 8)}</span>
                     </span>
                   </span>
                   <span style={{ fontSize: 12.5, fontWeight: 600, color: BLUE }}>Open →</span>
