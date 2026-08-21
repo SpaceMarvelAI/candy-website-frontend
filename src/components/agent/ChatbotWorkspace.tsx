@@ -14,6 +14,7 @@ import { listKnowledge, type KnowledgeDoc } from '../../api/knowledge';
 import { publishAgent } from '../../api/agents';
 import { ApiError, getToken } from '../../api/client';
 import { useApp } from '../../context/AppContext';
+import { errorMessage } from '../../utils/apiError';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { logger } from '../../utils/logger';
 
@@ -143,11 +144,11 @@ export default function ChatbotWorkspace({
             : bots[0].id;
           setSelectedId(wanted);
         }
-      } catch (e: any) {
+      } catch (e) {
         if (cancelled) return;
         const msg = e instanceof ApiError
-          ? `${e.status}: ${typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message)}`
-          : (e?.message || 'Failed to load agents');
+          ? `${e.status}: ${errorMessage(e)}`
+          : errorMessage(e, 'Failed to load agents');
         logger.error('[ChatbotWorkspace] Bootstrap failed', { slug, error: e, message: msg });
         setError(msg);
       } finally {
@@ -276,9 +277,7 @@ export default function ChatbotWorkspace({
       setStatusOverride(res.status);
       addToast(`${category} chatbot published!`, 'success');
     } catch (e) {
-      const msg = e instanceof ApiError
-        ? (typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? (e as Error).message))
-        : (e as Error).message;
+      const msg = errorMessage(e);
       logger.error('[ChatbotWorkspace] onPublish failed', { agentId: agent.id, error: e, message: msg });
       addToast(`Publish failed: ${msg}`, 'error');
     } finally {

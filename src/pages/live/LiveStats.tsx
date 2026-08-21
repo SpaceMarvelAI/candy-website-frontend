@@ -1,13 +1,27 @@
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 
-export default function LiveStats({ counts }) {
+export interface LiveCounts {
+  total:      number;
+  completed:  number;
+  inprogress: number;
+  declined:   number;
+  pending:    number;
+}
+
+export default function LiveStats({ counts }: { counts: LiveCounts }) {
   const isMobile = useMediaQuery('(max-width: 640px)');
   const isTablet = useMediaQuery('(max-width: 1024px)');
   const cols     = isMobile ? 2 : isTablet ? 3 : 5;
 
+  // counts.total is 0 whenever the recordings list is empty (new account, or a
+  // tab with nothing in it) — 0/0 rendered a literal "NaN% success rate".
+  const successRate = counts.total > 0
+    ? Math.round((counts.completed / counts.total) * 100)
+    : null;
+
   const stats = [
     { key: 'total',      label: 'Total contacts', val: counts.total,      sub: 'Imported from xlsx',    dotColor: 'var(--purple)' },
-    { key: 'completed',  label: 'Completed',       val: counts.completed,  sub: `${Math.round(counts.completed / counts.total * 100)}% success rate`, dotColor: 'var(--green)', dotGlow: true },
+    { key: 'completed',  label: 'Completed',       val: counts.completed,  sub: successRate === null ? 'No recordings yet' : `${successRate}% success rate`, dotColor: 'var(--green)', dotGlow: true },
     { key: 'inprogress', label: 'In progress',     val: counts.inprogress, sub: 'Active calls now',      dotColor: 'var(--blue)',  dotPulse: true },
     { key: 'declined',   label: 'Declined',        val: counts.declined,   sub: 'Not interested',        dotColor: 'var(--red)' },
     { key: 'pending',    label: 'Pending',         val: counts.pending,    sub: 'Retry queue',           dotColor: 'var(--amber)' },

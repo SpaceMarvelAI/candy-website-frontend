@@ -44,8 +44,12 @@ export default function SSOCallbackPage() {
         sessionStorage.clear();
 
         // Restore the newly validated candy session and the new SpaceMarvel bearer.
+        // `candy.user` MUST go to sessionStorage — that is the only store
+        // loadStoredUser() reads now (see api/client.ts: the session is
+        // session-scoped so it dies with the browser). Writing it to
+        // localStorage here would leave the user silently un-signed-in.
         if (candyToken) localStorage.setItem('candy.token', candyToken);
-        localStorage.setItem('candy.user', JSON.stringify(user));
+        sessionStorage.setItem('candy.user', JSON.stringify(user));
         if (dashboardToken) localStorage.setItem('dashboard_token', dashboardToken);
 
         posthog.identify(user.user_id, { email: user.email, name: user.full_name });
@@ -56,7 +60,7 @@ export default function SSOCallbackPage() {
         if (pendingIntent && dashboardToken) {
           try {
             const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            const smApi   = isLocal ? '/sm-api' : ((import.meta as any).env?.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
+            const smApi   = isLocal ? '/sm-api' : (import.meta.env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
             const res = await fetch(`${smApi}/api/rbac/auth/sso/generate/`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${dashboardToken}` },

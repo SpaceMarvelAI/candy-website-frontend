@@ -1,7 +1,7 @@
-import { useApp } from '../context/AppContext';
+import { useToasts, type ToastKind } from '../hooks/useToast';
 import Icon from '../assets/icons';
 
-const KIND_STYLE: Record<string, { bg: string; fg: string; iconBg: string; iconFg: string; icon: string }> = {
+const KIND_STYLE: Record<ToastKind, { bg: string; fg: string; iconBg: string; iconFg: string; icon: string }> = {
   success: {
     bg:     'rgba(22,22,32,0.96)',
     fg:     '#ffffff',
@@ -26,7 +26,7 @@ const KIND_STYLE: Record<string, { bg: string; fg: string; iconBg: string; iconF
 };
 
 export default function ToastHost() {
-  const { toasts } = useApp();
+  const toasts = useToasts();
 
   return (
     <div
@@ -37,11 +37,8 @@ export default function ToastHost() {
       }}
     >
       {toasts.map(t => {
-        // Kind comes from addToast(msg, 'success' | 'error' | 'info').
-        // Default to success when an unknown kind sneaks through so it
-        // never renders as black-on-black.
-        const k = (t as any).kind as string | undefined;
-        const style = KIND_STYLE[k || 'success'] || KIND_STYLE.success;
+        const k = t.kind;
+        const style = KIND_STYLE[k];
         return (
           <div
             key={t.id}

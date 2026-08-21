@@ -11,38 +11,94 @@
  */
 import { logger, truncateForLog } from '../utils/logger';
 
-const RAW_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8002';
+const RAW_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8002';
 export const API_BASE = RAW_BASE.replace(/\/$/, '');
 
-const TOKEN_KEY = 'access_token';  // Shared across all apps (Chat, Candy, Finixy)
+export const TOKEN_KEY = 'access_token';
+export const USER_KEY  = 'candy.user';
 
-// SSO tokens land in sessionStorage (tab-scoped, cleared on close).
-// Regular login tokens stay in localStorage.
+/**
+ * The session is SESSION-SCOPED: the token lives in `sessionStorage` only, so
+ * closing the browser genuinely ends the session and the next visit lands on
+ * sign-in.
+ *
+ * This used to write `localStorage` and read `sessionStorage || localStorage`,
+ * which meant (a) an un-signed-out session silently resumed days later, and
+ * (b) Candy trusted a token another app (Chat/Finixy) had left under the same
+ * shared key. Both were deliberate once; both are gone on purpose now.
+ * `purgeLegacyAuthStorage()` clears the old keys so a token written by an
+ * earlier build cannot resurrect a session after this ships.
+ */
 export function getToken(): string | null {
   try {
-    return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+    return sessionStorage.getItem(TOKEN_KEY);
   } catch { return null; }
 }
 export function setToken(t: string | null) {
-  try {
-    if (t) localStorage.setItem(TOKEN_KEY, t);
-    else   localStorage.removeItem(TOKEN_KEY);
-  } catch {}
-}
-export function setSessionToken(t: string | null) {
   try {
     if (t) sessionStorage.setItem(TOKEN_KEY, t);
     else   sessionStorage.removeItem(TOKEN_KEY);
   } catch {}
 }
+/** Kept as a distinct name for the SSO call sites; same store as `setToken` now. */
+export const setSessionToken = setToken;
+
+/**
+ * Drop auth left in `localStorage` by an earlier build (or by a sibling app).
+ * Called once at boot, before React reads any stored user — otherwise a stale
+ * `localStorage` token would keep the user "signed in" forever.
+ */
+export function purgeLegacyAuthStorage(): void {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+  } catch { /* storage blocked — nothing to purge */ }
+}
+
+/**
+ * Best-effort display string for an error body. NEVER returns an object, so
+ * `ApiError.message` can be rendered/interpolated without turning into
+ * "[object Object]". Handles FastAPI's three shapes:
+ *   • plain text body                         → the text
+ *   • { detail: "msg" }                       → "msg"
+ *   • { detail: { error, message, … } }       → the message (plan/credit gates)
+ *   • { detail: [ { loc, msg }, … ] }         → the first msg (422 validation)
+ */
+function apiErrorMessage(status: number, body: any): string {
+  if (typeof body === 'string' && body) return body;
+  const d = body?.detail;
+  if (typeof d === 'string' && d) return d;
+  const m = Array.isArray(d) ? d[0]?.msg : (d?.message ?? d?.msg);
+  if (typeof m === 'string' && m) return m;
+  if (d && typeof d === 'object') {
+    try { return JSON.stringify(d); } catch { /* circular — fall through */ }
+  }
+  return `HTTP ${status}`;
+}
 
 export class ApiError extends Error {
   status: number;
-  detail: any;
+  detail: any;      // whole parsed response body (unchanged — existing callers rely on it)
+  /**
+   * FastAPI's inner `detail` value: a string for plain errors, an object for the
+   * plan/credit gates (`{ error, message, current_plan?, feature?, limit?, used? }`).
+   */
+  payload: any;
+  /**
+   * Machine-readable gate code when the backend sent an object detail —
+   * 'upgrade_required' | 'voice_minutes_exhausted' (403) | 'no_credits' (402).
+   * Undefined for role gates (403 with a plain string) and everything else.
+   * Together with `status` this is what tells a plan/role gate apart from a real
+   * failure — see `gateInfo()` in src/utils/apiError.ts.
+   */
+  code?: string;
   constructor(status: number, detail: any) {
-    super(typeof detail === 'string' ? detail : (detail?.detail ?? `HTTP ${status}`));
-    this.status = status;
-    this.detail = detail;
+    super(apiErrorMessage(status, detail));
+    this.status  = status;
+    this.detail  = detail;
+    this.payload = typeof detail === 'string' ? detail : detail?.detail;
+    const c = this.payload?.error;
+    this.code = typeof c === 'string' ? c : undefined;
   }
 }
 
@@ -52,10 +108,17 @@ type Opts = {
   headers?: Record<string, string>;
   auth?: boolean;        // default true
   signal?: AbortSignal;
+  timeoutMs?: number;    // default DEFAULT_TIMEOUT_MS; ignored when `signal` is supplied
 };
 
+// A hung backend must not hang the UI forever. 60s is deliberately generous so
+// the slow-but-real endpoints (website crawl, LLM generation) still finish;
+// callers needing more pass `timeoutMs`, or their own signal to opt out.
+// No retry on purpose — these mutations are not idempotent.
+const DEFAULT_TIMEOUT_MS = 60_000;
+
 export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
-  const { method = 'GET', body, headers = {}, auth = true, signal } = opts;
+  const { method = 'GET', body, headers = {}, auth = true, signal, timeoutMs = DEFAULT_TIMEOUT_MS } = opts;
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
 
   const finalHeaders: Record<string, string> = { ...headers };
@@ -78,6 +141,12 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
     hasToken: !!getToken(),
   });
 
+  // A caller-supplied signal takes over cancellation completely; otherwise we
+  // arm our own so the promise can never hang indefinitely.
+  const ctl = signal ? null : new AbortController();
+  let timedOut = false;
+  const timer = ctl ? setTimeout(() => { timedOut = true; ctl.abort(); }, timeoutMs) : null;
+
   const t0 = performance.now();
   let res: Response;
   try {
@@ -85,10 +154,19 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
       method,
       headers: finalHeaders,
       body: body === undefined ? undefined : (isForm ? body : JSON.stringify(body)),
-      signal,
+      signal: signal ?? ctl!.signal,
     });
   } catch (e: any) {
     const duration = performance.now() - t0;
+    if (timedOut) {
+      // 408 keeps timeouts distinguishable from an offline backend (status 0).
+      logger.api('err', label, {
+        url, method, status: 408,
+        message:  `Timed out after ${timeoutMs} ms`,
+        duration: `${duration.toFixed(1)} ms`,
+      });
+      throw new ApiError(408, `Request timed out after ${timeoutMs} ms — the server did not respond.`);
+    }
     // Network-level failure (CORS block, backend offline, DNS failure, etc.)
     logger.api('err', label, {
       url,
@@ -100,6 +178,8 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
       stack:    e?.stack,
     });
     throw new ApiError(0, e?.message || 'Network error — is the backend running on ' + API_BASE + '?');
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
   const duration = performance.now() - t0;
@@ -124,8 +204,12 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
     if (res.status === 401 && auth) {
       logger.warn('[api] 401 received — clearing token and dispatching candy:auth-expired', { url });
       try {
+        // sessionStorage is where the live session lives; clear localStorage too
+        // so a legacy copy can't be picked up by anything still reading it.
+        sessionStorage.removeItem(TOKEN_KEY);
+        sessionStorage.removeItem(USER_KEY);
         localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem('candy.user');
+        localStorage.removeItem(USER_KEY);
       } catch {}
       try {
         window.dispatchEvent(new CustomEvent('candy:auth-expired'));

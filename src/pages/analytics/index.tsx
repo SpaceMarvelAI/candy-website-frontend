@@ -949,7 +949,6 @@ const EVENT_COLOR: Record<string, string> = {
 function EventTypePill({ type }: { type: string }) {
   const lower = type.toLowerCase();
   const color = Object.entries(EVENT_COLOR).find(([k]) => lower.includes(k))?.[1] ?? 'var(--text-3)';
-  const bg    = color === 'var(--text-3)' ? 'var(--tint-2)' : `${color.replace(')', ', 0.12)').replace('var(', 'rgba(').replace('--red', '255,92,122').replace('--amber', '255,181,71').replace('--blue', '24,218,252').replace('--green', '76,175,80')}`;
   return (
     <span
       style={{

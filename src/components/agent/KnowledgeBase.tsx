@@ -14,6 +14,7 @@ import { uploadKnowledgeFile, deleteKnowledge, crawlWebsite, getKnowledgeDoc, ty
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { logger } from '../../utils/logger';
+import { sectionHeader, sectionTitle, sectionPill } from '../../styles/tokens';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
@@ -192,7 +193,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
           <h3 style={sectionTitle}>Knowledge base</h3>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={pill}>{docs.length} {docs.length === 1 ? 'file' : 'files'}</span>
+          <span style={sectionPill}>{docs.length} {docs.length === 1 ? 'file' : 'files'}</span>
           {docs.length > 0 && (
             <button
               onClick={deleteAll}
@@ -634,16 +635,6 @@ const section = {
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius)',
   padding: 22,
-};
-const sectionHeader = {
-  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  marginBottom: 16,
-};
-const sectionTitle = { fontSize: 14, fontWeight: 600, color: 'var(--text-1)', margin: 0 };
-const pill = {
-  fontSize: 11, fontWeight: 500, color: 'var(--text-3)',
-  padding: '3px 8px', borderRadius: 99,
-  background: 'var(--card-bg)', border: '1px solid var(--border)',
 };
 const dropZone = {
   cursor: 'pointer',

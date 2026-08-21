@@ -1,5 +1,10 @@
-// Central SVG icon library — maps name → JSX path(s)
-const iconPaths = {
+import type { ReactNode } from 'react';
+
+// Central SVG icon library — maps name → JSX path(s).
+// Keyed by plain string, not a name union: most call sites pass a name computed
+// from a config array, and the `if (!paths) return null` guard below already
+// makes an unknown name render nothing rather than throw.
+const iconPaths: Record<string, ReactNode> = {
   grid: (
     <>
       <rect x="3" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.75"/>
@@ -288,7 +293,14 @@ const iconPaths = {
   ),
 };
 
-export function Icon({ name, size = 16, className = '', style = {} }) {
+export interface IconProps {
+  name:       string;
+  size?:      number;
+  className?: string;
+  style?:     React.CSSProperties;
+}
+
+export function Icon({ name, size = 16, className = '', style = {} }: IconProps) {
   const paths = iconPaths[name];
   if (!paths) return null;
   return (

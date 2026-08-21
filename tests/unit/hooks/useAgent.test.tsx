@@ -68,7 +68,7 @@ function req(overrides: Record<string, any> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  localStorage.setItem('access_token', 'test-token');
+  sessionStorage.setItem('access_token', 'test-token');
   vi.mocked(listLanguages).mockResolvedValue([]);
   vi.mocked(listAgents).mockResolvedValue([]);
   vi.mocked(getRequirements).mockResolvedValue(req());
@@ -80,7 +80,7 @@ beforeEach(() => {
 // ── Bootstrap: no token ─────────────────────────────────────────────────────
 describe('useAgent — bootstrap without a token', () => {
   it('bails out immediately with "Not signed in" and never calls the APIs', async () => {
-    localStorage.removeItem('access_token');
+    sessionStorage.removeItem('access_token');
     const { result } = renderHook(() => useAgent('ecommerce', 'My Agent'));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBe('Not signed in');

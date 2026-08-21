@@ -25,7 +25,7 @@
  *   logger.setErrorReporter(Sentry.captureException);  // wire a monitoring SDK later
  */
 
-const IS_DEV = (import.meta as any).env?.DEV === true;
+const IS_DEV = import.meta.env.DEV === true;
 /** Exported so tests can assert the exact allowlist without needing to fake IS_DEV=false
  * (a module-level constant fixed at load time — see logger.test.ts for why). */
 export const VERBOSE_HOSTS = ['localhost', '127.0.0.1', 'dev.candy.cx'];
@@ -38,7 +38,7 @@ function isVerbose(): boolean {
   } catch {
     // localStorage may throw in private mode / sandboxed iframes — fall through
   }
-  if ((import.meta as any).env?.VITE_DEBUG === 'true') return true;
+  if (import.meta.env.VITE_DEBUG === 'true') return true;
   if (IS_DEV) return true;
   if (typeof window !== 'undefined' && VERBOSE_HOSTS.includes(window.location.hostname)) return true;
   return false;

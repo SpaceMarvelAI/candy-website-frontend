@@ -1,9 +1,11 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Icon } from '../assets/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
-const crumbMap = {
+interface Crumb { t: string; current?: boolean }
+
+const crumbMap: Record<string, Crumb[]> = {
   dashboard:  [{ t: 'Home' }, { t: 'Dashboard',     current: true }],
   chatbots:   [{ t: 'Home' }, { t: 'AI Platform' }, { t: 'Chatbot Use Cases', current: true }],
   hr:         [{ t: 'Home' }, { t: 'HR & Hiring' }, { t: 'Candidate Screening', current: true }],
@@ -30,7 +32,7 @@ export default function Topbar({ onMenuOpen }: TopbarProps) {
 
   // ⌘K shortcut
   useEffect(() => {
-    const handler = (e) => {
+    const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         (document.querySelector('.topbar-search-input') as HTMLElement)?.focus();

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
+import type { AddToast } from '../hooks/useToast';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import Icon from '../assets/icons';
 
@@ -27,9 +28,9 @@ const NAV_SECTIONS = [
     label: 'Products',
     items: [
       { id: 'metaspace', label: 'Meta Space', icon: '', img: '/Metaspace.svg',   path: null,
-        ssoTarget: (import.meta as any).env?.VITE_META_APP_URL || 'https://meta.spacemarvel.ai', external: true },
+        ssoTarget: import.meta.env.VITE_META_APP_URL || 'https://meta.spacemarvel.ai', external: true },
       { id: 'finixy',    label: 'Finixy',     icon: '', img: '/FinixyLogo.svg', path: null,
-        ssoTarget: (import.meta as any).env?.VITE_FINIXY_APP_URL || 'https://app.finixy.ai',        external: true },
+        ssoTarget: import.meta.env.VITE_FINIXY_APP_URL || 'https://app.finixy.ai',        external: true },
     ],
   },
   {
@@ -56,16 +57,16 @@ const isLocal = typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 const SM_API = isLocal
   ? '/sm-api'
-  : ((import.meta as any).env?.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
+  : (import.meta.env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
 
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
-  anchorRect, panelWidth, onClose, onSignOut, navigate, addToast,
+  anchorRect, onClose, onSignOut, signingOut, navigate, addToast,
   theme, setTheme, onReportIssue,
 }: {
-  anchorRect: DOMRect; panelWidth: number;
-  onClose: () => void; onSignOut: () => void;
-  navigate: (p: string) => void; addToast: (m: string, k?: string) => void;
+  anchorRect: DOMRect;
+  onClose: () => void; onSignOut: () => void; signingOut: boolean;
+  navigate: (p: string) => void; addToast: AddToast;
   theme: string; setTheme: (t: 'light' | 'dark') => void;
   onReportIssue: () => void;
 }) {
@@ -193,7 +194,14 @@ function ProfileMenu({
 
         <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
 
-        {menuItem('Sign out', () => { onClose(); onSignOut(); }, { icon: 'logout', danger: true })}
+        {/* Keep the menu OPEN while signing out so the "Signing out…" label is
+            actually visible — closing it first made a slow sign-out look like a
+            dead click, which is what prompted people to click again. */}
+        {menuItem(
+          signingOut ? 'Signing out…' : 'Sign out',
+          () => { if (!signingOut) onSignOut(); },
+          { icon: 'logout', danger: true },
+        )}
       </div>
 
       {/* ── Appearance flyout ── */}
@@ -230,7 +238,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
-  const { user, addToast, signOut } = useApp();
+  const { user, addToast, signOut, signingOut } = useApp();
   const { theme, setTheme } = useTheme();
   const navigate     = useNavigate();
   const location     = useLocation();
@@ -332,8 +340,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const panelTransition = isMobileOrTablet
     ? 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
     : 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)';
-
-  const hasShadow = expanded || (isMobileOrTablet && mobileOpen);
 
   const userName  = user?.full_name || user?.email?.split('@')[0] || 'User';
   const userEmail = user?.email || '';
@@ -564,9 +570,9 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       {profileMenuOpen && profileAnchor && (
         <ProfileMenu
           anchorRect={profileAnchor}
-          panelWidth={panelWidth}
           onClose={() => setProfileMenuOpen(false)}
           onSignOut={signOut}
+          signingOut={signingOut}
           navigate={(p) => { navigate(p); setProfileMenuOpen(false); }}
           addToast={addToast}
           theme={theme}

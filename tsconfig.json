@@ -15,12 +15,14 @@
     "jsx": "react-jsx",
     "types": ["vite/client"],
 
-    /* Loose mode — flip these on later as you add types */
-    "strict": false,
-    "noImplicitAny": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": false,
+    /* Strict. Keep it that way: no `any`, no @ts-ignore — narrow from `unknown`
+       instead. noUnusedLocals/Parameters are load-bearing here (a large dead-code
+       cleanup preceded them); prefix a genuinely-needed unused param with `_`. */
+    "strict": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
     "allowJs": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true

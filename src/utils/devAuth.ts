@@ -28,12 +28,16 @@ export function installDevAuth(): void {
     // Always (re)seed on localhost when a dev token is configured — this
     // overwrites any stale/expired token left by an earlier SSO attempt that
     // would otherwise 401 and bounce back to the production callback.
-    localStorage.setItem('access_token', token);
-    localStorage.setItem('candy.user', userRaw);
-    // SSO paths also read sessionStorage first — clear it so localStorage wins.
+    // sessionStorage, NOT localStorage: the app is session-scoped now (see
+    // client.ts getToken/setToken), so a localStorage seed would never be read
+    // and localhost would appear permanently signed out. This also makes a dev
+    // session end on browser close, matching production.
+    sessionStorage.setItem('access_token', token);
+    sessionStorage.setItem('candy.user', userRaw);
+    // Drop any legacy localStorage copy so it can't linger and confuse debugging.
     try {
-      sessionStorage.removeItem('access_token');
-      sessionStorage.removeItem('candy.user');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('candy.user');
     } catch { /* ignore */ }
     // eslint-disable-next-line no-console
     console.info('[devAuth] localhost dev session seeded — skipping SSO');

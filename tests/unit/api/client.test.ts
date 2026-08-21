@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../mocks/server';
-import { api, ApiError, setToken, getToken, setSessionToken } from '../../../src/api/client';
+import { api, ApiError, setToken, getToken, setSessionToken, purgeLegacyAuthStorage } from '../../../src/api/client';
 import { API_BASE } from '../../mocks/fixtures';
 
 // ── Successful responses ──────────────────────────────────────────────────────
@@ -224,19 +224,22 @@ describe('api() — 401 auth-expiry side-effects', () => {
 // ── Token helpers ─────────────────────────────────────────────────────────────
 
 describe('getToken / setToken', () => {
-  it('setToken stores value in localStorage', () => {
+  it('setToken stores value in sessionStorage, not localStorage', () => {
     setToken('hello-world');
-    expect(localStorage.getItem('access_token')).toBe('hello-world');
+    expect(sessionStorage.getItem('access_token')).toBe('hello-world');
+    // Session-scoped: nothing may leak into localStorage, or the session would
+    // survive a browser close.
+    expect(localStorage.getItem('access_token')).toBeNull();
   });
 
   it('setToken(null) removes the key', () => {
     setToken('some-token');
     setToken(null);
-    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(sessionStorage.getItem('access_token')).toBeNull();
   });
 
-  it('getToken reads from localStorage', () => {
-    localStorage.setItem('access_token', 'stored-token');
+  it('getToken reads from sessionStorage', () => {
+    sessionStorage.setItem('access_token', 'stored-token');
     expect(getToken()).toBe('stored-token');
   });
 
@@ -244,10 +247,19 @@ describe('getToken / setToken', () => {
     expect(getToken()).toBeNull();
   });
 
-  it('prefers a sessionStorage token over a localStorage token', () => {
-    localStorage.setItem('access_token', 'local-token');
-    sessionStorage.setItem('access_token', 'session-token');
-    expect(getToken()).toBe('session-token');
+  it('IGNORES a localStorage token — the session must not survive a browser close', () => {
+    localStorage.setItem('access_token', 'stale-token-from-an-earlier-build');
+    expect(getToken()).toBeNull();
+  });
+
+  it('purgeLegacyAuthStorage clears legacy localStorage auth but keeps the live session', () => {
+    localStorage.setItem('access_token', 'stale');
+    localStorage.setItem('candy.user', '{"email":"old@candy.cx"}');
+    sessionStorage.setItem('access_token', 'live');
+    purgeLegacyAuthStorage();
+    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(localStorage.getItem('candy.user')).toBeNull();
+    expect(getToken()).toBe('live');
   });
 
   it('getToken returns null instead of throwing when storage access throws', () => {
@@ -267,5 +279,125 @@ describe('getToken / setToken', () => {
     setSessionToken('sess-abc');
     setSessionToken(null);
     expect(sessionStorage.getItem('access_token')).toBeNull();
+  });
+});
+
+// ── Plan / credit / role gate classification (402 · 403) ──────────────────────
+
+describe('api() — gate errors (402 / 403)', () => {
+  it('exposes the object detail as .payload and the gate code as .code on a 403 plan gate', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/workflows`, () =>
+        HttpResponse.json({
+          detail: {
+            error: 'upgrade_required',
+            message: 'This feature is not included in your current plan. Upgrade to access it.',
+            current_plan: 'free',
+            feature: 'workflows',
+          },
+        }, { status: 403 })
+      )
+    );
+    try {
+      await api('/v1/workflows');
+      expect.fail('should have thrown');
+    } catch (e) {
+      const err = e as ApiError;
+      expect(err.status).toBe(403);
+      expect(err.code).toBe('upgrade_required');
+      expect(err.payload).toMatchObject({ current_plan: 'free', feature: 'workflows' });
+    }
+  });
+
+  it('uses the object detail message for ApiError.message instead of "[object Object]"', async () => {
+    server.use(
+      http.post(`${API_BASE}/v1/agents/a1/demo/s1/turn/stream`, () =>
+        HttpResponse.json({
+          detail: { error: 'no_credits', message: 'This workspace is out of credits. Please add credits to continue.' },
+        }, { status: 402 })
+      )
+    );
+    try {
+      await api('/v1/agents/a1/demo/s1/turn/stream', { method: 'POST', body: {} });
+      expect.fail('should have thrown');
+    } catch (e) {
+      const err = e as ApiError;
+      expect(err.status).toBe(402);
+      expect(err.code).toBe('no_credits');
+      expect(err.message).toBe('This workspace is out of credits. Please add credits to continue.');
+      expect(err.message).not.toContain('[object Object]');
+    }
+  });
+
+  it('leaves .code undefined for a 403 role gate (string detail)', async () => {
+    server.use(
+      http.delete(`${API_BASE}/v1/webhooks/w1`, () =>
+        HttpResponse.json({ detail: "Role 'member' cannot perform this action" }, { status: 403 })
+      )
+    );
+    try {
+      await api('/v1/webhooks/w1', { method: 'DELETE' });
+      expect.fail('should have thrown');
+    } catch (e) {
+      const err = e as ApiError;
+      expect(err.code).toBeUndefined();
+      expect(err.payload).toBe("Role 'member' cannot perform this action");
+      expect(err.message).toBe("Role 'member' cannot perform this action");
+    }
+  });
+
+  it('never lets an object detail reach ApiError.message (falls back to JSON)', () => {
+    const err = new ApiError(400, { detail: { field: 'email' } });
+    expect(typeof err.message).toBe('string');
+    expect(err.message).toBe('{"field":"email"}');
+  });
+
+  it('uses the first validation msg for a FastAPI 422 array detail', () => {
+    const err = new ApiError(422, { detail: [{ loc: ['body', 'email'], msg: 'field required' }] });
+    expect(err.message).toBe('field required');
+  });
+});
+
+// ── Request timeout ───────────────────────────────────────────────────────────
+
+describe('api() — request timeout', () => {
+  it('throws ApiError with status 408 when the server does not respond in time', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/hangs`, async () => {
+        await new Promise(r => setTimeout(r, 300));
+        return HttpResponse.json({ ok: true });
+      })
+    );
+    try {
+      await api('/v1/hangs', { timeoutMs: 25 });
+      expect.fail('should have thrown');
+    } catch (e) {
+      const err = e as ApiError;
+      expect(err.status).toBe(408);
+      expect(err.message).toContain('timed out');
+    }
+  });
+
+  it('does not time out a request that answers within the budget', async () => {
+    server.use(http.get(`${API_BASE}/v1/fast`, () => HttpResponse.json({ ok: true })));
+    await expect(api('/v1/fast', { timeoutMs: 2000 })).resolves.toEqual({ ok: true });
+  });
+
+  it('hands cancellation to a caller-supplied signal instead of the default timeout', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/caller-aborts`, async () => {
+        await new Promise(r => setTimeout(r, 200));
+        return HttpResponse.json({ ok: true });
+      })
+    );
+    const ctl = new AbortController();
+    setTimeout(() => ctl.abort(), 20);
+    try {
+      await api('/v1/caller-aborts', { signal: ctl.signal, timeoutMs: 5 });
+      expect.fail('should have thrown');
+    } catch (e) {
+      // Caller abort, not our timeout → status 0 (generic fetch failure), not 408.
+      expect((e as ApiError).status).toBe(0);
+    }
   });
 });

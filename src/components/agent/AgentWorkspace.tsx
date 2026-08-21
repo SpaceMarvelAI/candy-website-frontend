@@ -19,6 +19,7 @@ import { useAgent } from '../../hooks/useAgent';
 import { publishAgent } from '../../api/agents';
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
+import { errorMessage } from '../../utils/apiError';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { logger } from '../../utils/logger';
 
@@ -126,9 +127,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
       setStatusOverride(res.status);
       addToast('Agent published', 'success');
     } catch (e) {
-      const msg = e instanceof ApiError
-        ? (typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message))
-        : (e as Error).message;
+      const msg = errorMessage(e);
       logger.error('[AgentWorkspace] onPublish failed', { agentId: agent.id, error: e, message: msg });
       addToast(`Publish failed: ${msg}`, 'error');
     } finally {

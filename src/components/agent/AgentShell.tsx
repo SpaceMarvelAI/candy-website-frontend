@@ -26,14 +26,6 @@ const tintColor = {
   pink:   'var(--pink)',
 };
 
-const tintGlow = {
-  purple: 'rgba(117,91,227,0.30)',
-  blue:   'rgba(24,218,252,0.30)',
-  teal:   'rgba(79,209,197,0.30)',
-  green:  'rgba(76,175,80,0.30)',
-  amber:  'rgba(255,181,71,0.30)',
-  pink:   'rgba(230,90,255,0.30)',
-};
 
 interface Props {
   category: string;

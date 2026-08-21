@@ -8,12 +8,14 @@
  * you can see records you may have created under a different category /
  * older session.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import Icon from '../../assets/icons';
 import { listAgents, type Agent } from '../../api/agents';
 import { useApp } from '../../context/AppContext';
+import { errorMessage } from '../../utils/apiError';
 import { ApiError, API_BASE } from '../../api/client';
 import { SkeletonBox } from '../Skeleton';
+import { sectionHeader as sharedSectionHeader, sectionTitle, sectionPill } from '../../styles/tokens';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
@@ -74,9 +76,7 @@ export default function AgentPicker({
       await onDelete(a.id);
       addToast(`Deleted "${a.name}"`, 'success');
     } catch (e) {
-      const msg = e instanceof ApiError
-        ? (typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message))
-        : (e as Error).message;
+      const msg = errorMessage(e);
       addToast(`Couldn't delete: ${msg}`, 'error');
     } finally {
       setDeletingId(null);
@@ -112,9 +112,7 @@ export default function AgentPicker({
       await onCreate(trimmed);
       addToast(`Created "${trimmed}"`, 'success');
     } catch (e) {
-      const msg = e instanceof ApiError
-        ? (typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message))
-        : (e as Error).message;
+      const msg = errorMessage(e);
       addToast(`Couldn't create agent: ${msg}`, 'error');
     } finally {
       setCreating(false);
@@ -155,7 +153,7 @@ export default function AgentPicker({
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Icon name="grid" size={16} style={{ color: tintColor[tint] }} />
           <h3 style={sectionTitle}>{category} agents</h3>
-          <span style={pill}>{agents.length}</span>
+          <span style={sectionPill}>{agents.length}</span>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {onReload && (
@@ -413,16 +411,9 @@ const section = {
   padding: 16,
   marginBottom: 16,
 };
-const sectionHeader = {
-  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  flexWrap: 'wrap' as const, gap: 8,
-  marginBottom: 12,
-};
-const sectionTitle = { fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)', margin: 0 };
-const pill = {
-  fontSize: 10.5, fontWeight: 600, color: 'var(--text-3)',
-  padding: '2px 7px', borderRadius: 99,
-  background: 'var(--card-bg)', border: '1px solid var(--border)',
+const sectionHeader: CSSProperties = {
+  ...sharedSectionHeader,
+  flexWrap: 'wrap', gap: 8,
 };
 const newBtn = {
   fontSize: 12, fontWeight: 600,

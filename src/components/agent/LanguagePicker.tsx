@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from '../../assets/icons';
 import { listLanguages, type Language } from '../../api/languages';
 import { ApiError } from '../../api/client';
+import { sectionHeader, sectionTitle } from '../../styles/tokens';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
@@ -228,8 +229,3 @@ const section = {
   borderRadius: 'var(--radius)',
   padding: 22,
 };
-const sectionHeader = {
-  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  marginBottom: 14,
-};
-const sectionTitle = { fontSize: 14, fontWeight: 600, color: 'var(--text-1)', margin: 0 };

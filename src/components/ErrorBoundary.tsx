@@ -62,7 +62,7 @@ class ErrorBoundaryBase extends React.Component<BaseProps, State> {
       if (this.props.fallback) return this.props.fallback;
 
       // Generic inline fallback (dev: shows details; prod: keeps it terse)
-      const isDev = (import.meta as any).env?.DEV === true;
+      const isDev = import.meta.env.DEV === true;
       return (
         <div style={inlineError}>
           <strong>Something went wrong</strong>
