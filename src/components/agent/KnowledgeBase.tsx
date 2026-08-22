@@ -513,7 +513,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
                     }
                   }}
                 >
-                  <Icon name={deleting ? 'refresh' : 'x'} size={12} />
+                  <Icon name={deleting ? 'refresh' : 'trash'} size={13} />
                 </button>
               </li>
             );

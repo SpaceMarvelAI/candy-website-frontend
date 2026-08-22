@@ -5,10 +5,10 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import Icon from '../../assets/icons';
 import AgentShell from './AgentShell';
 import EmbedModal from './EmbedModal';
 import AgentPicker from './AgentPicker';
+import ConfigPopover from './ConfigPopover';
 import KnowledgeBase from './KnowledgeBase';
 import PromptEditor from './PromptEditor';
 import LanguagePicker from './LanguagePicker';
@@ -77,10 +77,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
   const [publishing, setPublishing]         = useState(false);
   const [statusOverride, setStatusOverride] = useState<string | null>(null);
   const [embedOpen, setEmbedOpen]           = useState(false);
-  const [kbOpen,       setKbOpen]       = useState(false);
-  const [langOpen,     setLangOpen]     = useState(false);
   const [reqOpen,      setReqOpen]      = useState(false);
-  const [skillsOpen,   setSkillsOpen]   = useState(false);
   const [skillsCount,  setSkillsCount]  = useState(0);
 
   // Apply the draft prompt only once useAgent's own requirements fetch for the
@@ -155,18 +152,8 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
       publishing={publishing}
       publishDisabled={!canPublish}
       publishHint={canPublish ? undefined : 'Save the requirements — wait for them to compile, then publish.'}
+      flush
     >
-      {/* ── Entry point banner ── */}
-      {agent && (
-        <EntryPointBanner
-          agentId={agent.id}
-          callDirection={agent.call_direction ?? 'outbound'}
-          tint={tint}
-          onEmbed={() => setEmbedOpen(true)}
-          isPublished={status === 'published' || statusOverride === 'published'}
-        />
-      )}
-
       {/* ── Banners ── */}
       {error && (
         <div style={errorBanner}>
@@ -182,7 +169,10 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
         </div>
       )}
 
-      {/* ── Agent picker — full width ── */}
+      {/* ── Top bar: agent switcher + all four config panels, one compact row ──
+           Was a full-width picker plus a fixed 420px accordion column on the
+           right. The four panels are opened briefly and closed, so a permanent
+           column cost the chat a third of the width for nothing. ── */}
       <div style={{ marginBottom: 16 }}>
         <AgentPicker
           tint={tint}
@@ -195,91 +185,103 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
           onCreate={createNewAgent}
           onDelete={removeAgent}
           onReload={reloadAgents}
+          inlineExtras={
+            <>
+              {/* Telephony was a full-width row of its own above this card; it is
+                  one field and a button, so it belongs in the same bar. */}
+              {agent && (
+                <ConfigPopover label="Telephony" icon="phone" color={color} width={560} align="left">
+                  <div style={{ padding: 14 }}>
+                    <EntryPointBanner
+                      agentId={agent.id}
+                      callDirection={agent.call_direction ?? 'outbound'}
+                      tint={tint}
+                      onEmbed={() => setEmbedOpen(true)}
+                      isPublished={status === 'published' || statusOverride === 'published'}
+                    />
+                  </div>
+                </ConfigPopover>
+              )}
+              <ConfigPopover label="Knowledge Base" icon="book" color={color} width={560}>
+                <KnowledgeBase
+                  tint={tint}
+                  agentId={agent?.id ?? null}
+                  docs={docs}
+                  refreshDocs={refreshDocs}
+                />
+              </ConfigPopover>
+
+              <ConfigPopover label="Languages" icon="globe" color={color} width={480}>
+                <div style={{ padding: 16 }}>
+                  <LanguagePicker
+                    tint={tint}
+                    primary={primaryLang}
+                    onPrimaryChange={setPrimaryLang}
+                    supported={supportedCodes}
+                    onSupportedChange={setSupportedCodes}
+                    multilingual={multilingual}
+                    onMultilingualChange={setMultilingual}
+                  />
+                </div>
+              </ConfigPopover>
+
+              <ConfigPopover
+                label="Skills"
+                icon="layers"
+                color={color}
+                width={540}
+                badge={skillsCount > 0 ? skillsCount : undefined}
+              >
+                <SkillsPicker
+                  agentId={agent?.id ?? null}
+                  useCaseSlug={slug}
+                  tint={tint}
+                  onCountChange={setSkillsCount}
+                />
+              </ConfigPopover>
+
+              <ConfigPopover
+                label="Requirements" icon="zap" color={color} width={640}
+                open={reqOpen} onOpenChange={setReqOpen}
+              >
+                <PromptEditor
+                  tint={tint}
+                  agentId={agent?.id ?? null}
+                  value={effectivePrompt}
+                  onChange={setPromptText}
+                  presets={presets}
+                  supportedLanguageCodes={supportedCodes}
+                  multilingual={multilingual}
+                  callDirection={callDirection}
+                  onCallDirectionChange={setCallDirection}
+                  brandName={brandName}
+                  onBrandNameChange={setBrandName}
+                  personaName={personaName}
+                  onPersonaNameChange={setPersonaName}
+                  personaStyle={personaStyle}
+                  onPersonaStyleChange={setPersonaStyle}
+                  onSaved={reloadAgents}
+                />
+              </ConfigPopover>
+            </>
+          }
         />
       </div>
 
-      {/* ── Main 2-column grid ── */}
-      <div style={{
-        ...mainGrid,
-        gridTemplateColumns: isTabletOrMobile ? '1fr' : '1fr 420px',
-        minHeight: isTabletOrMobile ? 'auto' : 'calc(100vh - 274px)',
-      }}>
-
-        {/* Left: Test panel */}
-        <div style={{ height: '100%', minHeight: 300 }}>
-          <TestPanel
-            tint={tint}
-            category={category}
-            agentId={agent?.id ?? null}
-            disabled={!agent}
-            disabledHint={!agent ? `Pick or create a ${category} agent above to start testing` : undefined}
-            primaryLang={primaryLang}
-            supportedLangs={supportedCodes}
-          />
-        </div>
-
-        {/* Right: accordion list */}
-        <div style={{ ...rightCol, alignSelf: 'start' }}>
-          <AccordionItem open={kbOpen}   onToggle={() => setKbOpen(o => !o)}   label="Knowledge Base" icon="book" color={color}>
-            <KnowledgeBase
-              tint={tint}
-              agentId={agent?.id ?? null}
-              docs={docs}
-              refreshDocs={refreshDocs}
-            />
-          </AccordionItem>
-
-          <AccordionItem open={langOpen} onToggle={() => setLangOpen(o => !o)} label="Languages"      icon="globe" color={color}>
-            <div style={{ padding: 16 }}>
-              <LanguagePicker
-                tint={tint}
-                primary={primaryLang}
-                onPrimaryChange={setPrimaryLang}
-                supported={supportedCodes}
-                onSupportedChange={setSupportedCodes}
-                multilingual={multilingual}
-                onMultilingualChange={setMultilingual}
-              />
-            </div>
-          </AccordionItem>
-
-          <AccordionItem
-            open={skillsOpen}
-            onToggle={() => setSkillsOpen(o => !o)}
-            label="Skills"
-            icon="layers"
-            color={color}
-            badge={skillsCount > 0 ? skillsCount : undefined}
-          >
-            <SkillsPicker
-              agentId={agent?.id ?? null}
-              useCaseSlug={slug}
-              tint={tint}
-              onCountChange={setSkillsCount}
-            />
-          </AccordionItem>
-
-          <AccordionItem open={reqOpen}  onToggle={() => setReqOpen(o => !o)}  label="Requirements"   icon="zap" color={color}>
-            <PromptEditor
-              tint={tint}
-              agentId={agent?.id ?? null}
-              value={effectivePrompt}
-              onChange={setPromptText}
-              presets={presets}
-              supportedLanguageCodes={supportedCodes}
-              multilingual={multilingual}
-              callDirection={callDirection}
-              onCallDirectionChange={setCallDirection}
-              brandName={brandName}
-              onBrandNameChange={setBrandName}
-              personaName={personaName}
-              onPersonaNameChange={setPersonaName}
-              personaStyle={personaStyle}
-              onPersonaStyleChange={setPersonaStyle}
-              onSaved={reloadAgents}
-            />
-          </AccordionItem>
-        </div>
+      {/* ── Below the bar: nothing but the conversation, full width ── */}
+      {/* Plain block, not a flex row: as a flex ITEM of <main> it gets a definite
+          height from flex:1, which is what TestPanel's own height:100% resolves
+          against. A flex row here would leave the child unstretched horizontally. */}
+      <div style={{ flex: 1, minHeight: isTabletOrMobile ? 300 : 0 }}>
+        <TestPanel
+          tint={tint}
+          category={category}
+          agentId={agent?.id ?? null}
+          disabled={!agent}
+          disabledHint={!agent ? `Pick or create a ${category} agent above to start testing` : undefined}
+          primaryLang={primaryLang}
+          supportedLangs={supportedCodes}
+        />
       </div>
     </AgentShell>
     </>
@@ -287,102 +289,10 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
 }
 
 // ── Accordion item ────────────────────────────────────────────────────────────
-function AccordionItem({
-  open, onToggle, label, icon, color, badge, children,
-}: {
-  open: boolean;
-  onToggle: () => void;
-  label: string;
-  icon: string;
-  color: string;
-  badge?: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <button
-        onClick={onToggle}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '11px 14px',
-          borderRadius: open ? '10px 10px 0 0' : 10,
-          border: `1px solid ${open ? color : 'var(--border)'}`,
-          borderBottom: open ? 'none' : `1px solid ${open ? color : 'var(--border)'}`,
-          background: open ? `${color}12` : 'var(--card-bg)',
-          color: open ? color : 'var(--text-2)',
-          fontSize: 13,
-          fontWeight: 600,
-          cursor: 'pointer',
-          transition: 'all 0.15s ease',
-          letterSpacing: '0.01em',
-        }}
-      >
-        <span style={{ display: 'inline-flex', color }}><Icon name={icon} size={15} /></span>
-        <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
-        {badge !== undefined && badge > 0 && (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            minWidth: 18, height: 18, borderRadius: 9,
-            background: `${color}30`,
-            border: `1px solid ${color}55`,
-            color: color,
-            fontSize: 10.5, fontWeight: 700,
-            padding: '0 5px',
-          }}>
-            {badge}
-          </span>
-        )}
-        <svg
-          width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-          style={{
-            opacity: 0.6,
-            transform: open ? 'rotate(180deg)' : 'none',
-            transition: 'transform 0.25s ease',
-            flexShrink: 0,
-          }}
-        >
-          <polyline points="2 4 6 8 10 4" />
-        </svg>
-      </button>
-
-      <div style={{
-        display: 'grid',
-        gridTemplateRows: open ? '1fr' : '0fr',
-        transition: 'grid-template-rows 0.32s cubic-bezier(0.4, 0, 0.2, 1)',
-      }}>
-        <div style={{ overflow: 'hidden' }}>
-          <div style={{
-            border: `1px solid ${color}`,
-            borderTop: 'none',
-            borderRadius: '0 0 10px 10px',
-          }}>
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const mainGrid: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 420px',
-  gap: 20,
-  minHeight: 'calc(100vh - 274px)',
-  alignItems: 'stretch',
-};
 
-const rightCol: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 14,
-};
 
 const errorBanner: React.CSSProperties = {
   background: 'rgba(255,90,120,0.1)',

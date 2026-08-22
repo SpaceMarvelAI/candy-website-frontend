@@ -1445,6 +1445,18 @@ export default function TestPanel({
     setTestActive(false);
   }
 
+  const testHint = disabled
+    ? (disabledHint || 'Save the requirements to enable testing')
+    : !HAS_MEDIA_RECORDER
+      ? 'Your browser does not support audio recording — type below'
+      : !testActive
+        ? ''
+        : ttsPlaying
+          ? 'Agent is speaking — talk over it to interrupt'
+          : listening
+            ? 'Listening — speak now'
+            : 'Mic re-arms in a moment — keep talking';
+
   return (
     <aside style={panel}>
       <header style={panelHeader}>
@@ -1603,65 +1615,27 @@ export default function TestPanel({
         })}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '14px 0 8px' }}>
-        {/* Big Start Test / Stop Test button — drives the whole session
-            recording. While the test is active the mic auto-arms between
-            turns; when stopped, the conversation audio is uploaded as a
-            single demo_session recording. */}
-        <button
-          type="button"
-          onClick={testActive ? stopTest : startTest}
-          disabled={disabled || testStarting}
+      {/* Nothing to say while idle — the labelled Start test button in the composer
+          already says what it does, so the line only appears once it carries state. */}
+      {testHint && (
+        <div
           style={{
-            padding: '12px 22px', borderRadius: 999,
-            background: testActive ? 'var(--red)' : 'var(--grad-brand)',
-            border: 'none', color: '#fff',
-            fontSize: 13.5, fontWeight: 600,
-            cursor: disabled || testStarting ? 'not-allowed' : 'pointer',
-            opacity: disabled || testStarting ? 0.5 : 1,
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            boxShadow: testActive
-              ? '0 0 0 6px rgba(255,90,120,0.18), 0 0 24px rgba(255,90,120,0.5)'
-              : '0 8px 22px -8px rgba(117,91,227,0.7)',
-            transition: 'all 0.15s',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            fontSize: 11.5, color: 'var(--text-3)', marginTop: 8,
           }}
         >
-          <Icon name={testActive ? 'pause' : 'mic'} size={14} />
-          {testActive ? 'Stop test & save recording' : testStarting ? 'Starting…' : 'Start test'}
-        </button>
-
-        {testActive && (
-          <div
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              fontSize: 11, color: 'var(--text-3)',
-              fontFamily: "'Zalando Sans'",
-            }}
-          >
+          {testActive && (
             <span
               style={{
-                width: 7, height: 7, borderRadius: '50%',
+                width: 7, height: 7, borderRadius: '50%', flex: 'none',
                 background: 'var(--red)', boxShadow: '0 0 8px var(--red)',
                 animation: 'mic-pulse 1.6s ease-in-out infinite',
               }}
             />
-            REC · session being captured
-          </div>
-        )}
-      </div>
-      <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--text-3)', marginBottom: 12 }}>
-        {disabled
-          ? (disabledHint || 'Save the requirements to enable testing')
-          : !HAS_MEDIA_RECORDER
-            ? 'Your browser does not support audio recording — type below'
-            : !testActive
-              ? 'Click Start test to record the full conversation'
-              : ttsPlaying
-                ? 'Agent is speaking — talk over it to interrupt'
-                : listening
-                  ? 'Listening — speak now'
-                  : 'Mic re-arms in a moment — keep talking'}
-      </div>
+          )}
+          {testHint}
+        </div>
+      )}
 
       <div style={composer}>
         <input
@@ -1675,6 +1649,35 @@ export default function TestPanel({
             color: 'var(--text-1)', fontSize: 13.5,
           }}
         />
+        {/* Start / stop the recorded session. Was a large centred button above the
+            composer with its own helper line, which pushed the input down and read
+            as a separate mode. Sitting beside Send it reads as one of the input's
+            actions; it keeps its label because "record the conversation" is not
+            something a bare mic icon conveys. */}
+        <button
+          type="button"
+          onClick={testActive ? stopTest : startTest}
+          disabled={disabled || testStarting}
+          aria-pressed={testActive}
+          aria-busy={testStarting}
+          title={testActive
+            ? 'Stop the test and save the recording'
+            : testStarting ? 'Starting…' : 'Record the full conversation'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, flex: 'none',
+            height: 32, padding: '0 12px', borderRadius: 8,
+            fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap',
+            background: testActive ? 'var(--red)' : 'var(--grad-brand)',
+            border: 'none', color: '#fff',
+            cursor: disabled || testStarting ? 'not-allowed' : 'pointer',
+            opacity: disabled || testStarting ? 0.5 : 1,
+            boxShadow: testActive ? '0 0 0 4px rgba(255,90,120,0.18)' : 'none',
+            transition: 'all 0.15s',
+          }}
+        >
+          <Icon name={testActive ? 'pause' : 'mic'} size={13} />
+          {testActive ? 'Stop test' : testStarting ? 'Starting…' : 'Start test'}
+        </button>
         <button
           type="button"
           onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); send(input); }}
@@ -1730,6 +1733,9 @@ const transcriptArea = {
 };
 const composer = {
   display: 'flex', alignItems: 'center', gap: 8,
+  // The status line above used to carry the gap off the transcript; it is now
+  // conditional, so the composer holds its own breathing room.
+  marginTop: 10,
   padding: '10px 12px',
   background: 'var(--input-bg-strong)',
   border: '1px solid var(--border-strong)',

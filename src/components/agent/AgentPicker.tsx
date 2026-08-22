@@ -8,7 +8,10 @@
  * you can see records you may have created under a different category /
  * older session.
  */
-import { useEffect, useState, type CSSProperties } from 'react';
+import {
+  useEffect, useState, useMemo, useCallback, useRef, type CSSProperties,
+} from 'react';
+import { useDialogA11y } from '../../hooks/useDialogA11y';
 import Icon from '../../assets/icons';
 import { listAgents, type Agent } from '../../api/agents';
 import { useApp } from '../../context/AppContext';
@@ -34,7 +37,57 @@ interface Props {
   onCreate: (name: string) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   onReload?: () => Promise<void>;
+  /** Rendered on the same row as the switcher — AgentWorkspace passes the
+   *  Knowledge Base / Languages / Skills / Requirements triggers here so the
+   *  whole top bar is one compact row. */
+  inlineExtras?: React.ReactNode;
 }
+
+/**
+ * Filter by query, then group by status and sort by name inside each group.
+ *
+ * Exported and pure so the ordering rules are testable: the previous picker
+ * rendered whatever order the API returned, so an agent changed position between
+ * refreshes. Search matches the name anywhere, or an id by prefix — the id is
+ * the only way to tell two identically-named agents apart.
+ */
+export function groupAgents(
+  agents: Agent[],
+  query: string,
+): { status: string; list: Agent[] }[] {
+  const q = query.trim().toLowerCase();
+  const matched = q
+    ? agents.filter(a => a.name.toLowerCase().includes(q) || a.id.toLowerCase().startsWith(q))
+    : agents;
+
+  const by = new Map<string, Agent[]>();
+  for (const a of matched) {
+    const k = a.agent_flow_status || 'not_designed';
+    const bucket = by.get(k);
+    if (bucket) bucket.push(a);
+    else by.set(k, [a]);
+  }
+
+  // Most-actionable first; anything unrecognised sorts to the end.
+  const ORDER = ['published', 'ready_to_test', 'not_designed', 'archived'];
+  const rank = (k: string) => { const i = ORDER.indexOf(k); return i < 0 ? ORDER.length : i; };
+
+  return [...by.entries()]
+    .sort((x, y) => rank(x[0]) - rank(y[0]) || x[0].localeCompare(y[0]))
+    .map(([status, list]) => ({
+      status,
+      list: [...list].sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+}
+
+/** Group headings for the switcher — the status appears once per group here,
+ *  instead of as a badge repeated on every row. */
+const STATUS_GROUP_LABEL: Record<string, string> = {
+  published:     'Live',
+  ready_to_test: 'Ready to test',
+  not_designed:  'Not designed',
+  archived:      'Archived',
+};
 
 const SLUG_LABEL: Record<string, string> = {
   ecom: 'E-commerce', fin: 'Financial', log: 'Logistics',
@@ -46,6 +99,7 @@ const SLUG_LABEL: Record<string, string> = {
 export default function AgentPicker({
   tint = 'purple', category, slug,
   agents, loading = false, selectedId, onSelect, onCreate, onDelete, onReload,
+  inlineExtras,
 }: Props) {
   const { user, addToast } = useApp();
   const confirm = useConfirm();
@@ -160,39 +214,6 @@ export default function AgentPicker({
           <h3 style={sectionTitle}>{category} agents</h3>
           <span style={sectionPill}>{agents.length}</span>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {onReload && (
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              title="Re-fetch the agent list"
-              style={{ ...newBtn, opacity: refreshing ? 0.7 : 1 }}
-            >
-              <Icon
-                name="refresh"
-                size={11}
-                style={refreshing ? { animation: 'spin 0.7s linear infinite' } : {}}
-              />
-              {refreshing ? 'Refreshing…' : 'Refresh'}
-            </button>
-          )}
-          <button
-            onClick={() => setShowAll(v => !v)}
-            style={{ ...newBtn, background: showAll ? `${tintColor[tint]}1f` : 'var(--card-bg)' }}
-          >
-            <Icon name="grid" size={11} /> {showAll ? 'Showing all' : 'Show all my agents'}
-          </button>
-          <button
-            onClick={() => setDebug(v => !v)}
-            title="Show debug info"
-            style={{ ...newBtn, padding: '6px 9px' }}
-          >
-            <Icon name="settings" size={11} />
-          </button>
-          <button onClick={openNewModal} disabled={creating} style={newBtn}>
-            <Icon name="plus" size={12} /> {creating ? 'Creating…' : 'New agent'}
-          </button>
-        </div>
       </header>
 
       {debug && (
@@ -221,105 +242,60 @@ export default function AgentPicker({
           ))}
         </div>
       ) : (
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {visible.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '6px 0' }}>
-            {loadingAll ? 'Loading…'
-              : showAll
-                ? 'No agents at all on this account. Click "New agent" to create one.'
-                : `No ${category} agents yet — click "New agent", or "Show all my agents" if you created one under a different category.`}
-          </div>
-        )}
-        {visible.map(a => {
-          const active = a.id === selectedId;
-          const wrongSlug = a.use_case_slug !== slug;
-          const deleting  = deletingId === a.id;
-          return (
-            <div
-              key={a.id}
-              style={{
-                display: 'inline-flex', alignItems: 'stretch',
-                borderRadius: 9, overflow: 'hidden',
-                background: active ? `${tintColor[tint]}1f` : 'var(--card-bg)',
-                border: `1px solid ${active ? tintColor[tint] : 'var(--border)'}`,
-                opacity: wrongSlug ? 0.65 : 1,
-                transition: 'all 0.15s',
-              }}
-            >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <AgentSwitcher
+        agents={visible}
+        selectedId={selectedId}
+        slug={slug}
+        tint={tint}
+        category={category}
+        showAll={showAll}
+        loadingAll={loadingAll}
+        deletingId={deletingId}
+        statusBadge={statusBadge}
+        onSelect={onSelect}
+        onDelete={onDelete ? handleDelete : undefined}
+        actions={
+          <>
+            {onReload && (
               <button
-                type="button"
-                onClick={() => onSelect(a.id)}
-                title={wrongSlug ? `This agent belongs to "${SLUG_LABEL[a.use_case_slug] ?? a.use_case_slug}"` : undefined}
-                style={{
-                  padding: '8px 10px 8px 12px',
-                  background: 'transparent', border: 'none',
-                  color: 'var(--text-1)',
-                  cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', gap: 8,
-                  textAlign: 'left',
-                }}
+                onClick={handleRefresh}
+                disabled={refreshing}
+                title="Re-fetch the agent list"
+                style={{ ...newBtn, opacity: refreshing ? 0.7 : 1 }}
               >
-                {active && <Icon name="check" size={11} style={{ color: tintColor[tint] }} />}
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>
-                  {a.name}
-                </span>
-                {wrongSlug && (
-                  <span
-                    style={{
-                      fontSize: 10, padding: '2px 7px', borderRadius: 99,
-                      background: 'var(--tint-2)', color: 'var(--text-3)',
-                      textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600,
-                    }}
-                  >
-                    {SLUG_LABEL[a.use_case_slug] ?? a.use_case_slug}
-                  </span>
-                )}
-                {statusBadge(a.agent_flow_status)}
-                <span
-                  style={{
-                    fontSize: 10.5, color: 'var(--text-4)',
-                    fontFamily: "'Zalando Sans'",
-                  }}
-                >
-                  {a.id.slice(0, 8)}
-                </span>
+                <Icon
+                  name="refresh"
+                  size={11}
+                  style={refreshing ? { animation: 'spin 0.7s linear infinite' } : {}}
+                />
+                {refreshing ? 'Refreshing…' : 'Refresh'}
               </button>
-              {onDelete && (
-                <button
-                  type="button"
-                  onClick={(ev) => handleDelete(a, ev)}
-                  disabled={deleting}
-                  title={`Delete ${a.name}`}
-                  aria-label={`Delete ${a.name}`}
-                  style={{
-                    padding: '0 10px',
-                    background: deleting ? 'rgba(255,90,120,0.15)' : 'transparent',
-                    border: 'none',
-                    borderLeft: '1px solid var(--border)',
-                    color: deleting ? 'var(--red)' : 'var(--text-3)',
-                    cursor: deleting ? 'wait' : 'pointer',
-                    display: 'inline-grid', placeItems: 'center',
-                    transition: 'all 0.15s',
-                  }}
-                  onMouseEnter={e => {
-                    if (!deleting) {
-                      e.currentTarget.style.background = 'rgba(255,90,120,0.1)';
-                      e.currentTarget.style.color = 'var(--red)';
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (!deleting) {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = 'var(--text-3)';
-                    }
-                  }}
-                >
-                  <Icon name={deleting ? 'refresh' : 'x'} size={12} />
-                </button>
-              )}
-            </div>
-          );
-        })}
+            )}
+            <button
+              onClick={() => setShowAll(v => !v)}
+              style={{ ...newBtn, background: showAll ? `${tintColor[tint]}1f` : 'var(--card-bg)' }}
+            >
+              <Icon name="grid" size={11} /> {showAll ? 'Showing all' : 'Show all'}
+            </button>
+            <button
+              onClick={() => setDebug(v => !v)}
+              title="Show debug info"
+              style={{ ...newBtn, padding: '6px 9px' }}
+            >
+              <Icon name="settings" size={11} />
+            </button>
+            <button
+              onClick={openNewModal}
+              disabled={creating}
+              style={{ ...newBtn, marginLeft: 'auto' }}
+            >
+              <Icon name="plus" size={12} /> {creating ? 'Creating…' : 'New agent'}
+            </button>
+          </>
+        }
+      />
+      {inlineExtras}
       </div>
       )}
 
@@ -429,3 +405,262 @@ const newBtn = {
   display: 'inline-flex', alignItems: 'center', gap: 6,
   transition: 'all 0.15s',
 };
+
+/* ── Agent switcher ────────────────────────────────────────────────────────────
+ * Replaces a wrapping row of pills — one per agent — that had grown to 17 and
+ * cost ~350px of vertical space above the actual work area. At that count the
+ * layout was ragged (pills sized to their text), the status badge was repeated
+ * on every pill so it carried no information, there was no way to search, and a
+ * delete × sat permanently on each pill at the same visual weight as the pill.
+ *
+ * Collapsed it is one line showing the current agent. Opening it gives a search
+ * box and the full list grouped by status, so it scales past 100 agents.
+ * ────────────────────────────────────────────────────────────────────────────── */
+function AgentSwitcher({
+  agents, selectedId, slug, tint, category, showAll, loadingAll, deletingId,
+  statusBadge, onSelect, onDelete, actions,
+}: {
+  agents: Agent[];
+  selectedId: string | null;
+  slug: string;
+  tint: keyof typeof tintColor;
+  category: string;
+  showAll: boolean;
+  loadingAll: boolean;
+  deletingId: string | null;
+  statusBadge: (s: string) => React.ReactNode;
+  onSelect: (id: string) => void;
+  onDelete?: (a: Agent, ev: React.MouseEvent) => void;
+  /** Refresh / Show all / debug / New agent. These act on the LIST, so they live
+   *  with the list rather than in the page header — which also keeps the top bar
+   *  to a single row of pickers. */
+  actions?: React.ReactNode;
+}) {
+  const [open, setOpen]   = useState(false);
+  const [query, setQuery] = useState('');
+  const panelRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => { setOpen(false); setQuery(''); }, []);
+  useDialogA11y(panelRef, close, false);
+
+  const selected = agents.find(a => a.id === selectedId) ?? null;
+
+  // Group by status so the badge appears once per group instead of 17 times.
+  // Sorted by name inside each group: the previous order was whatever the API
+  // returned, so an agent moved position between refreshes.
+  const groups = useMemo(() => groupAgents(agents, query), [agents, query]);
+
+  const total = agents.length;
+  const shown = groups.reduce((n, g) => n + g.list.length, 0);
+
+  if (total === 0) {
+    return (
+      <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '6px 0' }}>
+        {loadingAll ? 'Loading…'
+          : showAll
+            ? 'No agents at all on this account. Click "New agent" to create one.'
+            : `No ${category} agents yet — click "New agent", or "Show all my agents" if you created one under a different category.`}
+      </div>
+    );
+  }
+
+  return (
+    // flex 2 vs the config pickers' 1: this cell carries a name, a status badge
+    // and an id, and at an equal share the name truncated to "Patie…" and the
+    // badge wrapped onto three lines.
+    <div style={{ position: 'relative', flex: '2 1 300px', minWidth: 0 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+          overflow: 'hidden',
+          padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
+          background: 'var(--card-bg)', border: `1px solid ${open ? tintColor[tint] : 'var(--border)'}`,
+          textAlign: 'left', transition: 'border-color 0.15s',
+        }}
+      >
+        <Icon name="grid" size={13} style={{ color: tintColor[tint], flex: 'none' }} />
+        <span
+          style={{
+            fontSize: 13, fontWeight: 600, color: 'var(--text-1)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+        >
+          {selected ? selected.name : `Choose an agent — ${total} available`}
+        </span>
+        {selected && (
+          <span style={{ flex: 'none', whiteSpace: 'nowrap', display: 'inline-flex' }}>
+            {statusBadge(selected.agent_flow_status)}
+          </span>
+        )}
+        {selected && (
+          <span style={{ fontSize: 10.5, color: 'var(--text-4)', flex: 'none' }}>
+            {selected.id.slice(0, 8)}
+          </span>
+        )}
+        <span style={{ marginLeft: 'auto', color: 'var(--text-3)', fontSize: 11 }}>
+          {open ? '▲' : '▼'}
+        </span>
+      </button>
+
+      {open && (
+        <>
+          {/* Click-away. Transparent, so the page stays visible behind the panel. */}
+          <div onClick={close} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+          <div
+            ref={panelRef}
+            role="listbox"
+            aria-label={`${category} agents`}
+            tabIndex={-1}
+            style={{
+              position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 41,
+              width: 'min(92vw, 470px)',
+              background: 'var(--bg-1)', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-lg)', boxShadow: '0 18px 44px rgba(8,12,20,0.22)',
+              overflow: 'hidden', outline: 'none',
+            }}
+          >
+            {actions && (
+              <div
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+                  padding: 10, borderBottom: '1px solid var(--border)',
+                }}
+              >
+                {actions}
+              </div>
+            )}
+
+            <div style={{ padding: 10, borderBottom: '1px solid var(--border)' }}>
+              <input
+                autoFocus
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder={`Search ${total} agent${total === 1 ? '' : 's'}…`}
+                aria-label="Search agents"
+                style={{
+                  width: '100%', padding: '8px 10px', fontSize: 13,
+                  borderRadius: 'var(--radius)', border: '1px solid var(--border)',
+                  background: 'var(--bg-2)', color: 'var(--text-1)', outline: 'none',
+                }}
+              />
+            </div>
+
+            <div style={{ maxHeight: 340, overflowY: 'auto', padding: 6 }}>
+              {shown === 0 && (
+                <div style={{ padding: '14px 8px', fontSize: 12.5, color: 'var(--text-3)' }}>
+                  No agent matches “{query}”.
+                </div>
+              )}
+              {groups.map(g => (
+                <div key={g.status}>
+                  <div
+                    style={{
+                      padding: '8px 8px 5px', fontSize: 10, fontWeight: 600,
+                      letterSpacing: '0.07em', textTransform: 'uppercase',
+                      color: 'var(--text-4)',
+                    }}
+                  >
+                    {STATUS_GROUP_LABEL[g.status] ?? g.status} · {g.list.length}
+                  </div>
+                  {g.list.map(a => {
+                    const active     = a.id === selectedId;
+                    const wrongSlug  = a.use_case_slug !== slug;
+                    const deleting   = deletingId === a.id;
+                    return (
+                      <div
+                        key={a.id}
+                        className="agent-row"
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          borderRadius: 'var(--radius)',
+                          background: active ? `${tintColor[tint]}1f` : 'transparent',
+                          opacity: wrongSlug ? 0.7 : 1,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          onClick={() => { onSelect(a.id); close(); }}
+                          title={wrongSlug
+                            ? `This agent belongs to "${SLUG_LABEL[a.use_case_slug] ?? a.use_case_slug}"`
+                            : undefined}
+                          style={{
+                            flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '8px 10px', background: 'transparent', border: 'none',
+                            cursor: 'pointer', textAlign: 'left', color: 'var(--text-1)',
+                          }}
+                        >
+                          <span style={{ width: 12, flex: 'none', color: tintColor[tint] }}>
+                            {active ? <Icon name="check" size={11} /> : null}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 13, fontWeight: active ? 600 : 500,
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {a.name}
+                          </span>
+                          {wrongSlug && (
+                            <span
+                              style={{
+                                fontSize: 9.5, padding: '2px 6px', borderRadius: 99, flex: 'none',
+                                background: 'var(--tint-2)', color: 'var(--text-3)',
+                                textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600,
+                              }}
+                            >
+                              {SLUG_LABEL[a.use_case_slug] ?? a.use_case_slug}
+                            </span>
+                          )}
+                          {/* The id is the only thing separating same-named agents,
+                              so it stays visible rather than hiding on hover. */}
+                          <span style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--text-4)', flex: 'none' }}>
+                            {a.id.slice(0, 8)}
+                          </span>
+                        </button>
+                        {onDelete && (
+                          <button
+                            type="button"
+                            onClick={ev => onDelete(a, ev)}
+                            disabled={deleting}
+                            title={`Delete ${a.name}`}
+                            aria-label={`Delete ${a.name}`}
+                            style={{
+                              flex: 'none', width: 30, height: 30, marginRight: 4,
+                              display: 'grid', placeItems: 'center',
+                              background: 'transparent', border: 'none', borderRadius: 7,
+                              color: deleting ? 'var(--red)' : 'var(--text-4)',
+                              cursor: deleting ? 'wait' : 'pointer',
+                            }}
+                            onMouseEnter={e => {
+                              if (!deleting) {
+                                e.currentTarget.style.background = 'rgba(255,90,120,0.12)';
+                                e.currentTarget.style.color = 'var(--red)';
+                              }
+                            }}
+                            onMouseLeave={e => {
+                              if (!deleting) {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.color = 'var(--text-4)';
+                              }
+                            }}
+                          >
+                            <Icon name={deleting ? 'refresh' : 'trash'} size={12.5} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

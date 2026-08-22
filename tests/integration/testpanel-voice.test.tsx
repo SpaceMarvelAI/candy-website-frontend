@@ -224,7 +224,7 @@ async function typeAndSend(text: string) {
 }
 
 async function startTest() {
-  await act(async () => { fireEvent.click(screen.getByText('Start test')); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Start test' })); });
   await flush();
 }
 
@@ -527,10 +527,13 @@ describe('TestPanel — session lifecycle', () => {
 
     renderPanel();
     await flush();
-    const button = screen.getByText('Start test');
+    const button = screen.getByRole('button', { name: 'Start test' });
     await act(async () => { fireEvent.click(button); });
-    // Second click lands while getUserMedia is still pending.
-    await act(async () => { fireEvent.click(screen.getByText('Starting…')); });
+    // Second click lands while getUserMedia is still pending. The control is now
+    // the icon button in the composer, so the pending state shows as aria-busy
+    // rather than a "Starting…" label.
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    await act(async () => { fireEvent.click(button); });
     await act(async () => { releaseMic(null); });
     await flush();
 
@@ -576,7 +579,7 @@ describe('TestPanel — session lifecycle', () => {
     const { rerender } = render(<TestPanel agentId="a1" />);
     await flush();
     await startTest();
-    expect(screen.getByText('Stop test & save recording')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop test' })).toBeInTheDocument();
 
     await act(async () => { rerender(<TestPanel agentId="a2" />); });
     await flush();
@@ -584,7 +587,7 @@ describe('TestPanel — session lifecycle', () => {
     expect(H.micTracks[0].stop).toHaveBeenCalled();
     expect(H.sockets[0].readyState).toBe(3);
     expect(uploadRecording).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Start test')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start test' })).toBeInTheDocument();
     // The recording belongs to the agent we left, not the one we switched to.
     expect(uploadRecording.mock.calls[0][0].agentId).toBe('a1');
   });
@@ -593,7 +596,7 @@ describe('TestPanel — session lifecycle', () => {
     renderPanel();
     await flush();
     await startTest();
-    await act(async () => { fireEvent.click(screen.getByText('Stop test & save recording')); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Stop test' })); });
     await flush();
 
     expect(H.sockets).toHaveLength(1);
