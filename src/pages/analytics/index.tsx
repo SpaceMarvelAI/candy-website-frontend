@@ -117,18 +117,18 @@ function StatCard({ label, value, sub, accent }: {
       style={{
         background: 'var(--card-bg)',
         border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        padding: '20px 22px',
+        borderRadius: 10,
+        padding: '14px 16px',
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
         backdropFilter: 'blur(20px)',
       }}
     >
-      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-4)', fontWeight: 500 }}>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-4)', fontWeight: 700 }}>
         {label}
       </div>
-      <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.03em', color: accent || 'var(--text-1)' }}>
+      <div style={{ fontSize: 19, fontWeight: 700, color: accent || 'var(--text-1)' }}>
         {value}
       </div>
       {sub && (
@@ -159,7 +159,7 @@ function TableCard({ title, children }: { title: string; children: React.ReactNo
       }}
     >
       <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{title}</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-1)', margin: 0 }}>{title}</h3>
       </div>
       {children}
     </div>
@@ -168,17 +168,18 @@ function TableCard({ title, children }: { title: string; children: React.ReactNo
 
 const TH_STYLE: React.CSSProperties = {
   textAlign: 'left',
-  padding: '12px 22px',
+  padding: '12px 16px',
   color: 'var(--text-3)',
-  fontSize: 11,
+  fontSize: 10.5,
   textTransform: 'uppercase',
-  letterSpacing: '0.12em',
-  fontWeight: 500,
+  letterSpacing: '0.07em',
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
   background: 'var(--card-bg-strong)',
   borderBottom: '1px solid var(--border)',
 };
 const TD_STYLE: React.CSSProperties = {
-  padding: '14px 22px',
+  padding: '13px 16px',
   color: 'var(--text-2)',
   fontSize: 13,
   borderBottom: '1px solid var(--border)',
@@ -235,39 +236,46 @@ function SessionsByDayChart({ rows }: { rows: { date: string; sessions: number }
       style={{
         background: 'var(--card-bg)',
         border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        overflow: 'hidden',
+        borderRadius: 10,
+        padding: '18px 20px',
       }}
     >
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>Sessions by Day</span>
-        <span style={{ fontSize: 11.5, color: 'var(--text-4)' }}>{rows.length} days</span>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        paddingBottom: 10, marginBottom: 14, borderBottom: '1px solid var(--border)',
+      }}>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-3)' }}>
+          Sessions by Day
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-3)' }}>
+          {rows.length} days
+        </span>
       </div>
-      <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {rows.map(r => (
           <div key={r.date} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
               style={{
-                width: 88, fontSize: 11.5, color: 'var(--text-3)',
+                width: 92, fontSize: 12, color: 'var(--text-3)',
                 fontFamily: "'Zalando Sans'", flexShrink: 0,
               }}
             >
               {r.date}
             </div>
-            <div style={{ flex: 1, height: 8, borderRadius: 99, background: 'var(--tint-2)', overflow: 'hidden' }}>
+            <div style={{ flex: 1, height: 8, borderRadius: 20, background: 'var(--tint-2)', overflow: 'hidden' }}>
               <div
                 style={{
                   width: `${(r.sessions / max) * 100}%`,
                   height: '100%',
-                  background: 'var(--grad-brand)',
-                  borderRadius: 99,
+                  background: 'var(--purple-hi)',
+                  borderRadius: 20,
                   transition: 'width 0.3s ease',
                 }}
               />
             </div>
             <div
               style={{
-                width: 36, fontSize: 12.5, fontWeight: 600,
+                width: 30, fontSize: 12.5, fontWeight: 650,
                 color: 'var(--text-1)', textAlign: 'right', flexShrink: 0,
                 fontFamily: "'Zalando Sans'",
               }}
@@ -284,7 +292,15 @@ function SessionsByDayChart({ rows }: { rows: { date: string; sessions: number }
 // ── Generic object array table (used for top_failing_agents & unknown arrays) ─
 function ObjectArrayTable({ label, rows }: { label: string; rows: Record<string, unknown>[] }) {
   if (rows.length === 0) return null;
-  const cols = Object.keys(rows[0]);
+  const rawCols = Object.keys(rows[0]);
+  // Once a row has a human-readable name, the id column next to it is just
+  // noise (e.g. "Top Failing Agents" — the name already identifies the row).
+  // Only hide id-like columns when a name is actually present, so a table
+  // with nothing but ids still shows them.
+  const hasName = rawCols.includes('name') || rawCols.includes('agent_name');
+  const cols = hasName
+    ? rawCols.filter(c => c !== 'agent_id' && c !== 'id' && !c.endsWith('_id'))
+    : rawCols;
 
   function cellValue(v: unknown): string {
     if (v == null) return '—';
@@ -314,7 +330,7 @@ function ObjectArrayTable({ label, rows }: { label: string; rows: Record<string,
       }}
     >
       <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>
           {label.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
         </span>
         <span style={{ fontSize: 11.5, color: 'var(--text-4)' }}>{rows.length} {rows.length === 1 ? 'entry' : 'entries'}</span>
@@ -324,16 +340,7 @@ function ObjectArrayTable({ label, rows }: { label: string; rows: Record<string,
           <thead>
             <tr>
               {cols.map(col => (
-                <th
-                  key={col}
-                  style={{
-                    textAlign: 'left', padding: '10px 18px',
-                    color: 'var(--text-3)', fontSize: 10.5,
-                    textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 500,
-                    background: 'var(--card-bg-strong)', borderBottom: '1px solid var(--border)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
+                <th key={col} style={TH_STYLE}>
                   {col.replace(/_/g, ' ')}
                 </th>
               ))}
@@ -352,7 +359,10 @@ function ObjectArrayTable({ label, rows }: { label: string; rows: Record<string,
                       style={{
                         padding: '12px 18px',
                         color: accent || (isNameCol ? 'var(--text-1)' : 'var(--text-2)'),
-                        fontWeight: isNameCol ? 600 : 400,
+                        // 500, matching the same "highlight the name column" weight already
+                        // used in SessionsView/AgentsView (line ~523/872) — was 600 here, an
+                        // unintentional drift between the two table implementations.
+                        fontWeight: isNameCol ? 500 : 400,
                         fontFamily: typeof v === 'number' ? "'Zalando Sans'" : undefined,
                         fontSize: 12.5,
                         whiteSpace: 'nowrap',
@@ -642,7 +652,7 @@ function LatencyView({ data, loading }: { data: AnalyticsLatency | null; loading
         borderRadius: 'var(--radius-lg)', overflow: 'hidden',
       }}>
         <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--border)' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>Component breakdown</span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>Component breakdown</span>
         </div>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 480 }}>
@@ -1080,13 +1090,10 @@ export default function AnalyticsPage() {
     <div className="fade-up" style={{ padding: isMobile ? '20px 16px 48px' : isTablet ? '24px 24px 52px' : '32px 40px 60px' }}>
       {/* ── Page header ── */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--blue)', marginBottom: 10 }}>
-          Analytics · Insights
-        </div>
-        <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--text-1)' }}>
+        <h1 style={{ fontSize: 21, fontWeight: 400, letterSpacing: '-0.4px', color: 'var(--text-1)' }}>
           Analytics
         </h1>
-        <p style={{ color: 'var(--text-3)', fontSize: 15, marginTop: 8 }}>
+        <p style={{ color: 'var(--text-3)', fontSize: 12.5, marginTop: 2 }}>
           {loading ? 'Loading…' : `${sessions.length} sessions · ${agents.length} agents · ${events.length} events`}
         </p>
       </div>
@@ -1115,11 +1122,11 @@ export default function AnalyticsPage() {
               key={t.key}
               onClick={() => setTab(t.key)}
               style={{
-                padding: '7px 14px', borderRadius: 99,
+                padding: '10px 16px', borderRadius: 99,
                 background: 'var(--card-bg)',
                 border: tab === t.key ? '1px solid var(--border-strong)' : '1px solid var(--border)',
                 color: tab === t.key ? 'var(--text-1)' : 'var(--text-2)',
-                cursor: 'pointer', fontSize: 12.5,
+                cursor: 'pointer', fontSize: 13.5,
                 display: 'inline-flex', alignItems: 'center', gap: 7,
                 transition: 'all 0.15s',
                 flexShrink: 0,
