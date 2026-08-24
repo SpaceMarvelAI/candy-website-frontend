@@ -19,8 +19,8 @@ test.beforeEach(async ({ context }) => {
   // Seed BEFORE any app script runs (addInitScript), so LandingPage's
   // "redirect to real OIDC login" effect never fires — see App.tsx RootRedirect.
   await context.addInitScript((user) => {
-    localStorage.setItem('access_token', 'fake-e2e-token-not-verified-by-backend');
-    localStorage.setItem('candy.user', JSON.stringify(user));
+    sessionStorage.setItem('access_token', 'fake-e2e-token-not-verified-by-backend');
+    sessionStorage.setItem('candy.user', JSON.stringify(user));
   }, SEEDED_USER);
 });
 

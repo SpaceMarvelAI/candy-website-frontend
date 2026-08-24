@@ -1,6 +1,8 @@
-const SM_API    = (import.meta as any).env?.VITE_SM_API_URL    || 'https://dashboard-api.spacemarvel.ai';
-const META_API  = (import.meta as any).env?.VITE_META_API_URL  || 'https://meta-api.spacemarvel.ai';
-const META_APP  = (import.meta as any).env?.VITE_META_APP_URL  || 'https://meta.spacemarvel.ai';
+import { logger, truncateForLog } from '../utils/logger';
+
+const SM_API    = import.meta.env.VITE_SM_API_URL    || 'https://dashboard-api.spacemarvel.ai';
+const META_API  = import.meta.env.VITE_META_API_URL  || 'https://meta-api.spacemarvel.ai';
+const META_APP  = import.meta.env.VITE_META_APP_URL  || 'https://meta.spacemarvel.ai';
 
 let _metaToken: string | null = null;
 let _metaTokenExpiry = 0;
@@ -55,7 +57,12 @@ async function metaFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
       _metaTokenExpiry = 0;
       throw new Error('COMPOSIO_UNAUTHORIZED');
     }
-    throw new Error(`${res.status}: ${await res.text()}`);
+    // Do NOT put the upstream response body in the message — this error reaches
+    // users through toasts, so an upstream stack trace or SQL error would render
+    // verbatim. Log the body instead, where the verbosity gate and redaction apply.
+    const body = await res.text().catch(() => '');
+    logger.error('[composio] request failed', { status: res.status, body: truncateForLog(body) });
+    throw new Error(`Request failed (${res.status})`);
   }
   return res.json();
 }

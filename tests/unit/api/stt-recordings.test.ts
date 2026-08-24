@@ -128,20 +128,21 @@ describe('api/recordings', () => {
     ).rejects.toMatchObject({ status: 413 });
   });
 
-  it('downloadRecordingBlob returns a Blob on success', async () => {
-    // jsdom's Response can't construct from a Blob body (extractBody calls
-    // .stream(), which jsdom's Blob doesn't implement) — use a plain string
-    // body instead, which jsdom's fetch/Response handles natively.
-    server.use(http.get(`${B}/v1/recordings/r1/download`, () =>
-      new HttpResponse('audio-bytes', { headers: { 'Content-Type': 'audio/mpeg' } })
-    ));
-    const blob = await Recordings.downloadRecordingBlob('r1');
-    // Not toBeInstanceOf(Blob): jsdom's fetch/Response internals construct
-    // their own Blob from a different realm than this test file's global
-    // Blob, so `instanceof` fails even though it's a real Blob. Duck-type
-    // instead — matches how downloadRecordingBlob's actual caller uses it.
-    expect(typeof blob.size).toBe('number');
-    expect(blob.type).toBe('audio/mpeg');
+  it('downloadRecordingBlob returns the audio blob + metadata on success', async () => {
+    // The endpoint returns JSON metadata, not audio — the bytes come from the
+    // signed URL it points at. Full contract cover lives in
+    // tests/unit/api/recordings-download.test.ts.
+    server.use(
+      http.get(`${B}/v1/recordings/r1/download`, () => HttpResponse.json({
+        signed_url: 'https://s3.test/r1.mp3', s3_key: 'r1.mp3',
+        mime_type: 'audio/mpeg', filename: 'r1.mp3',
+      })),
+      http.get('https://s3.test/r1.mp3', () => new HttpResponse('audio-bytes')),
+    );
+    const dl = await Recordings.downloadRecordingBlob('r1');
+    expect(typeof dl.blob!.size).toBe('number');
+    expect(dl.blob!.type).toBe('audio/mpeg');
+    expect(dl.filename).toBe('r1.mp3');
   });
 
   it('downloadRecordingBlob throws on a failed response', async () => {
@@ -214,8 +215,12 @@ describe('api/recordings', () => {
     server.use(
       http.get(`${B}/v1/recordings/r1/download`, ({ request }) => {
         expect(request.headers.get('authorization')).toBeNull();
-        return new HttpResponse('bytes');
+        return HttpResponse.json({
+          signed_url: 'https://s3.test/r1.mp3', s3_key: 'r1.mp3',
+          mime_type: 'audio/mpeg', filename: 'r1.mp3',
+        });
       }),
+      http.get('https://s3.test/r1.mp3', () => new HttpResponse('bytes')),
     );
     await Recordings.downloadRecordingBlob('r1');
   });

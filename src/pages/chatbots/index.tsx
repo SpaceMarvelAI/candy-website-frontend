@@ -58,7 +58,9 @@ const USE_CASES = [
   },
 ];
 
-function UseCaseCard({ uc, onClick }) {
+type UseCase = (typeof USE_CASES)[number];
+
+function UseCaseCard({ uc, onClick }: { uc: UseCase; onClick: () => void }) {
   return (
     <div
       className="cat-card-anim"
@@ -189,10 +191,10 @@ export default function ChatbotsPage() {
 
       {/* Cards grid */}
       <div className="grid-categories">
-        {USE_CASES.map((uc, idx) => (
+        {USE_CASES.map(uc => (
           <UseCaseCard
             key={uc.id}
-            uc={{ ...uc, idx }}
+            uc={uc}
             onClick={() => openUseCase(uc.view)}
           />
         ))}

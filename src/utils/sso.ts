@@ -44,7 +44,6 @@ export function redirectToOIDC(): void {
     // Also stash in sessionStorage as a fallback (in case cookies fail).
     if (ticket) sessionStorage.setItem(PENDING_PROMPT_TICKET_KEY, ticket);
 
-    const returnTo = encodeURIComponent(window.location.origin);
     const loginUrl = new URL(`${API_BASE}/v1/auth/sso/oidc/login`);
     loginUrl.searchParams.set('return_to', window.location.origin);
     if (ticket) loginUrl.searchParams.set('ticket', ticket);

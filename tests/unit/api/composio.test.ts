@@ -180,9 +180,12 @@ describe('composio API calls (with mocked SSO exchange)', () => {
     await expect(Composio.getComposioApps()).rejects.toThrow('COMPOSIO_UNAUTHORIZED');
   });
 
-  it('throws a generic error containing the status and body text on a non-401 failure', async () => {
+  it('throws a status-only error on a non-401 failure, never the upstream body', async () => {
+    // This error surfaces in a toast, so the upstream body (which may be a stack
+    // trace or SQL error) must not appear in the message. It is logged instead.
     server.use(http.get(`${META_API}/api/composio/apps`, () => new HttpResponse('boom', { status: 500 })));
-    await expect(Composio.getComposioApps()).rejects.toThrow('500: boom');
+    await expect(Composio.getComposioApps()).rejects.toThrow('Request failed (500)');
+    await expect(Composio.getComposioApps()).rejects.not.toThrow('boom');
   });
 
   it('getComposioApps falls back to [] when the envelope has no apps field', async () => {

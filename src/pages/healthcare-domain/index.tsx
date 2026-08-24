@@ -1,4 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+/**
+ * First unused name in the `base`, `base 2`, `base 3`… series.
+ *
+ * The create dialog used to pre-fill the same default every time, so repeatedly
+ * clicking "Create & customise" produced a stack of agents with identical names
+ * that no picker could tell apart. Suggesting the next free name makes the
+ * duplicate obvious before it is created, without blocking anyone who genuinely
+ * wants two agents for one use case.
+ */
+export function nextAvailableName(base: string, taken: { name: string }[]): string {
+  const names = new Set(taken.map(a => a.name.trim().toLowerCase()));
+  if (!names.has(base.trim().toLowerCase())) return base;
+  for (let n = 2; n < 100; n++) {
+    const candidate = `${base} ${n}`;
+    if (!names.has(candidate.toLowerCase())) return candidate;
+  }
+  return base;
+}
 import Icon from '../../assets/icons';
 import { useApp } from '../../context/AppContext';
 import {
@@ -10,18 +29,18 @@ import {
 import { createHealthcareAgent, listUseCaseAgents } from '../../api/healthcare';
 import type { Agent } from '../../api/agents';
 
-// Clinical blue/white palette (local to the healthcare surface so we don't
+// Mockup-matched accent palette (local to the healthcare surface so we don't
 // disturb other pages' tokens).
-const BLUE = '#0071e3';
-const BLUE_HI = '#2997ff';
-const BLUE_SOFT = 'rgba(0,113,227,0.08)';
-const BLUE_BORDER = 'rgba(0,113,227,0.22)';
+const ACCENT = '#755BE3';
+const ACCENT_HI = '#6448D6';
+const ACCENT_SOFT = 'rgba(117,91,227,0.08)';
+const ACCENT_BORDER = 'rgba(117,91,227,0.22)';
 
 function DirBadge({ direction }: { direction: Direction }) {
   const map: Record<Direction, { label: string; color: string; bg: string }> = {
-    inbound:  { label: 'Inbound',  color: '#0071e3', bg: 'rgba(0,113,227,0.10)' },
-    outbound: { label: 'Outbound', color: '#0a8f5b', bg: 'rgba(48,209,88,0.12)' },
-    both:     { label: 'Inbound + Outbound', color: '#7a5bd6', bg: 'rgba(122,91,214,0.12)' },
+    inbound:  { label: 'Inbound',  color: '#1e40af', bg: '#dbeafe' },
+    outbound: { label: 'Outbound', color: '#166534', bg: '#dcfce7' },
+    both:     { label: 'Inbound + Outbound', color: '#5b21b6', bg: '#ede9fe' },
   };
   const m = map[direction];
   return (
@@ -44,8 +63,8 @@ function UseCaseCard({ uc, onCreate }: { uc: HealthcareUseCase; onCreate: () => 
       }}
       onMouseEnter={e => {
         e.currentTarget.style.transform = 'translateY(-3px)';
-        e.currentTarget.style.borderColor = BLUE_BORDER;
-        e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,113,227,0.12)';
+        e.currentTarget.style.borderColor = ACCENT_BORDER;
+        e.currentTarget.style.boxShadow = '0 8px 28px rgba(117,91,227,0.12)';
       }}
       onMouseLeave={e => {
         e.currentTarget.style.transform = 'translateY(0)';
@@ -56,7 +75,7 @@ function UseCaseCard({ uc, onCreate }: { uc: HealthcareUseCase; onCreate: () => 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
         <div style={{
           width: 44, height: 44, borderRadius: 12, display: 'grid', placeItems: 'center',
-          background: BLUE_SOFT, border: `1px solid ${BLUE_BORDER}`, color: BLUE, flexShrink: 0,
+          background: ACCENT_SOFT, border: `1px solid ${ACCENT_BORDER}`, color: ACCENT, flexShrink: 0,
         }}>
           <Icon name={uc.icon} size={20} />
         </div>
@@ -91,7 +110,7 @@ function UseCaseCard({ uc, onCreate }: { uc: HealthcareUseCase; onCreate: () => 
         <div style={{ fontSize: 11, color: 'var(--text-4)' }}>
           {uc.skills.length} skill{uc.skills.length > 1 ? 's' : ''} attached
         </div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: BLUE, display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: ACCENT, display: 'flex', alignItems: 'center', gap: 5 }}>
           Create agent <span aria-hidden>→</span>
         </div>
       </div>
@@ -105,13 +124,22 @@ function CreateModal({
   const { showView, addToast } = useApp();
   const [name, setName] = useState(`${uc.title} Agent`);
   const [busy, setBusy] = useState(false);
+  const creatingRef = useRef(false);
   const [existing, setExisting] = useState<Agent[] | null>(null); // null = loading
 
   // Look for agents this company already has for this use case.
   useEffect(() => {
     let cancelled = false;
     listUseCaseAgents(uc)
-      .then(list => { if (!cancelled) setExisting(list); })
+      .then(list => {
+        if (cancelled) return;
+        setExisting(list);
+        // Suggest a distinct name when this use case already has agents. The
+        // field used to pre-fill the same default every time, so clicking
+        // "Create & customise" repeatedly produced several agents with identical
+        // names that were impossible to tell apart in any picker.
+        setName(nextAvailableName(`${uc.title} Agent`, list));
+      })
       .catch(() => { if (!cancelled) setExisting([]); });
     return () => { cancelled = true; };
   }, [uc]);
@@ -123,7 +151,12 @@ function CreateModal({
   }
 
   async function handleCreate() {
-    if (busy) return;
+    // Ref, not state: `setBusy(true)` does not apply until the next render, so a
+    // fast double-click slipped past `if (busy)` and created a second identical
+    // agent. Creating one is 4 sequential round trips (create + 3 attachSkill),
+    // which feels unresponsive — exactly when people click again.
+    if (creatingRef.current || busy) return;
+    creatingRef.current = true;
     setBusy(true);
     try {
       const { agent, failed } = await createHealthcareAgent(uc, name);
@@ -136,6 +169,7 @@ function CreateModal({
       openAgent(agent.id);
     } catch (e) {
       addToast(`Could not create agent: ${(e as Error).message}`, 'error');
+      creatingRef.current = false;   // allow a retry after a genuine failure
       setBusy(false);
     }
   }
@@ -158,7 +192,7 @@ function CreateModal({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
           <div style={{ width: 40, height: 40, borderRadius: 10, display: 'grid', placeItems: 'center',
-            background: BLUE_SOFT, border: `1px solid ${BLUE_BORDER}`, color: BLUE }}>
+            background: ACCENT_SOFT, border: `1px solid ${ACCENT_BORDER}`, color: ACCENT }}>
             <Icon name={uc.icon} size={19} />
           </div>
           <div>
@@ -187,7 +221,7 @@ function CreateModal({
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '10px 12px', borderRadius: 'var(--radius)',
-                    border: `1px solid ${BLUE_BORDER}`, background: BLUE_SOFT,
+                    border: `1px solid ${ACCENT_BORDER}`, background: ACCENT_SOFT,
                     cursor: busy ? 'default' : 'pointer', textAlign: 'left', width: '100%',
                   }}
                 >
@@ -195,9 +229,12 @@ function CreateModal({
                     <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)' }}>{a.name}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-4)' }}>
                       {a.agent_flow_status === 'published' ? 'Live' : 'Draft'} · {a.call_direction}
+                      {/* Short id so same-named agents are actually distinguishable —
+                          matches how AgentPicker labels them. */}
+                      {' · '}<span style={{ fontFamily: 'ui-monospace, monospace' }}>{a.id.slice(0, 8)}</span>
                     </span>
                   </span>
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: BLUE }}>Open →</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: ACCENT }}>Open →</span>
                 </button>
               ))}
             </div>
@@ -227,7 +264,7 @@ function CreateModal({
           {uc.skills.map(s => (
             <span key={s} style={{
               fontSize: 11.5, padding: '3px 9px', borderRadius: 7,
-              background: BLUE_SOFT, color: BLUE, border: `1px solid ${BLUE_BORDER}`, fontWeight: 500,
+              background: ACCENT_SOFT, color: ACCENT, border: `1px solid ${ACCENT_BORDER}`, fontWeight: 500,
             }}>{skillLabel(s)}</span>
           ))}
         </div>
@@ -252,7 +289,7 @@ function CreateModal({
             disabled={busy}
             style={{
               padding: '9px 18px', borderRadius: 'var(--radius)', fontSize: 13.5, fontWeight: 650,
-              background: BLUE, color: '#fff', border: 'none', cursor: busy ? 'default' : 'pointer',
+              background: ACCENT, color: '#fff', border: 'none', cursor: busy ? 'default' : 'pointer',
               opacity: busy ? 0.7 : 1,
             }}
           >{busy ? 'Creating…' : 'Create & customise'}</button>
@@ -273,6 +310,7 @@ function StatChip({ value, label }: { value: string; label: string }) {
 
 export default function HealthcareDomain() {
   const [active, setActive] = useState<HealthcareUseCase | null>(null);
+  const [dirFilter, setDirFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
   const inbound  = useMemo(() => HEALTHCARE_USE_CASES.filter(u => u.direction !== 'outbound'), []);
   const outbound = useMemo(() => HEALTHCARE_USE_CASES.filter(u => u.direction === 'outbound'), []);
 
@@ -286,14 +324,10 @@ export default function HealthcareDomain() {
       {/* Hero */}
       <div style={{
         position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius-xl)',
-        background: `linear-gradient(135deg, ${BLUE} 0%, #0a5bd0 55%, #084a9e 100%)`,
+        background: ACCENT,
         padding: '34px 36px', marginBottom: 30, color: '#fff',
-        boxShadow: '0 12px 40px rgba(0,113,227,0.28)',
+        boxShadow: '0 12px 40px rgba(117,91,227,0.28)',
       }}>
-        <div style={{ position: 'absolute', right: -40, top: -40, width: 220, height: 220,
-          borderRadius: '50%', background: 'rgba(255,255,255,0.10)' }} />
-        <div style={{ position: 'absolute', right: 70, bottom: -60, width: 160, height: 160,
-          borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
         <div style={{ position: 'relative', zIndex: 1, maxWidth: 720 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '4px 12px',
             borderRadius: 99, background: 'rgba(255,255,255,0.16)', fontSize: 12, fontWeight: 600,
@@ -317,20 +351,41 @@ export default function HealthcareDomain() {
       </div>
 
       {/* Inbound */}
-      <SectionHeading icon="chat" title="Inbound & two-way use cases"
-        sub="Patients call in — the agent handles the request and collects what the clinic needs." />
-      <div style={grid}>
-        {inbound.map(uc => <UseCaseCard key={uc.key} uc={uc} onCreate={() => setActive(uc)} />)}
-      </div>
-
-      {/* Outbound */}
-      <div style={{ marginTop: 34 }}>
-        <SectionHeading icon="broadcast" title="Outbound use cases"
-          sub="The agent calls the patient — reminders, follow-ups and surveys." />
-        <div style={grid}>
-          {outbound.map(uc => <UseCaseCard key={uc.key} uc={uc} onCreate={() => setActive(uc)} />)}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <SectionHeading icon="chat" title="Inbound & two-way use cases"
+          sub="Patients call in — the agent handles the request and collects what the clinic needs." />
+        <div style={{ display: 'flex', gap: 3, padding: 3, borderRadius: 8, background: 'var(--bg-3)' }}>
+          {(['all', 'inbound', 'outbound'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setDirFilter(f)}
+              style={{
+                padding: '6px 13px', borderRadius: 6, fontSize: 12.5, fontWeight: 600,
+                border: 'none', cursor: 'pointer',
+                background: dirFilter === f ? 'var(--card-bg)' : 'transparent',
+                color: dirFilter === f ? 'var(--text-1)' : 'var(--text-3)',
+                boxShadow: dirFilter === f ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+              }}
+            >{f === 'all' ? 'All' : f === 'inbound' ? 'Inbound' : 'Outbound'}</button>
+          ))}
         </div>
       </div>
+      {dirFilter !== 'outbound' && (
+        <div style={grid}>
+          {inbound.map(uc => <UseCaseCard key={uc.key} uc={uc} onCreate={() => setActive(uc)} />)}
+        </div>
+      )}
+
+      {/* Outbound */}
+      {dirFilter !== 'inbound' && (
+        <div style={{ marginTop: 34 }}>
+          <SectionHeading icon="broadcast" title="Outbound use cases"
+            sub="The agent calls the patient — reminders, follow-ups and surveys." />
+          <div style={grid}>
+            {outbound.map(uc => <UseCaseCard key={uc.key} uc={uc} onCreate={() => setActive(uc)} />)}
+          </div>
+        </div>
+      )}
 
       {active && <CreateModal uc={active} onClose={() => setActive(null)} />}
     </div>
@@ -341,7 +396,7 @@ function SectionHeading({ icon, title, sub }: { icon: string; title: string; sub
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-        <span style={{ color: BLUE_HI, display: 'grid', placeItems: 'center' }}><Icon name={icon} size={17} /></span>
+        <span style={{ color: ACCENT_HI, display: 'grid', placeItems: 'center' }}><Icon name={icon} size={17} /></span>
         <h2 style={{ fontSize: 18, fontWeight: 680, color: 'var(--text-1)', margin: 0, letterSpacing: '-0.01em' }}>{title}</h2>
       </div>
       <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '4px 0 0 26px' }}>{sub}</p>

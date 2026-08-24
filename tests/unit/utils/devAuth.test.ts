@@ -54,13 +54,18 @@ describe('installDevAuth', () => {
 
     installDevAuth();
 
-    // The exact key api/client.ts's getToken() reads — this is the bug this
-    // test guards against regressing.
-    expect(localStorage.getItem('access_token')).toBe('dev-token-abc');
-    expect(localStorage.getItem('candy.user')).toBe(user);
+    // sessionStorage is the exact store api/client.ts's getToken() reads. Seeding
+    // localStorage instead would leave localhost permanently signed out — that is
+    // the regression this test guards.
+    expect(sessionStorage.getItem('access_token')).toBe('dev-token-abc');
+    expect(sessionStorage.getItem('candy.user')).toBe(user);
+    // And nothing may land in localStorage, or the dev session would outlive the
+    // browser, unlike production.
+    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(localStorage.getItem('candy.user')).toBeNull();
   });
 
-  it('clears sessionStorage token/user so localStorage wins', () => {
+  it('overwrites a stale session token rather than leaving it to 401', () => {
     setHostname('localhost');
     (import.meta.env as any).VITE_DEV_TOKEN = 'dev-token-abc';
     (import.meta.env as any).VITE_DEV_USER = JSON.stringify({ email: 'dev@candy.internal' });
@@ -69,8 +74,20 @@ describe('installDevAuth', () => {
 
     installDevAuth();
 
-    expect(sessionStorage.getItem('access_token')).toBeNull();
-    expect(sessionStorage.getItem('candy.user')).toBeNull();
+    expect(sessionStorage.getItem('access_token')).toBe('dev-token-abc');
+  });
+
+  it('purges a legacy localStorage copy so it cannot confuse debugging', () => {
+    setHostname('localhost');
+    (import.meta.env as any).VITE_DEV_TOKEN = 'dev-token-abc';
+    (import.meta.env as any).VITE_DEV_USER = JSON.stringify({ email: 'dev@candy.internal' });
+    localStorage.setItem('access_token', 'legacy-local-token');
+    localStorage.setItem('candy.user', 'legacy-local-user');
+
+    installDevAuth();
+
+    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(localStorage.getItem('candy.user')).toBeNull();
   });
 
   it('never throws even if localStorage access fails', () => {

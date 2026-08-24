@@ -1,18 +1,21 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { http, HttpResponse, delay } from 'msw';
 import { server } from '../../mocks/server';
-import { login, signup, logout, ssoCallback, loadStoredUser, fullLogout } from '../../../src/api/auth';
+import {
+  login, signup, logout, ssoCallback, loadStoredUser, fullLogout,
+  consumeSignedOutFlag, SIGNED_OUT_KEY, _resetSignedOutDecision,
+} from '../../../src/api/auth';
 import { setToken } from '../../../src/api/client';
 
 // ── login() ───────────────────────────────────────────────────────────────────
 
 describe('login()', () => {
-  it('stores the access token in localStorage on success', async () => {
+  it('stores the access token in sessionStorage on success', async () => {
     await login('admin@acme.com', 'correct-password');
-    expect(localStorage.getItem('access_token')).toBe('test-jwt-abc123');
+    expect(sessionStorage.getItem('access_token')).toBe('test-jwt-abc123');
   });
 
-  it('stores the user object in localStorage on success', async () => {
+  it('stores the user object in sessionStorage on success', async () => {
     await login('admin@acme.com', 'correct-password');
     const stored = loadStoredUser();
     expect(stored?.email).toBe('admin@acme.com');
@@ -34,7 +37,7 @@ describe('login()', () => {
       )
     );
     await expect(login('bad@email.com', 'wrong')).rejects.toThrow();
-    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(sessionStorage.getItem('access_token')).toBeNull();
   });
 
   it('throws and does not store token on 500', async () => {
@@ -44,7 +47,7 @@ describe('login()', () => {
       )
     );
     await expect(login('admin@acme.com', 'pass')).rejects.toThrow();
-    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(sessionStorage.getItem('access_token')).toBeNull();
   });
 });
 
@@ -53,9 +56,9 @@ describe('login()', () => {
 describe('signup()', () => {
   const args = { company_name: 'New Corp', email: 'new@corp.com', password: 'secret123' };
 
-  it('stores the access token in localStorage on success', async () => {
+  it('stores the access token in sessionStorage on success', async () => {
     await signup(args);
-    expect(localStorage.getItem('access_token')).toBe('test-jwt-abc123');
+    expect(sessionStorage.getItem('access_token')).toBe('test-jwt-abc123');
   });
 
   it('returns the token and user objects', async () => {
@@ -77,16 +80,16 @@ describe('signup()', () => {
 // ── logout() ─────────────────────────────────────────────────────────────────
 
 describe('logout()', () => {
-  it('removes access_token from localStorage', () => {
-    localStorage.setItem('access_token', 'live-token');
+  it('removes access_token from sessionStorage', () => {
+    sessionStorage.setItem('access_token', 'live-token');
     logout();
-    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(sessionStorage.getItem('access_token')).toBeNull();
   });
 
-  it('removes candy.user from localStorage', () => {
-    localStorage.setItem('candy.user', JSON.stringify({ email: 'test@test.com' }));
+  it('removes candy.user from sessionStorage', () => {
+    sessionStorage.setItem('candy.user', JSON.stringify({ email: 'test@test.com' }));
     logout();
-    expect(localStorage.getItem('candy.user')).toBeNull();
+    expect(sessionStorage.getItem('candy.user')).toBeNull();
   });
 
   it('is safe to call when nothing is stored', () => {
@@ -97,12 +100,12 @@ describe('logout()', () => {
 // ── ssoCallback() ────────────────────────────────────────────────────────────
 
 describe('ssoCallback()', () => {
-  it('stores the access token in localStorage', async () => {
+  it('stores the access token in sessionStorage', async () => {
     await ssoCallback('sso-temp-token-xyz');
-    expect(localStorage.getItem('access_token')).toBe('test-jwt-abc123');
+    expect(sessionStorage.getItem('access_token')).toBe('test-jwt-abc123');
   });
 
-  it('stores the user object in localStorage', async () => {
+  it('stores the user object in sessionStorage', async () => {
     await ssoCallback('sso-temp-token-xyz');
     const stored = loadStoredUser();
     expect(stored?.email).toBe('admin@acme.com');
@@ -129,7 +132,7 @@ describe('ssoCallback()', () => {
 
 describe('loadStoredUser() — malformed storage', () => {
   it('returns null instead of throwing when stored JSON is corrupt', () => {
-    localStorage.setItem('candy.user', '{not valid json');
+    sessionStorage.setItem('candy.user', '{not valid json');
     expect(() => loadStoredUser()).not.toThrow();
     expect(loadStoredUser()).toBeNull();
   });
@@ -137,19 +140,23 @@ describe('loadStoredUser() — malformed storage', () => {
 
 // ── loadStoredUser() — sessionStorage takes priority (SSO sessions) ──────────
 
-describe('loadStoredUser() — storage precedence', () => {
+describe('loadStoredUser() — session-scoped storage', () => {
   afterEach(() => {
     sessionStorage.removeItem('candy.user');
     localStorage.removeItem('candy.user');
   });
 
-  it('reads from sessionStorage before falling back to localStorage', () => {
+  it('reads the session-scoped user', () => {
     sessionStorage.setItem('candy.user', JSON.stringify({ email: 'sso@candy.cx' }));
-    localStorage.setItem('candy.user', JSON.stringify({ email: 'regular@candy.cx' }));
     expect(loadStoredUser()?.email).toBe('sso@candy.cx');
   });
 
-  it('returns null when nothing is stored in either storage', () => {
+  it('IGNORES a localStorage user — the session must not survive a browser close', () => {
+    localStorage.setItem('candy.user', JSON.stringify({ email: 'stale@candy.cx' }));
+    expect(loadStoredUser()).toBeNull();
+  });
+
+  it('returns null when nothing is stored', () => {
     sessionStorage.removeItem('candy.user');
     localStorage.removeItem('candy.user');
     expect(loadStoredUser()).toBeNull();
@@ -170,7 +177,15 @@ describe('loadStoredUser() — storage precedence', () => {
 
 const originalLocation = window.location;
 function stubLocationForLogout() {
-  const loc = { ...originalLocation, origin: 'https://app.candy.cx', href: '' };
+  const loc = {
+    ...originalLocation,
+    origin: 'https://app.candy.cx',
+    href: '',
+    // fullLogout() navigates with replace(), NOT href, so signing out leaves no
+    // history entry to Back into. Mirroring into `href` keeps the assertions
+    // below readable while still exercising the real call.
+    replace: vi.fn((url: string) => { loc.href = url; }),
+  };
   Object.defineProperty(window, 'location', { value: loc, writable: true, configurable: true });
   return loc;
 }
@@ -182,7 +197,7 @@ describe('fullLogout()', () => {
 
   it('navigates to end_session_url on success and wipes every storage key', async () => {
     setToken('live-token');
-    localStorage.setItem('candy.user', JSON.stringify({ email: 'a@b.com' }));
+    sessionStorage.setItem('candy.user', JSON.stringify({ email: 'a@b.com' }));
     localStorage.setItem('dashboard_token', 'sm-token');
     localStorage.setItem('candy.tts', 'some-preference');
     server.use(
@@ -195,8 +210,8 @@ describe('fullLogout()', () => {
     await fullLogout();
 
     expect(loc.href).toBe('https://dashboard-api.spacemarvel.ai/o/logout/?done=1');
-    expect(localStorage.getItem('access_token')).toBeNull();
-    expect(localStorage.getItem('candy.user')).toBeNull();
+    expect(sessionStorage.getItem('access_token')).toBeNull();
+    expect(sessionStorage.getItem('candy.user')).toBeNull();
     expect(localStorage.getItem('dashboard_token')).toBeNull();
     expect(localStorage.getItem('candy.tts')).toBeNull();
   });
@@ -205,15 +220,15 @@ describe('fullLogout()', () => {
     setToken(null);
     const loc = stubLocationForLogout();
 
-    await expect(fullLogout()).resolves.toBeUndefined();
+    await expect(fullLogout()).resolves.toEqual({ navigated: false });
 
     expect(loc.href).toBe('');
-    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(sessionStorage.getItem('access_token')).toBeNull();
   });
 
   it('does not navigate, but still wipes state, when logout-everywhere fails', async () => {
     setToken('live-token');
-    localStorage.setItem('candy.user', JSON.stringify({ email: 'a@b.com' }));
+    sessionStorage.setItem('candy.user', JSON.stringify({ email: 'a@b.com' }));
     server.use(
       http.post('http://localhost:8002/v1/auth/sso/oidc/logout-everywhere', () =>
         HttpResponse.json({ detail: 'boom' }, { status: 500 })
@@ -221,10 +236,10 @@ describe('fullLogout()', () => {
     );
     const loc = stubLocationForLogout();
 
-    await expect(fullLogout()).resolves.toBeUndefined();
+    await expect(fullLogout()).resolves.toEqual({ navigated: false });
 
     expect(loc.href).toBe('');
-    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(sessionStorage.getItem('access_token')).toBeNull();
   });
 
   it('does not navigate, but still wipes state, when the network call itself throws', async () => {
@@ -234,7 +249,7 @@ describe('fullLogout()', () => {
     );
     const loc = stubLocationForLogout();
 
-    await expect(fullLogout()).resolves.toBeUndefined();
+    await expect(fullLogout()).resolves.toEqual({ navigated: false });
     expect(loc.href).toBe('');
   });
 
@@ -261,7 +276,7 @@ describe('fullLogout()', () => {
     );
     const loc = stubLocationForLogout();
 
-    await expect(fullLogout()).resolves.toBeUndefined();
+    await expect(fullLogout()).resolves.toEqual({ navigated: false });
     expect(loc.href).toBe('');
   });
 
@@ -285,6 +300,45 @@ describe('fullLogout()', () => {
     }
 
     expect(loc.href).toBe('');
-    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(sessionStorage.getItem('access_token')).toBeNull();
+  });
+});
+
+// ── signed-out flag ──────────────────────────────────────────────────────────
+// fullLogout() can only clear the IDP's httpOnly cookie when logout-everywhere
+// succeeded. When it didn't, LandingPage must NOT auto-redirect to the IDP or it
+// re-authenticates the user we just signed out — the "sign out did nothing" bug.
+
+describe('signed-out flag', () => {
+  beforeEach(() => { _resetSignedOutDecision(); });
+
+  it('fullLogout sets it so the landing page skips its auto-redirect', async () => {
+    setToken('live-token');
+    stubLocationForLogout();
+    await fullLogout();
+    expect(sessionStorage.getItem(SIGNED_OUT_KEY)).toBe('1');
+  });
+
+  it('stays true across repeated calls in one page load (StrictMode double-invoke)', () => {
+    sessionStorage.setItem(SIGNED_OUT_KEY, '1');
+    // React 18 StrictMode runs the LandingPage effect twice in dev. Both calls
+    // must agree — a read-and-clear that returned false on the second call let
+    // the page redirect to the IDP and silently re-authenticate the user.
+    expect(consumeSignedOutFlag()).toBe(true);
+    expect(consumeSignedOutFlag()).toBe(true);
+    // The key itself is still consumed, so a LATER page load redirects normally.
+    expect(sessionStorage.getItem(SIGNED_OUT_KEY)).toBeNull();
+  });
+
+  it('is false when no sign-out happened, and stays false', () => {
+    expect(consumeSignedOutFlag()).toBe(false);
+    expect(consumeSignedOutFlag()).toBe(false);
+  });
+
+  it('a fresh page load after the flag was consumed redirects normally', () => {
+    sessionStorage.setItem(SIGNED_OUT_KEY, '1');
+    expect(consumeSignedOutFlag()).toBe(true);
+    _resetSignedOutDecision();          // simulates a new page load
+    expect(consumeSignedOutFlag()).toBe(false);
   });
 });

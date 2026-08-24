@@ -4,7 +4,7 @@
  * the first user turn. The Atlas seed messages stay (they're cosmetic).
  */
 import { useRef, useEffect, useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, type ChatMessage } from '../../context/AppContext';
 import Icon from '../../assets/icons';
 import { findAgentForSlug, createAgent, type Agent } from '../../api/agents';
 import { startDemo, sendDemoTurn } from '../../api/demo';
@@ -104,7 +104,7 @@ export default function ChatPanel() {
     }
   }
 
-  function handleKeyDown(e) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendChat();
@@ -297,7 +297,7 @@ export default function ChatPanel() {
   );
 }
 
-function Message({ msg }) {
+function Message({ msg }: { msg: ChatMessage }) {
   if (msg.role === 'typing') {
     return (
       <div style={{ display: 'flex', gap: 12, maxWidth: '88%' }}>

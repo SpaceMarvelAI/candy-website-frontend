@@ -391,10 +391,14 @@ describe('truncateForLog', () => {
     expect(truncateForLog(undefined)).toBeUndefined();
   });
 
-  it('returns the original value as-is when JSON.stringify throws (circular reference)', () => {
-    const circular: any = {};
+  it('handles a circular reference without throwing, and never returns the raw object', () => {
+    const circular: any = { password: 'hunter2' };
     circular.self = circular;
-    expect(truncateForLog(circular)).toBe(circular);
+    const out = truncateForLog(circular);
+    // Must not hand back the original reference — it could carry a secret.
+    expect(out).not.toBe(circular);
+    expect(out.password).toBe('[redacted]');
+    expect(out.self).toBe('[circular]');
   });
 });
 
@@ -414,5 +418,48 @@ describe('logger.group', () => {
     const endSpy = vi.spyOn(console, 'groupEnd').mockImplementation(() => {});
     expect(() => logger.group('[block] boom', () => { throw new Error('x'); })).toThrow();
     expect(endSpy).toHaveBeenCalledOnce();
+  });
+});
+
+// ── Redaction — the login password must never reach a log ─────────────────────
+// client.ts logs every request body via truncateForLog, and auth.ts posts
+// { email, password }. Before this, the plaintext password was printed whenever
+// isVerbose() was true — which is ALWAYS on dev.candy.cx, a deployed public site.
+
+describe('truncateForLog — secret redaction', () => {
+  it('masks a login body but keeps the non-sensitive fields', () => {
+    const out = truncateForLog({ email: 'a@b.com', password: 'hunter2' });
+    expect(out.password).toBe('[redacted]');
+    expect(out.email).toBe('a@b.com');
+  });
+
+  it('masks every sensitive key variant', () => {
+    const out = truncateForLog({
+      password: 'p', new_password: 'p', current_password: 'p',
+      token: 't', access_token: 't', refresh_token: 't', dashboard_token: 't',
+      secret: 's', client_secret: 's', api_key: 'k', apiKey: 'k',
+      authorization: 'Bearer x', credential: 'c', private_key: 'pk',
+    });
+    for (const v of Object.values(out)) expect(v).toBe('[redacted]');
+  });
+
+  it('masks nested and array payloads', () => {
+    const out = truncateForLog({ user: { name: 'x', password: 'p' }, list: [{ token: 't' }] });
+    expect(out.user.password).toBe('[redacted]');
+    expect(out.user.name).toBe('x');
+    expect(out.list[0].token).toBe('[redacted]');
+  });
+
+  it('NEVER mutates the caller-supplied object', () => {
+    // The value passed in is the live request body about to be sent. Redacting in
+    // place would strip the password before it reached the server — breaking login.
+    const body = { email: 'a@b.com', password: 'hunter2' };
+    truncateForLog(body);
+    expect(body.password).toBe('hunter2');
+  });
+
+  it('keeps a secret out of the truncated preview string too', () => {
+    const out = truncateForLog({ password: 'hunter2', filler: 'x'.repeat(5000) }, 200);
+    expect(JSON.stringify(out)).not.toContain('hunter2');
   });
 });
