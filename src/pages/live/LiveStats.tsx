@@ -28,21 +28,21 @@ export default function LiveStats({ counts }: { counts: LiveCounts }) {
   ];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: isMobile ? 10 : 14, marginBottom: 24 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: isMobile ? 10 : 12, marginBottom: 14 }}>
       {stats.map(s => (
         <div
           key={s.key}
           style={{
             background: 'var(--card-bg)',
             border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            padding: 18,
+            borderRadius: 10,
+            padding: '14px 16px',
             position: 'relative', overflow: 'hidden',
           }}
         >
           <div
             style={{
-              fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em',
+              fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em',
               color: 'var(--text-3)', marginBottom: 10,
               display: 'flex', alignItems: 'center',
             }}
@@ -59,10 +59,10 @@ export default function LiveStats({ counts }: { counts: LiveCounts }) {
             />
             {s.label}
           </div>
-          <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-1)' }}>
+          <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--text-1)' }}>
             {s.val}
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 4 }}>{s.sub}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>{s.sub}</div>
         </div>
       ))}
     </div>

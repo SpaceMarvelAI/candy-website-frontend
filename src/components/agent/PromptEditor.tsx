@@ -16,7 +16,7 @@ import { sectionHeader, sectionTitle } from '../../styles/tokens';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
-  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)',
+  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)', violet: 'var(--violet)',
 };
 
 const STYLE_OPTIONS = [

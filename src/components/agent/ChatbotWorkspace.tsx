@@ -22,7 +22,7 @@ interface Props {
   slug: string;
   category: string;
   icon: string;
-  tint?: 'purple' | 'blue' | 'teal' | 'green' | 'amber' | 'pink';
+  tint?: 'purple' | 'blue' | 'teal' | 'green' | 'amber' | 'pink' | 'violet';
   defaultPrompt: string;
   presets: { label: string; body: string }[];
 }
@@ -34,6 +34,7 @@ const tintColor: Record<string, string> = {
   green:  'var(--green)',
   amber:  'var(--amber)',
   pink:   'var(--pink)',
+  violet: 'var(--violet)',
 };
 
 

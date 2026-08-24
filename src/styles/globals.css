@@ -100,6 +100,7 @@ img, video { max-width: 100%; height: auto; }
   --purple-hi: #2997ff;
   --blue: #0071e3;
   --teal: #30d158;                        /* Apple green */
+  --violet: var(--teal);
   --green: #30d158;
   --pink: #ff375f;
   --amber: #ff9f0a;
@@ -350,6 +351,7 @@ button, input, textarea { font-family: inherit; }
   --border: rgba(0, 0, 0, 0.08);
   --border-strong: rgba(0, 0, 0, 0.16);
   --border-accent: rgba(0, 113, 227, 0.35);
+  --violet: #755BE3;
 
   --text-1: #1d1d1f;
   --text-2: rgba(0, 0, 0, 0.80);

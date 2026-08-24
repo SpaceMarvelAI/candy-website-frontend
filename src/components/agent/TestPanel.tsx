@@ -305,6 +305,36 @@ function SpeakerIcon({ on }: { on: boolean }) {
 }
 
 /**
+ * True if two lowercase word tokens are "the same word" for echo-matching —
+ * exact match, or at most one letter apart. Speaker→mic echo goes through a
+ * lossy round trip (browser TTS → speaker → room → mic → STT), and Whisper
+ * routinely returns a near-miss for the echoed audio (a dropped trailing
+ * "s", a soundalike swap) even though a human would call it the same word.
+ * Short words skip the fuzzy check: barge-in commands are usually short
+ * ("wait", "stop", "hold on"), and at 4 letters those collide with common
+ * unrelated words one edit away ("wait"/"want", "stop"/"shop", "hold"/"sold",
+ * "then"/"than") — fuzzing them risks swallowing a real interruption as
+ * "echo" instead of the false-barge-in this is meant to fix. 5+ letters is
+ * long enough that a coincidental one-edit collision with a genuine
+ * interruption word is rare.
+ * ponytail: length-5 cutoff is a heuristic tripwire, not a proven line —
+ * revisit if a real 4-letter mishearing (e.g. "cost"/"cast") shows up.
+ */
+function wordsMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length < 5 || b.length < 5 || Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length === b.length) { i++; j++; }   // substitution
+    else if (a.length > b.length) { i++; }      // extra letter in a
+    else { j++; }                               // extra letter in b
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
+/**
  * Word-overlap between what the mic heard and what the agent just said.
  *
  * Used to tell an echo of the agent's own TTS (which the mic picks up whenever
@@ -312,17 +342,18 @@ function SpeakerIcon({ on }: { on: boolean }) {
  * a real interruption. Returns the fraction of heard words that also appear in
  * the agent's speech, so 1.0 means "every word came from the agent".
  *
- * ponytail: bag-of-words heuristic. A backend echo/VAD signal (or a
- * double-talk detector) would be exact; this is the best a client can do.
+ * ponytail: bag-of-words heuristic (with one-letter fuzz for STT noise). A
+ * backend echo/VAD signal (or a double-talk detector) would be exact; this
+ * is the best a client can do.
  */
 function agentEchoRatio(heard: string, agentSpoke: string): number {
   const words = (s: string) =>
     s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
   const h = words(heard);
   if (h.length === 0) return 0;
-  const spoken = new Set(words(agentSpoke));
-  if (spoken.size === 0) return 0;
-  return h.filter(w => spoken.has(w)).length / h.length;
+  const spoken = words(agentSpoke);
+  if (spoken.length === 0) return 0;
+  return h.filter(w => spoken.some(sw => wordsMatch(w, sw))).length / h.length;
 }
 
 /** At or above this fraction of shared words we treat a transcript as echo. */
@@ -330,7 +361,7 @@ const ECHO_RATIO = 0.6;
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
-  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)',
+  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)', violet: 'var(--violet)',
 };
 const tintHi = {
   purple: 'rgba(117,91,227,0.55)',
@@ -339,6 +370,7 @@ const tintHi = {
   green:  'rgba(76,175,80,0.55)',
   amber:  'rgba(255,181,71,0.55)',
   pink:   'rgba(230,90,255,0.55)',
+  violet: 'rgba(117,91,227,0.55)',
 };
 
 interface Msg {

@@ -449,6 +449,54 @@ describe('TestPanel — mic gate while the agent is speaking', () => {
     expect(screen.queryByText('our pricing starts at ten dollars')).toBeNull();
   });
 
+  it('drops an echo even when STT mishears every word by a letter or two', async () => {
+    // Regression: exact word-matching flagged a slightly-misheard echo
+    // (the real-world case — TTS through speakers, picked up by the mic,
+    // re-transcribed with Whisper noise) as a genuine interruption and
+    // cancelled the agent mid-sentence. Every heard word here is a 1-edit
+    // miss of an agent word — under exact matching the ratio is 0/4 (would
+    // have barged in); fuzzy matching brings it to 4/4.
+    renderPanel();
+    await flush();
+    await startTest();
+    await speak('tell me about the pricing plans');
+    await act(async () => {
+      turns[0].cb.onSentence('our pricing starts at ten dollars a month.', 'our pricing starts at ten dollars a month.');
+    });
+    await flush();
+    expect(H.playedSrcs).toHaveLength(1);
+
+    // pricing→princing, starts→stares, dollars→dollar, month→munth.
+    await speak('princing stares dollar munth');
+
+    expect(streamDemoTurn).toHaveBeenCalledTimes(1);           // no self-answer
+    expect(ttsAudio().hasAttribute('src')).toBe(true);         // still speaking
+    expect(screen.queryByText('princing stares dollar munth')).toBeNull();
+  });
+
+  it('does not let a fuzzy match on a short word swallow a real interruption', async () => {
+    // Regression guard for the fix above: fuzzing short words (<5 letters)
+    // is what would make this false-negative possible — "wait" is one
+    // substitution from "want", which the agent happens to say. If the
+    // cutoff were lowered to 4 letters, "wait" would fuzzy-match "want"
+    // and push the ratio to the 0.6 threshold, swallowing "wait, is this
+    // sold out" as if it were an echo instead of a real interruption.
+    renderPanel();
+    await flush();
+    await startTest();
+    await speak('tell me about my order');
+    await act(async () => {
+      turns[0].cb.onSentence('your order is sold, and we want to confirm shipping.', 'your order is sold, and we want to confirm shipping.');
+    });
+    await flush();
+
+    await speak('wait is this sold out');
+
+    expect(streamDemoTurn).toHaveBeenCalledTimes(2);
+    expect(turns[1].utterance).toBe('wait is this sold out');
+    expect(H.revokedUrls).toContain(H.playedSrcs[0]);
+  });
+
   it('treats a genuine interruption as barge-in: cancels playback and takes the turn', async () => {
     renderPanel();
     await flush();

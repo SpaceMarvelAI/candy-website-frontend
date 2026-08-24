@@ -36,7 +36,13 @@ const NAV_SECTIONS = [
   {
     label: 'Main',
     items: [
-      { id: 'healthcare', label: 'Healthcare', icon: 'bulb',     path: '/healthcare' },
+      { id: 'usecase', label: 'Use Case', icon: 'health', path: null,
+        subItems: [
+          { id: 'healthcare',       label: 'Healthcare',       path: '/healthcare' },
+          { id: 'finance',          label: 'Finance',          path: null, soon: true },
+          { id: 'legal',            label: 'Legal',            path: null, soon: true },
+          { id: 'customer-support', label: 'Customer Support', path: null, soon: true },
+        ] },
       { id: 'voice',      label: 'Live Calls', icon: 'livecall', path: '/live' },
       { id: 'analytics',  label: 'Analytics',  icon: 'chart',    path: '/analytics' },
       { id: 'flows',      label: 'Flows',      icon: 'flowsnav', path: '/flows' },
@@ -243,6 +249,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const navigate     = useNavigate();
   const location     = useLocation();
   const [expanded, setExpanded] = useState(true);
+  const [useCaseOpen, setUseCaseOpen] = useState(true);
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -467,6 +474,87 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
               <div style={{ padding: panelExpanded ? '0 8px' : '0 4px' }}>
                 {section.items.map((item: any) => {
+                  if (item.subItems) {
+                    const groupActive = item.subItems.some((s: any) => s.id === activeId);
+                    return (
+                      <div key={item.id}>
+                        <button
+                          onClick={() => panelExpanded ? setUseCaseOpen(o => !o) : handleNav(item.subItems[0])}
+                          className={!panelExpanded ? 'tooltip-wrap' : ''}
+                          data-tip={!panelExpanded ? item.label : undefined}
+                          style={{
+                            ...styles.navBtn,
+                            justifyContent: panelExpanded ? 'flex-start' : 'center',
+                            padding:        panelExpanded ? '8px 12px' : 0,
+                            width:          '100%',
+                            height:         panelExpanded ? 'auto' : 36,
+                            margin:         '0 0 2px 0',
+                            borderRadius:   12,
+                            background:     groupActive ? 'var(--tint-2)' : 'transparent',
+                            border:         '1px solid transparent',
+                            color:          groupActive ? 'var(--text-1)' : 'var(--text-2)',
+                            fontWeight:     groupActive ? 600 : 500,
+                            transition:     'background 0.12s, color 0.12s',
+                          }}
+                          onMouseEnter={e => {
+                            if (groupActive) return;
+                            e.currentTarget.style.background = 'var(--tint-2)';
+                            e.currentTarget.style.color = 'var(--text-1)';
+                          }}
+                          onMouseLeave={e => {
+                            if (groupActive) return;
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.color = 'var(--text-2)';
+                          }}
+                        >
+                          <Icon name={item.icon} size={16} />
+                          {panelExpanded && (
+                            <>
+                              <span style={{ flex: 1, whiteSpace: 'nowrap', textAlign: 'left' }}>{item.label}</span>
+                              <Icon name="chevronDown" size={13} style={{
+                                opacity: 0.5, flexShrink: 0,
+                                transform: useCaseOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.2s ease',
+                              }} />
+                            </>
+                          )}
+                        </button>
+                        {panelExpanded && useCaseOpen && (
+                          <div style={{ marginBottom: 2 }}>
+                            {item.subItems.map((sub: any) => {
+                              const subActive = activeId === sub.id;
+                              return (
+                                <button
+                                  key={sub.id}
+                                  onClick={() => handleNav(sub)}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                    padding: '7px 12px 7px 40px', borderRadius: 10, border: 'none',
+                                    background: subActive ? 'var(--tint-2)' : 'transparent',
+                                    color: sub.soon ? 'var(--text-4)' : (subActive ? 'var(--text-1)' : 'var(--text-3)'),
+                                    fontSize: 13, fontWeight: subActive ? 600 : 500,
+                                    cursor: 'pointer', textAlign: 'left', margin: '0 0 1px 0',
+                                    transition: 'background 0.12s, color 0.12s',
+                                  }}
+                                  onMouseEnter={e => { if (!subActive) e.currentTarget.style.background = 'var(--tint-2)'; }}
+                                  onMouseLeave={e => { if (!subActive) e.currentTarget.style.background = 'transparent'; }}
+                                >
+                                  <span style={{ flex: 1, whiteSpace: 'nowrap' }}>{sub.label}</span>
+                                  {sub.soon && (
+                                    <span style={{
+                                      fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+                                      background: 'var(--tint-2)', color: 'var(--text-4)', padding: '2px 7px',
+                                      borderRadius: 20, flexShrink: 0,
+                                    }}>Soon</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
                   const isActive = activeId === item.id;
                   const isExternal = !!item.external;
                   return (

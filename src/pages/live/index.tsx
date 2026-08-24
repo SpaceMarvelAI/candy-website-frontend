@@ -289,13 +289,10 @@ export default function LiveCallsPage() {
   return (
     <div className="fade-up">
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--blue)', marginBottom: 10 }}>
-          Voice Bots · Recordings
-        </div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--text-1)' }}>
+        <h1 style={{ fontSize: 21, fontWeight: 400, letterSpacing: '-0.4px', color: 'var(--text-1)' }}>
           Live Call Logs
         </h1>
-        <p style={{ color: 'var(--text-3)', fontSize: 15, marginTop: 8 }}>
+        <p style={{ color: 'var(--text-3)', fontSize: 12.5, marginTop: 2 }}>
           {loading
             ? 'Loading…'
             : `${counts.demo} demo · ${counts.live} live · ${counts.agents} agents`}
@@ -330,11 +327,11 @@ export default function LiveCallsPage() {
             onClick={() => setTab(t.key as Tab)}
             title={t.hint}
             style={{
-              padding: '7px 14px', borderRadius: 99,
+              padding: '10px 16px', borderRadius: 99,
               background: 'var(--card-bg)',
               border: tab === t.key ? '1px solid var(--border-strong)' : '1px solid var(--border)',
               color: tab === t.key ? 'var(--text-1)' : 'var(--text-2)',
-              cursor: 'pointer', fontSize: 12.5,
+              cursor: 'pointer', fontSize: 13.5,
               display: 'inline-flex', alignItems: 'center', gap: 7,
               transition: 'all 0.15s',
             }}
@@ -342,7 +339,7 @@ export default function LiveCallsPage() {
             {t.label}
             <span
               style={{
-                fontSize: 10.5, padding: '1px 7px', borderRadius: 99,
+                fontSize: 10.5, padding: '2px 8px', borderRadius: 99,
                 background: tab === t.key ? 'var(--purple)' : 'var(--tint-1)',
                 color: tab === t.key ? '#fff' : 'var(--text-3)',
               }}
@@ -501,15 +498,15 @@ function RecordingsTable({
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
             <thead>
               <tr>
-                {['Agent', 'Captured', 'Duration', 'Size', 'Language', 'Transcript', ''].map((h, i) => (
+                {['Agent', 'Captured', 'Duration', 'Language', 'Transcript', ''].map((h, i) => (
                   <th
                     key={h || `c${i}`}
                     style={{
-                      textAlign: i === 6 ? 'right' : 'left',
-                      padding: '12px 22px',
+                      textAlign: i === 5 ? 'right' : 'left',
+                      padding: '12px 16px',
                       color: 'var(--text-3)',
-                      fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em',
-                      fontWeight: 500,
+                      fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.07em',
+                      fontWeight: 700,
                       background: 'var(--surface-soft)',
                       borderBottom: '1px solid var(--border)',
                     }}
@@ -524,22 +521,19 @@ function RecordingsTable({
                 const isPlaying = playingId === r.recording_id;
                 return (
                   <tr key={r.recording_id} data-recording-id={r.recording_id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '14px 22px' }}>
+                    <td style={{ padding: '13px 16px' }}>
                       <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{r.agent_name || '—'}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
                         {(r.use_case_slug && SLUG_LABEL[r.use_case_slug]) || r.use_case_slug || ''}
                       </div>
                     </td>
-                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontSize: 12.5 }}>
+                    <td style={{ padding: '13px 16px', color: 'var(--text-2)', fontSize: 13 }}>
                       {formatTime(r.created_at)}
                     </td>
-                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'", fontSize: 12.5 }}>
+                    <td style={{ padding: '13px 16px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'", fontSize: 13 }}>
                       {formatDuration(r.duration_ms)}
                     </td>
-                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'", fontSize: 12.5 }}>
-                      {formatSize(r.size_bytes)}
-                    </td>
-                    <td style={{ padding: '14px 22px' }}>
+                    <td style={{ padding: '13px 16px' }}>
                       <span
                         style={{
                           fontSize: 10.5, padding: '2px 8px', borderRadius: 99,
@@ -554,8 +548,8 @@ function RecordingsTable({
                       className="ph-mask"
                       onClick={() => onView(r)}
                       style={{
-                        padding: '14px 22px', color: 'var(--text-3)',
-                        fontSize: 12, maxWidth: 320,
+                        padding: '13px 16px', color: 'var(--text-3)',
+                        fontSize: 13, maxWidth: 320,
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         cursor: 'pointer',
                       }}
@@ -565,7 +559,7 @@ function RecordingsTable({
                     >
                       {r.transcript || <em style={{ color: 'var(--text-4)' }}>(no transcript)</em>}
                     </td>
-                    <td style={{ padding: '14px 22px', textAlign: 'right' }}>
+                    <td style={{ padding: '13px 16px', textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: 6 }}>
                         <button
                           onClick={() => onPlay(r)}
@@ -648,7 +642,7 @@ function RecordingsTable({
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 flexWrap: 'wrap', gap: 8,
-                padding: '14px 22px', borderTop: '1px solid var(--border)',
+                padding: '12px 16px', borderTop: '1px solid var(--border)',
               }}
             >
               <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
@@ -1033,9 +1027,9 @@ function ChatSessionsTable({ sessions, loading, loadError }: { sessions: ChatSes
           <tr>
             {['Agent', 'Use case', 'Started', 'Messages', 'First message', ''].map((h, i) => (
               <th key={h || i} style={{
-                textAlign: 'left', padding: '12px 22px',
-                color: 'var(--text-3)', fontSize: 11, textTransform: 'uppercase',
-                letterSpacing: '0.12em', fontWeight: 500,
+                textAlign: 'left', padding: '12px 16px',
+                color: 'var(--text-3)', fontSize: 10.5, textTransform: 'uppercase',
+                letterSpacing: '0.07em', fontWeight: 700,
                 background: 'var(--surface-soft)', borderBottom: '1px solid var(--border)',
               }}>{h}</th>
             ))}
@@ -1051,24 +1045,24 @@ function ChatSessionsTable({ sessions, loading, loadError }: { sessions: ChatSes
               <Fragment key={s.session_id}>
                 <tr style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
                     onClick={() => toggle(s)}>
-                  <td style={{ padding: '14px 22px' }}>
+                  <td style={{ padding: '13px 16px' }}>
                     <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{s.agent_name}</div>
                   </td>
-                  <td style={{ padding: '14px 22px' }}>
+                  <td style={{ padding: '13px 16px' }}>
                     <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(117,91,227,0.12)', color: 'var(--purple-hi)', fontWeight: 600 }}>
                       {s.use_case_label || s.use_case_slug || '—'}
                     </span>
                   </td>
-                  <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontSize: 12.5 }}>
+                  <td style={{ padding: '13px 16px', color: 'var(--text-2)', fontSize: 13 }}>
                     {formatTime(s.started_at)}
                   </td>
-                  <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'" }}>
+                  <td style={{ padding: '13px 16px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'" }}>
                     {s.message_count}
                   </td>
-                  <td className="ph-mask" style={{ padding: '14px 22px', color: 'var(--text-3)', fontSize: 12, maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <td className="ph-mask" style={{ padding: '13px 16px', color: 'var(--text-3)', fontSize: 13, maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {s.preview || <em>—</em>}
                   </td>
-                  <td style={{ padding: '14px 22px', textAlign: 'right' }}>
+                  <td style={{ padding: '13px 16px', textAlign: 'right' }}>
                     {/* Real button so the expander is reachable by keyboard —
                         the row's onClick is mouse-only. */}
                     <button
@@ -1125,7 +1119,7 @@ function ChatSessionsTable({ sessions, loading, loadError }: { sessions: ChatSes
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             flexWrap: 'wrap', gap: 8,
-            padding: '14px 22px', borderTop: '1px solid var(--border)',
+            padding: '12px 16px', borderTop: '1px solid var(--border)',
           }}
         >
           <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
@@ -1248,10 +1242,10 @@ function AgentsTable({ agents, loading, loadError }: { agents: Agent[]; loading:
                 key={h}
                 style={{
                   textAlign: 'left',
-                  padding: '12px 22px',
+                  padding: '12px 16px',
                   color: 'var(--text-3)',
-                  fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em',
-                  fontWeight: 500,
+                  fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.07em',
+                  fontWeight: 700,
                   background: 'var(--surface-soft)',
                   borderBottom: '1px solid var(--border)',
                 }}
@@ -1264,11 +1258,11 @@ function AgentsTable({ agents, loading, loadError }: { agents: Agent[]; loading:
         <tbody>
           {pageAgents.map(a => (
             <tr key={a.id} style={{ borderBottom: '1px solid var(--border)' }}>
-              <td style={{ padding: '14px 22px', fontWeight: 500, color: 'var(--text-1)' }}>{a.name}</td>
-              <td style={{ padding: '14px 22px', color: 'var(--text-2)' }}>
+              <td style={{ padding: '13px 16px', fontWeight: 500, color: 'var(--text-1)' }}>{a.name}</td>
+              <td style={{ padding: '13px 16px', color: 'var(--text-2)' }}>
                 {SLUG_LABEL[a.use_case_slug] || a.use_case_slug}
               </td>
-              <td style={{ padding: '14px 22px' }}>
+              <td style={{ padding: '13px 16px' }}>
                 <span
                   style={{
                     fontSize: 10.5, padding: '2px 8px', borderRadius: 99,
@@ -1279,8 +1273,8 @@ function AgentsTable({ agents, loading, loadError }: { agents: Agent[]; loading:
                   {a.agent_flow_status.replace(/_/g, ' ')}
                 </span>
               </td>
-              <td style={{ padding: '14px 22px', color: 'var(--text-2)' }}>{a.call_direction}</td>
-              <td style={{ padding: '14px 22px', color: 'var(--text-3)' }}>
+              <td style={{ padding: '13px 16px', color: 'var(--text-2)' }}>{a.call_direction}</td>
+              <td style={{ padding: '13px 16px', color: 'var(--text-3)' }}>
                 {a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}
               </td>
             </tr>
@@ -1295,7 +1289,7 @@ function AgentsTable({ agents, loading, loadError }: { agents: Agent[]; loading:
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             flexWrap: 'wrap', gap: 8,
-            padding: '14px 22px', borderTop: '1px solid var(--border)',
+            padding: '12px 16px', borderTop: '1px solid var(--border)',
           }}
         >
           <span style={{ fontSize: 12, color: 'var(--text-3)' }}>

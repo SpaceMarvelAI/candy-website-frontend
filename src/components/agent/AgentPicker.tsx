@@ -23,7 +23,7 @@ import { useConfirm } from '../ConfirmDialog';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
-  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)',
+  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)', violet: 'var(--violet)',
 };
 
 interface Props {
@@ -464,10 +464,11 @@ function AgentSwitcher({
   }
 
   return (
-    // flex 2 vs the config pickers' 1: this cell carries a name, a status badge
-    // and an id, and at an equal share the name truncated to "Patie…" and the
-    // badge wrapped onto three lines.
-    <div style={{ position: 'relative', flex: '2 1 300px', minWidth: 0 }}>
+    // Equal flex share with the config pickers (Telephony, etc.) so the top bar
+    // splits evenly between them — Knowledge Base/Languages/Skills/Requirements
+    // moved into the right-hand tab panel, so this row is down to just two or
+    // three items now and has plenty of room for the name/badge/id either way.
+    <div style={{ position: 'relative', flex: '1 1 300px', minWidth: 0 }}>
       <button
         type="button"
         onClick={() => setOpen(o => !o)}

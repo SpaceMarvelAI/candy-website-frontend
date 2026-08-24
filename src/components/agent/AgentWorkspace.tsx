@@ -1,10 +1,12 @@
 /**
  * AgentWorkspace — voice-agent workspace.
- * Layout: TestPanel (left, full height) + accordion config panel (right).
- * Accordion items: Knowledge Base | Languages | Requirements
+ * Layout: TestPanel (left) + a tabbed config panel (right) — Knowledge Base,
+ * Languages, Skills, Requirements. On tablet/mobile there's no room for a
+ * second column, so those same four collapse into popovers above instead.
  */
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import Icon from '../../assets/icons';
 import AgentShell from './AgentShell';
 import EmbedModal from './EmbedModal';
 import AgentPicker from './AgentPicker';
@@ -27,7 +29,7 @@ interface Props {
   slug: string;
   category: string;
   icon: string;
-  tint?: 'purple' | 'blue' | 'teal' | 'green' | 'amber' | 'pink';
+  tint?: 'purple' | 'blue' | 'teal' | 'green' | 'amber' | 'pink' | 'violet';
   defaultPrompt: string;
   presets: { label: string; body: string }[];
 }
@@ -39,6 +41,7 @@ const tintColor: Record<string, string> = {
   green:  'var(--green)',
   amber:  'var(--amber)',
   pink:   'var(--pink)',
+  violet: 'var(--violet)',
 };
 
 export default function AgentWorkspace({ slug, category, icon, tint = 'purple', defaultPrompt, presets }: Props) {
@@ -92,7 +95,8 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
     if (draftAppliedFor.current === agent.id) return;
     draftAppliedFor.current = agent.id;
     setPromptText(navState.draftRequirements);
-    setReqOpen(true);
+    setReqOpen(true);       // tablet/mobile: opens the Requirements popover
+    setRightTab('req');     // desktop: switches the right panel to the Requirements tab
     addToast('Prompt loaded into Requirements — review and click Save.', 'info');
   }, [agent, loading, navState, setPromptText, addToast]);
 
@@ -100,6 +104,56 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
   const status     = statusOverride || agent?.agent_flow_status || null;
   const canPublish = !!agent && (status === 'ready_to_test' || status === 'published');
   const color      = tintColor[tint] ?? tintColor.purple;
+
+  // Which config tab is showing in the right-hand panel (desktop/laptop only —
+  // tablet/mobile keeps the popover row instead, see isTabletOrMobile below).
+  const [rightTab, setRightTab] = useState<'kb' | 'lang' | 'skills' | 'req'>('kb');
+
+  // Rendered once, used in two places: the right-hand tab panel on desktop, or
+  // inside a ConfigPopover on tablet/mobile — same components, same props,
+  // just a different container around them depending on screen size.
+  const kbContent = (
+    <KnowledgeBase tint={tint} agentId={agent?.id ?? null} docs={docs} refreshDocs={refreshDocs} />
+  );
+  const langContent = (
+    <LanguagePicker
+      tint={tint}
+      primary={primaryLang}
+      onPrimaryChange={setPrimaryLang}
+      supported={supportedCodes}
+      onSupportedChange={setSupportedCodes}
+      multilingual={multilingual}
+      onMultilingualChange={setMultilingual}
+    />
+  );
+  const skillsContent = (
+    <SkillsPicker
+      agentId={agent?.id ?? null}
+      useCaseSlug={slug}
+      tint={tint}
+      onCountChange={setSkillsCount}
+    />
+  );
+  const reqContent = (
+    <PromptEditor
+      tint={tint}
+      agentId={agent?.id ?? null}
+      value={effectivePrompt}
+      onChange={setPromptText}
+      presets={presets}
+      supportedLanguageCodes={supportedCodes}
+      multilingual={multilingual}
+      callDirection={callDirection}
+      onCallDirectionChange={setCallDirection}
+      brandName={brandName}
+      onBrandNameChange={setBrandName}
+      personaName={personaName}
+      onPersonaNameChange={setPersonaName}
+      personaStyle={personaStyle}
+      onPersonaStyleChange={setPersonaStyle}
+      onSaved={reloadAgents}
+    />
+  );
 
   async function onPublish() {
     if (!agent || publishing) return;
@@ -169,10 +223,11 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
         </div>
       )}
 
-      {/* ── Top bar: agent switcher + all four config panels, one compact row ──
-           Was a full-width picker plus a fixed 420px accordion column on the
-           right. The four panels are opened briefly and closed, so a permanent
-           column cost the chat a third of the width for nothing. ── */}
+      {/* ── Top bar: agent switcher + Telephony ──
+           Knowledge Base / Languages / Skills / Requirements used to live here
+           too as popovers. On tablet/mobile there's no room for a second
+           column, so they still do (see isTabletOrMobile below); on desktop
+           they've moved into the right-hand tab panel next to the chat. */}
       <div style={{ marginBottom: 16 }}>
         <AgentPicker
           tint={tint}
@@ -202,91 +257,102 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
                   </div>
                 </ConfigPopover>
               )}
-              <ConfigPopover label="Knowledge Base" icon="book" color={color} width={560}>
-                <KnowledgeBase
-                  tint={tint}
-                  agentId={agent?.id ?? null}
-                  docs={docs}
-                  refreshDocs={refreshDocs}
-                />
-              </ConfigPopover>
-
-              <ConfigPopover label="Languages" icon="globe" color={color} width={480}>
-                <div style={{ padding: 16 }}>
-                  <LanguagePicker
-                    tint={tint}
-                    primary={primaryLang}
-                    onPrimaryChange={setPrimaryLang}
-                    supported={supportedCodes}
-                    onSupportedChange={setSupportedCodes}
-                    multilingual={multilingual}
-                    onMultilingualChange={setMultilingual}
-                  />
-                </div>
-              </ConfigPopover>
-
-              <ConfigPopover
-                label="Skills"
-                icon="layers"
-                color={color}
-                width={540}
-                badge={skillsCount > 0 ? skillsCount : undefined}
-              >
-                <SkillsPicker
-                  agentId={agent?.id ?? null}
-                  useCaseSlug={slug}
-                  tint={tint}
-                  onCountChange={setSkillsCount}
-                />
-              </ConfigPopover>
-
-              <ConfigPopover
-                label="Requirements" icon="zap" color={color} width={640}
-                open={reqOpen} onOpenChange={setReqOpen}
-              >
-                <PromptEditor
-                  tint={tint}
-                  agentId={agent?.id ?? null}
-                  value={effectivePrompt}
-                  onChange={setPromptText}
-                  presets={presets}
-                  supportedLanguageCodes={supportedCodes}
-                  multilingual={multilingual}
-                  callDirection={callDirection}
-                  onCallDirectionChange={setCallDirection}
-                  brandName={brandName}
-                  onBrandNameChange={setBrandName}
-                  personaName={personaName}
-                  onPersonaNameChange={setPersonaName}
-                  personaStyle={personaStyle}
-                  onPersonaStyleChange={setPersonaStyle}
-                  onSaved={reloadAgents}
-                />
-              </ConfigPopover>
+              {isTabletOrMobile && (
+                <>
+                  <ConfigPopover label="Knowledge Base" icon="book" color={color} width={560}>
+                    {kbContent}
+                  </ConfigPopover>
+                  <ConfigPopover label="Languages" icon="globe" color={color} width={480}>
+                    <div style={{ padding: 16 }}>{langContent}</div>
+                  </ConfigPopover>
+                  <ConfigPopover
+                    label="Skills" icon="layers" color={color} width={540}
+                    badge={skillsCount > 0 ? skillsCount : undefined}
+                  >
+                    {skillsContent}
+                  </ConfigPopover>
+                  <ConfigPopover
+                    label="Requirements" icon="zap" color={color} width={640}
+                    open={reqOpen} onOpenChange={setReqOpen}
+                  >
+                    {reqContent}
+                  </ConfigPopover>
+                </>
+              )}
             </>
           }
         />
       </div>
 
-      {/* ── Below the bar: nothing but the conversation, full width ── */}
-      {/* Plain block, not a flex row: as a flex ITEM of <main> it gets a definite
-          height from flex:1, which is what TestPanel's own height:100% resolves
-          against. A flex row here would leave the child unstretched horizontally. */}
-      <div style={{ flex: 1, minHeight: isTabletOrMobile ? 300 : 0 }}>
-        <TestPanel
-          tint={tint}
-          category={category}
-          agentId={agent?.id ?? null}
-          disabled={!agent}
-          disabledHint={!agent ? `Pick or create a ${category} agent above to start testing` : undefined}
-          primaryLang={primaryLang}
-          supportedLangs={supportedCodes}
-        />
+      {/* ── Below the bar: chat on the left, config tabs on the right (desktop) ──
+           A flex row so the two panes sit side by side. On tablet/mobile there's
+           no room for a second column, so it collapses to just the chat — config
+           stays in the popovers above instead. */}
+      <div style={{
+        flex: 1, minHeight: isTabletOrMobile ? 300 : 0,
+        display: 'flex', gap: 16, minWidth: 0,
+      }}>
+        <div style={{ flex: '1.1 1 0%', minWidth: 0 }}>
+          <TestPanel
+            tint={tint}
+            category={category}
+            agentId={agent?.id ?? null}
+            disabled={!agent}
+            disabledHint={!agent ? `Pick or create a ${category} agent above to start testing` : undefined}
+            primaryLang={primaryLang}
+            supportedLangs={supportedCodes}
+          />
+        </div>
+
+        {!isTabletOrMobile && (
+          <div style={{
+            flex: '1 1 0%', minWidth: 0, display: 'flex', flexDirection: 'column',
+            border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden',
+          }}>
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0, overflowX: 'auto' }}>
+              {RIGHT_TABS.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setRightTab(t.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '11px 16px',
+                    fontSize: 13.5, fontWeight: rightTab === t.id ? 600 : 500, whiteSpace: 'nowrap',
+                    color: rightTab === t.id ? 'var(--text-1)' : 'var(--text-3)',
+                    borderBottom: `2px solid ${rightTab === t.id ? color : 'transparent'}`,
+                    background: 'none', border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  <Icon name={t.icon} size={14} />
+                  {t.label}
+                  {t.id === 'skills' && skillsCount > 0 && (
+                    <span style={{
+                      fontSize: 10.5, fontWeight: 700, color: 'var(--text-3)',
+                      background: 'var(--tint-2)', borderRadius: 20, padding: '1px 6px',
+                    }}>{skillsCount}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+              {rightTab === 'kb'     && kbContent}
+              {rightTab === 'lang'   && langContent}
+              {rightTab === 'skills' && skillsContent}
+              {rightTab === 'req'    && reqContent}
+            </div>
+          </div>
+        )}
       </div>
     </AgentShell>
     </>
   );
 }
+
+const RIGHT_TABS: { id: 'kb' | 'lang' | 'skills' | 'req'; label: string; icon: string }[] = [
+  { id: 'kb',     label: 'Knowledge Base', icon: 'book'   },
+  { id: 'lang',   label: 'Languages',      icon: 'globe'  },
+  { id: 'skills', label: 'Skills',         icon: 'layers' },
+  { id: 'req',    label: 'Requirements',   icon: 'zap'    },
+];
 
 // ── Accordion item ────────────────────────────────────────────────────────────
 

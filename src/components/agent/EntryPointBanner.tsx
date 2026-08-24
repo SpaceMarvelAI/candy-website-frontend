@@ -28,6 +28,7 @@ const tintColor: Record<string, string> = {
   green:  'var(--green)',
   amber:  'var(--amber)',
   pink:   'var(--pink)',
+  violet: 'var(--violet)',
 };
 
 // ── types ─────────────────────────────────────────────────────────────────────

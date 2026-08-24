@@ -17,7 +17,7 @@ import PlanGateNotice from '../PlanGateNotice';
 
 const tintColor: Record<string, string> = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
-  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)',
+  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)', violet: 'var(--violet)',
 };
 
 // ── Category metadata (visual) ────────────────────────────────────────────────
