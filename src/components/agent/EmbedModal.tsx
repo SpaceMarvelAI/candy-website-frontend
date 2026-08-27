@@ -2,8 +2,9 @@
  * EmbedModal — shows HTML / JS / Python integration snippets for a published agent.
  * Opens when the user clicks "Embed" in AgentShell.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type React from 'react';
+import posthog from 'posthog-js';
 import Icon from '../../assets/icons';
 
 interface Props {
@@ -280,6 +281,12 @@ type Tab = 'html' | 'js' | 'python';
 
 export default function EmbedModal({ agentId, agentName, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('html');
+
+  // Client-only intent signal: opening the snippet UI, not the (backend-side)
+  // widget-token or webhook calls a developer makes afterward.
+  useEffect(() => {
+    posthog.capture('agent_embed_modal_opened', { agent_id: agentId });
+  }, [agentId]);
 
   const code = tab === 'html' ? snippetHtml(agentId)
              : tab === 'js'   ? snippetJs(agentId)

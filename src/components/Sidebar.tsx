@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { createPortal } from 'react-dom';
+import posthog from 'posthog-js';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
@@ -283,7 +284,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     }
   }
 
-  async function handleNav(item: { path: string | null; label: string; ssoTarget?: string }) {
+  async function handleNav(item: { id?: string; path: string | null; label: string; ssoTarget?: string }) {
     if (!item.ssoTarget) {
       if (item.path) {
         navigate(item.path);
@@ -293,6 +294,10 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       }
       return;
     }
+
+    // Client-only signal: this leaves Candy entirely via SSO redirect, so no
+    // Candy pageview/backend event ever records that the click happened.
+    posthog.capture('sidebar_product_link_clicked', { product: item.id ?? item.label });
 
     const dashboardToken = localStorage.getItem('dashboard_token');
 
