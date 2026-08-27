@@ -8,18 +8,20 @@
  *       until the Twilio bridge writes `live_call` rows).
  *     • Agents — quick overview of every agent on the company.
  */
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { errorMessage } from '../../utils/apiError';
 import LiveStats from './LiveStats';
 import Icon from '../../assets/icons';
 import { SkeletonTable } from '../../components/Skeleton';
 import { listAgents, type Agent } from '../../api/agents';
 import { listAllRecordings, deleteRecording, downloadRecordingBlob, type RecordingRow } from '../../api/recordings';
 import { listChatSessions, getChatSession, type ChatSessionRow, type ChatSessionDetail } from '../../api/chat-sessions';
-import { ApiError, getToken } from '../../api/client';
+import { getToken } from '../../api/client';
+import { useConfirm } from '../../components/ConfirmDialog';
 
 type Tab = 'demo' | 'live' | 'chat' | 'agents';
 
@@ -56,6 +58,7 @@ const VALID_TABS: Tab[] = ['demo', 'live', 'chat', 'agents'];
 
 export default function LiveCallsPage() {
   const { addToast } = useApp();
+  const confirm = useConfirm();
   const { tab: rawTab } = useParams<{ tab: string }>();
   const navigate = useNavigate();
   const tab: Tab = (VALID_TABS.includes(rawTab as Tab) ? rawTab : 'demo') as Tab;
@@ -84,15 +87,20 @@ export default function LiveCallsPage() {
     const ext = rec.s3_key.match(/\.([a-zA-Z0-9]+)$/)?.[1] || rec.mime_type?.split('/')[1]?.split(';')[0] || 'bin';
     const filename = `${(rec.agent_name || 'recording').replace(/\s+/g, '_')}_${rec.created_at.slice(0, 19).replace(/[:/\s]/g, '-')}.${ext}`;
 
-    function triggerBlobDownload(blob: Blob) {
+    function triggerBlobDownload(blob: Blob, name: string) {
       const url = URL.createObjectURL(blob);
       const a   = document.createElement('a');
       a.href     = url;
-      a.download = filename;
+      a.download = name;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    }
+
+    function openInTab(url: string) {
+      window.open(url, '_blank');
+      addToast('Opening in new tab — right-click the audio and choose "Save As" to download.', 'info');
     }
 
     try {
@@ -100,21 +108,27 @@ export default function LiveCallsPage() {
       // This works when the S3 bucket has CORS configured for this origin.
       const res = await fetch(rec.signed_url);
       if (!res.ok) throw new Error(`S3 fetch failed: ${res.status}`);
-      triggerBlobDownload(await res.blob());
+      triggerBlobDownload(await res.blob(), filename);
       addToast(`Downloading ${filename}`, 'success');
     } catch {
-      // Strategy 2: route through the backend proxy which fetches S3
-      // server-side and returns the file with Content-Disposition: attachment,
-      // bypassing any S3 CORS restrictions entirely.
+      // Strategy 2: ask the backend to re-issue the download. That endpoint
+      // returns JSON metadata (signed_url / mime_type / filename), not audio,
+      // so downloadRecordingBlob fetches the fresh signed URL for the bytes —
+      // which recovers an expired rec.signed_url. It does NOT bypass S3 CORS:
+      // the backend hands back a URL, it does not proxy the bytes.
       try {
-        const blob = await downloadRecordingBlob(rec.recording_id);
-        triggerBlobDownload(blob);
-        addToast(`Downloading ${filename}`, 'success');
+        const dl = await downloadRecordingBlob(rec.recording_id);
+        if (dl.blob) {
+          triggerBlobDownload(dl.blob, dl.filename || filename);
+          addToast(`Downloading ${dl.filename || filename}`, 'success');
+        } else {
+          // Strategy 3: last resort — open the (fresh) signed URL in a new tab.
+          // The user will need to right-click → Save As to save the file.
+          openInTab(dl.signed_url);
+        }
       } catch {
-        // Strategy 3: last resort — open the signed URL in a new tab.
-        // The user will need to right-click → Save As to save the file.
-        window.open(rec.signed_url, '_blank');
-        addToast('Opening in new tab — right-click the audio and choose "Save As" to download.', 'info');
+        // Strategy 3, with the URL we already had.
+        openInTab(rec.signed_url);
       }
     } finally {
       setDownloadingId(null);
@@ -126,35 +140,51 @@ export default function LiveCallsPage() {
   async function refresh() {
     setLoading(true);
     setError(null);
-    try {
-      const [demo, live, chat, ags] = await Promise.all([
-        listAllRecordings({ recording_type: 'demo_session', limit: 200 }).catch(() => []),
-        listAllRecordings({ recording_type: 'live_call',    limit: 200 }).catch(() => []),
-        listChatSessions({ limit: 200 }).catch(() => []),
-        listAgents().catch(() => []),
-      ]);
-      setDemoRecs(demo);
-      setLiveRecs(live);
-      setChatSess(chat);
-      setAgents(ags);
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : (e as Error).message;
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    // allSettled, not `.catch(() => [])`: a failed section must not render as
+    // "nothing here yet". Whatever loads still shows; the rest is named.
+    const [demo, live, chat, ags] = await Promise.allSettled([
+      listAllRecordings({ recording_type: 'demo_session', limit: 200 }),
+      listAllRecordings({ recording_type: 'live_call',    limit: 200 }),
+      listChatSessions({ limit: 200 }),
+      listAgents(),
+    ]);
+    setDemoRecs(demo.status === 'fulfilled' ? demo.value : []);
+    setLiveRecs(live.status === 'fulfilled' ? live.value : []);
+    setChatSess(chat.status === 'fulfilled' ? chat.value : []);
+    setAgents(ags.status === 'fulfilled' ? ags.value : []);
+
+    const failed = [
+      demo.status === 'rejected' && 'demo recordings',
+      live.status === 'rejected' && 'live calls',
+      chat.status === 'rejected' && 'chat sessions',
+      ags.status  === 'rejected' && 'agents',
+    ].filter((s): s is string => typeof s === 'string');
+    // ApiError extends Error, so .message covers both.
+    const first = [demo, live, chat, ags].find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
+    const detail = (first?.reason as Error | undefined)?.message;
+    setError(
+      failed.length
+        ? `Could not load ${failed.join(', ')}${detail ? ` — ${detail}` : ''}. Hit Refresh to try again.`
+        : null,
+    );
+    setLoading(false);
   }
 
   useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
-    if (!getToken()) {
-      setError('Not signed in');
-      setLoading(false);
-      return;
+    // Cleanup is registered unconditionally: with an early return above it,
+    // StrictMode's dev double-invoke left the second run with no cleanup and
+    // audio still playing after navigating away.
+    const stopAudio = () => { try { audioRef.current?.pause(); } catch {} };
+    if (!initRef.current) {
+      initRef.current = true;
+      if (!getToken()) {
+        setError('Not signed in');
+        setLoading(false);
+      } else {
+        refresh();
+      }
     }
-    refresh();
-    return () => { try { audioRef.current?.pause(); } catch {} };
+    return stopAudio;
   }, []);
 
   function openPlayer(rec: RecordingRow) {
@@ -182,6 +212,9 @@ export default function LiveCallsPage() {
     audio.onloadedmetadata = () => setPlayerDur(audio.duration || 0);
     audio.ontimeupdate     = () => setPlayerTime(audio.currentTime);
     audio.onended          = () => setPlayerPlaying(false);
+    // Without this, an expired/dead signed URL leaves `playing` true and the
+    // scrubber animating over silence.
+    audio.onerror          = () => { setPlayerPlaying(false); addToast('Playback failed.', 'error'); };
 
     audio.play()
       .then(() => setPlayerPlaying(true))
@@ -189,7 +222,11 @@ export default function LiveCallsPage() {
   }
 
   function closePlayer() {
-    try { audioRef.current?.pause(); audioRef.current && (audioRef.current.src = ''); } catch {}
+    // Detach onerror first: clearing src makes browsers fire a bogus error event.
+    try {
+      const a = audioRef.current;
+      if (a) { a.onerror = null; a.pause(); a.src = ''; }
+    } catch {}
     setPlayerRec(null);
     setPlayerPlaying(false);
     setPlayerTime(0);
@@ -220,9 +257,12 @@ export default function LiveCallsPage() {
 
   async function remove(rec: RecordingRow) {
     if (deletingId) return;
-    if (!window.confirm(
-      `Delete this recording permanently?\n\nAgent: ${rec.agent_name || '—'}\nCaptured: ${rec.created_at}\nDuration: ${formatDuration(rec.duration_ms)}`,
-    )) return;
+    if (!await confirm({
+      title: 'Delete this recording?',
+      body: `Agent: ${rec.agent_name || '—'}\nCaptured: ${rec.created_at}\nDuration: ${formatDuration(rec.duration_ms)}`,
+      consequence: 'The audio and its transcript are removed permanently.',
+      confirmLabel: 'Delete recording',
+    })) return;
     setDeletingId(rec.recording_id);
     if (playerRec?.recording_id === rec.recording_id) closePlayer();
     try {
@@ -232,8 +272,7 @@ export default function LiveCallsPage() {
       setLiveRecs(prev => prev.filter(r => r.recording_id !== rec.recording_id));
       addToast('Recording deleted', 'success');
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : (e as Error).message;
-      addToast(`Could not delete recording: ${msg}`, 'error');
+      addToast(`Could not delete recording: ${errorMessage(e)}`, 'error');
     } finally {
       setDeletingId(null);
     }
@@ -246,18 +285,14 @@ export default function LiveCallsPage() {
     chat:   chatSess.length,
     agents: agents.length,
   };
-  const totalDuration = list.reduce((acc, r) => acc + (r.duration_ms || 0), 0);
 
   return (
     <div className="fade-up">
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--blue)', marginBottom: 10 }}>
-          Voice Bots · Recordings
-        </div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--text-1)' }}>
+        <h1 style={{ fontSize: 21, fontWeight: 400, letterSpacing: '-0.4px', color: 'var(--text-1)' }}>
           Live Call Logs
         </h1>
-        <p style={{ color: 'var(--text-3)', fontSize: 15, marginTop: 8 }}>
+        <p style={{ color: 'var(--text-3)', fontSize: 12.5, marginTop: 2 }}>
           {loading
             ? 'Loading…'
             : `${counts.demo} demo · ${counts.live} live · ${counts.agents} agents`}
@@ -292,11 +327,11 @@ export default function LiveCallsPage() {
             onClick={() => setTab(t.key as Tab)}
             title={t.hint}
             style={{
-              padding: '7px 14px', borderRadius: 99,
+              padding: '10px 16px', borderRadius: 99,
               background: 'var(--card-bg)',
               border: tab === t.key ? '1px solid var(--border-strong)' : '1px solid var(--border)',
               color: tab === t.key ? 'var(--text-1)' : 'var(--text-2)',
-              cursor: 'pointer', fontSize: 12.5,
+              cursor: 'pointer', fontSize: 13.5,
               display: 'inline-flex', alignItems: 'center', gap: 7,
               transition: 'all 0.15s',
             }}
@@ -304,7 +339,7 @@ export default function LiveCallsPage() {
             {t.label}
             <span
               style={{
-                fontSize: 10.5, padding: '1px 7px', borderRadius: 99,
+                fontSize: 10.5, padding: '2px 8px', borderRadius: 99,
                 background: tab === t.key ? 'var(--purple)' : 'var(--tint-1)',
                 color: tab === t.key ? '#fff' : 'var(--text-3)',
               }}
@@ -338,13 +373,16 @@ export default function LiveCallsPage() {
       }} />
 
       {tab === 'chat' ? (
-        <ChatSessionsTable sessions={chatSess} loading={loading} />
+        <ChatSessionsTable sessions={chatSess} loading={loading} loadError={error} />
       ) : tab !== 'agents' ? (
         <RecordingsTable
           rows={list}
           loading={loading}
           emptyHint={
-            tab === 'demo'
+            // An empty list after a failed load is not "nothing recorded yet".
+            error
+              ? 'Could not load recordings — see the message above, then hit Refresh.'
+              : tab === 'demo'
               ? 'No demo recordings yet — open any agent and click Start test, talk for a bit, then Stop test.'
               : 'No live call recordings yet — these appear once the telephony bridge starts writing live_call rows.'
           }
@@ -357,7 +395,7 @@ export default function LiveCallsPage() {
           downloadingId={downloadingId}
         />
       ) : (
-        <AgentsTable agents={agents} loading={loading} />
+        <AgentsTable agents={agents} loading={loading} loadError={error} />
       )}
 
       {selectedRec && createPortal(
@@ -402,11 +440,13 @@ function RecordingsTable({
 }) {
   const [page, setPage] = useState(1);
 
-  // Reset to page 1 whenever the list changes (tab switch / refresh)
-  const prevLenRef = useRef(rows.length);
-  if (prevLenRef.current !== rows.length) {
-    prevLenRef.current = rows.length;
-    if (page !== 1) setPage(1);
+  // Reset to page 1 whenever the list changes (tab switch / refresh).
+  // Previous value lives in state, not a ref: adjusting state while rendering
+  // is the supported pattern, mutating a ref mid-render is not.
+  const [prevLen, setPrevLen] = useState(rows.length);
+  if (prevLen !== rows.length) {
+    setPrevLen(rows.length);
+    setPage(1);
   }
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -458,15 +498,15 @@ function RecordingsTable({
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
             <thead>
               <tr>
-                {['Agent', 'Captured', 'Duration', 'Size', 'Language', 'Transcript', ''].map((h, i) => (
+                {['Agent', 'Captured', 'Duration', 'Language', 'Transcript', ''].map((h, i) => (
                   <th
                     key={h || `c${i}`}
                     style={{
-                      textAlign: i === 6 ? 'right' : 'left',
-                      padding: '12px 22px',
+                      textAlign: i === 5 ? 'right' : 'left',
+                      padding: '12px 16px',
                       color: 'var(--text-3)',
-                      fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em',
-                      fontWeight: 500,
+                      fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.07em',
+                      fontWeight: 700,
                       background: 'var(--surface-soft)',
                       borderBottom: '1px solid var(--border)',
                     }}
@@ -481,22 +521,19 @@ function RecordingsTable({
                 const isPlaying = playingId === r.recording_id;
                 return (
                   <tr key={r.recording_id} data-recording-id={r.recording_id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '14px 22px' }}>
+                    <td style={{ padding: '13px 16px' }}>
                       <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{r.agent_name || '—'}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
                         {(r.use_case_slug && SLUG_LABEL[r.use_case_slug]) || r.use_case_slug || ''}
                       </div>
                     </td>
-                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontSize: 12.5 }}>
+                    <td style={{ padding: '13px 16px', color: 'var(--text-2)', fontSize: 13 }}>
                       {formatTime(r.created_at)}
                     </td>
-                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'", fontSize: 12.5 }}>
+                    <td style={{ padding: '13px 16px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'", fontSize: 13 }}>
                       {formatDuration(r.duration_ms)}
                     </td>
-                    <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'", fontSize: 12.5 }}>
-                      {formatSize(r.size_bytes)}
-                    </td>
-                    <td style={{ padding: '14px 22px' }}>
+                    <td style={{ padding: '13px 16px' }}>
                       <span
                         style={{
                           fontSize: 10.5, padding: '2px 8px', borderRadius: 99,
@@ -511,8 +548,8 @@ function RecordingsTable({
                       className="ph-mask"
                       onClick={() => onView(r)}
                       style={{
-                        padding: '14px 22px', color: 'var(--text-3)',
-                        fontSize: 12, maxWidth: 320,
+                        padding: '13px 16px', color: 'var(--text-3)',
+                        fontSize: 13, maxWidth: 320,
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         cursor: 'pointer',
                       }}
@@ -522,7 +559,7 @@ function RecordingsTable({
                     >
                       {r.transcript || <em style={{ color: 'var(--text-4)' }}>(no transcript)</em>}
                     </td>
-                    <td style={{ padding: '14px 22px', textAlign: 'right' }}>
+                    <td style={{ padding: '13px 16px', textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: 6 }}>
                         <button
                           onClick={() => onPlay(r)}
@@ -605,7 +642,7 @@ function RecordingsTable({
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 flexWrap: 'wrap', gap: 8,
-                padding: '14px 22px', borderTop: '1px solid var(--border)',
+                padding: '12px 16px', borderTop: '1px solid var(--border)',
               }}
             >
               <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
@@ -926,16 +963,17 @@ function RecordingDetailModal({ rec, onClose, onDownload }: { rec: RecordingRow;
 }
 
 // ── Chat sessions table ───────────────────────────────────────────────────────
-function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; loading: boolean }) {
+function ChatSessionsTable({ sessions, loading, loadError }: { sessions: ChatSessionRow[]; loading: boolean; loadError: string | null }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail]         = useState<ChatSessionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [page, setPage] = useState(1);
 
-  const prevLenRef = useRef(sessions.length);
-  if (prevLenRef.current !== sessions.length) {
-    prevLenRef.current = sessions.length;
-    if (page !== 1) setPage(1);
+  // See RecordingsTable: prev length in state, so no ref mutation while rendering.
+  const [prevLen, setPrevLen] = useState(sessions.length);
+  if (prevLen !== sessions.length) {
+    setPrevLen(sessions.length);
+    setPage(1);
   }
 
   const totalPages = Math.max(1, Math.ceil(sessions.length / PAGE_SIZE));
@@ -967,7 +1005,9 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
   if (loading && sessions.length === 0)
     return <SkeletonTable rows={8} cols={['20%', '12%', '10%', '8%', '10%', '12%', '12%']} />;
   if (sessions.length === 0)
-    return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>No chat sessions yet — open a chatbot workspace, select an agent, and click "Start chat session".</div>;
+    return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>{loadError
+      ? 'Could not load chat sessions — see the message above, then hit Refresh.'
+      : 'No chat sessions yet — open a chatbot workspace, select an agent, and click "Start chat session".'}</div>;
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
@@ -987,9 +1027,9 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
           <tr>
             {['Agent', 'Use case', 'Started', 'Messages', 'First message', ''].map((h, i) => (
               <th key={h || i} style={{
-                textAlign: 'left', padding: '12px 22px',
-                color: 'var(--text-3)', fontSize: 11, textTransform: 'uppercase',
-                letterSpacing: '0.12em', fontWeight: 500,
+                textAlign: 'left', padding: '12px 16px',
+                color: 'var(--text-3)', fontSize: 10.5, textTransform: 'uppercase',
+                letterSpacing: '0.07em', fontWeight: 700,
                 background: 'var(--surface-soft)', borderBottom: '1px solid var(--border)',
               }}>{h}</th>
             ))}
@@ -999,32 +1039,45 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
           {pageSess.map(s => {
             const isOpen = expandedId === s.session_id;
             return (
-              <>
-                <tr key={s.session_id} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
+              // Keyed Fragment, not <>: with the key on the inner <tr> React
+              // matched the row pair by position, so deleting or re-sorting
+              // while a row was expanded showed another row's conversation.
+              <Fragment key={s.session_id}>
+                <tr style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
                     onClick={() => toggle(s)}>
-                  <td style={{ padding: '14px 22px' }}>
+                  <td style={{ padding: '13px 16px' }}>
                     <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{s.agent_name}</div>
                   </td>
-                  <td style={{ padding: '14px 22px' }}>
+                  <td style={{ padding: '13px 16px' }}>
                     <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(117,91,227,0.12)', color: 'var(--purple-hi)', fontWeight: 600 }}>
                       {s.use_case_label || s.use_case_slug || '—'}
                     </span>
                   </td>
-                  <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontSize: 12.5 }}>
+                  <td style={{ padding: '13px 16px', color: 'var(--text-2)', fontSize: 13 }}>
                     {formatTime(s.started_at)}
                   </td>
-                  <td style={{ padding: '14px 22px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'" }}>
+                  <td style={{ padding: '13px 16px', color: 'var(--text-2)', fontFamily: "'Zalando Sans'" }}>
                     {s.message_count}
                   </td>
-                  <td className="ph-mask" style={{ padding: '14px 22px', color: 'var(--text-3)', fontSize: 12, maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <td className="ph-mask" style={{ padding: '13px 16px', color: 'var(--text-3)', fontSize: 13, maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {s.preview || <em>—</em>}
                   </td>
-                  <td style={{ padding: '14px 22px', textAlign: 'right' }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{isOpen ? '▲ Hide' : '▼ View'}</span>
+                  <td style={{ padding: '13px 16px', textAlign: 'right' }}>
+                    {/* Real button so the expander is reachable by keyboard —
+                        the row's onClick is mouse-only. */}
+                    <button
+                      onClick={e => { e.stopPropagation(); toggle(s); }}
+                      aria-expanded={isOpen}
+                      aria-label={`${isOpen ? 'Hide' : 'View'} conversation with ${s.agent_name}`}
+                      style={{
+                        fontSize: 11, color: 'var(--text-3)', background: 'transparent',
+                        border: 'none', padding: 0, cursor: 'pointer',
+                      }}
+                    >{isOpen ? '▲ Hide' : '▼ View'}</button>
                   </td>
                 </tr>
                 {isOpen && (
-                  <tr key={`${s.session_id}-detail`} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     <td colSpan={6} style={{ padding: '0 22px 20px' }}>
                       {loadingDetail ? (
                         <div style={{ padding: '16px 0', color: 'var(--text-3)', fontSize: 13 }}>Loading conversation…</div>
@@ -1053,7 +1106,7 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             );
           })}
         </tbody>
@@ -1066,7 +1119,7 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             flexWrap: 'wrap', gap: 8,
-            padding: '14px 22px', borderTop: '1px solid var(--border)',
+            padding: '12px 16px', borderTop: '1px solid var(--border)',
           }}
         >
           <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
@@ -1129,13 +1182,14 @@ function ChatSessionsTable({ sessions, loading }: { sessions: ChatSessionRow[]; 
 // ── Agents overview ───────────────────────────────────────────────────────────
 const AGENTS_PAGE_SIZE = 10;
 
-function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean }) {
+function AgentsTable({ agents, loading, loadError }: { agents: Agent[]; loading: boolean; loadError: string | null }) {
   const [page, setPage] = useState(1);
 
-  const prevLenRef = useRef(agents.length);
-  if (prevLenRef.current !== agents.length) {
-    prevLenRef.current = agents.length;
-    if (page !== 1) setPage(1);
+  // See RecordingsTable: prev length in state, so no ref mutation while rendering.
+  const [prevLen, setPrevLen] = useState(agents.length);
+  if (prevLen !== agents.length) {
+    setPrevLen(agents.length);
+    setPage(1);
   }
 
   const totalPages = Math.max(1, Math.ceil(agents.length / AGENTS_PAGE_SIZE));
@@ -1156,7 +1210,9 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
     return <SkeletonTable rows={8} cols={['20%', '12%', '10%', '8%', '10%', '12%', '12%']} />;
   }
   if (agents.length === 0) {
-    return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>No agents on this account yet.</div>;
+    return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>{loadError
+      ? 'Could not load agents — see the message above, then hit Refresh.'
+      : 'No agents on this account yet.'}</div>;
   }
 
   return (
@@ -1186,10 +1242,10 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
                 key={h}
                 style={{
                   textAlign: 'left',
-                  padding: '12px 22px',
+                  padding: '12px 16px',
                   color: 'var(--text-3)',
-                  fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em',
-                  fontWeight: 500,
+                  fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.07em',
+                  fontWeight: 700,
                   background: 'var(--surface-soft)',
                   borderBottom: '1px solid var(--border)',
                 }}
@@ -1202,11 +1258,11 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
         <tbody>
           {pageAgents.map(a => (
             <tr key={a.id} style={{ borderBottom: '1px solid var(--border)' }}>
-              <td style={{ padding: '14px 22px', fontWeight: 500, color: 'var(--text-1)' }}>{a.name}</td>
-              <td style={{ padding: '14px 22px', color: 'var(--text-2)' }}>
+              <td style={{ padding: '13px 16px', fontWeight: 500, color: 'var(--text-1)' }}>{a.name}</td>
+              <td style={{ padding: '13px 16px', color: 'var(--text-2)' }}>
                 {SLUG_LABEL[a.use_case_slug] || a.use_case_slug}
               </td>
-              <td style={{ padding: '14px 22px' }}>
+              <td style={{ padding: '13px 16px' }}>
                 <span
                   style={{
                     fontSize: 10.5, padding: '2px 8px', borderRadius: 99,
@@ -1217,8 +1273,8 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
                   {a.agent_flow_status.replace(/_/g, ' ')}
                 </span>
               </td>
-              <td style={{ padding: '14px 22px', color: 'var(--text-2)' }}>{a.call_direction}</td>
-              <td style={{ padding: '14px 22px', color: 'var(--text-3)' }}>
+              <td style={{ padding: '13px 16px', color: 'var(--text-2)' }}>{a.call_direction}</td>
+              <td style={{ padding: '13px 16px', color: 'var(--text-3)' }}>
                 {a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}
               </td>
             </tr>
@@ -1233,7 +1289,7 @@ function AgentsTable({ agents, loading }: { agents: Agent[]; loading: boolean })
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             flexWrap: 'wrap', gap: 8,
-            padding: '14px 22px', borderTop: '1px solid var(--border)',
+            padding: '12px 16px', borderTop: '1px solid var(--border)',
           }}
         >
           <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
@@ -1362,6 +1418,19 @@ function AudioPlayerPopup({
     seekAt(e.clientX);
   }
 
+  // Keyboard equivalent of dragging the track.
+  function onKeyDown(e: React.KeyboardEvent) {
+    const step = e.shiftKey ? 10 : 5;
+    switch (e.key) {
+      case 'ArrowLeft':  case 'ArrowDown': e.preventDefault(); onSkip(-step); break;
+      case 'ArrowRight': case 'ArrowUp':   e.preventDefault(); onSkip(step);  break;
+      case 'PageDown': e.preventDefault(); onSkip(-30); break;
+      case 'PageUp':   e.preventDefault(); onSkip(30);  break;
+      case 'Home': e.preventDefault(); onSeek(0);        break;
+      case 'End':  e.preventDefault(); onSeek(duration); break;
+    }
+  }
+
   return (
     <div
       style={{
@@ -1430,6 +1499,14 @@ function AudioPlayerPopup({
         <div
           ref={trackRef}
           onMouseDown={onMouseDown}
+          onKeyDown={onKeyDown}
+          role="slider"
+          tabIndex={0}
+          aria-label="Seek within recording"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(duration)}
+          aria-valuenow={Math.round(Math.min(currentTime, duration))}
+          aria-valuetext={`${fmtSecs(currentTime)} of ${fmtSecs(duration)}`}
           style={{
             height: 6, borderRadius: 99, background: 'var(--tint-3)',
             cursor: duration > 0 ? 'pointer' : 'default', position: 'relative',

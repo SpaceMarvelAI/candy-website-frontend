@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import Icon from '../../assets/icons';
 import { redirectToOIDC } from '../../utils/sso';
+import { consumeSignedOutFlag } from '../../api/auth';
 import { useDebugLifecycle } from '../../utils/useDebugLifecycle';
 
 export default function LandingPage() {
@@ -18,11 +19,17 @@ export default function LandingPage() {
   // fully independent OIDC login cycle carrying the SAME ?ticket=, which lands a
   // second /prompts/claim call for an already-consumed single-use ticket (404).
   // Confirmed live: two complete parallel login cycles, one ticket, one 404.
+  // MUST NOT fire on the mount immediately after a sign-out either. fullLogout()
+  // can only clear the IDP's httpOnly cookie when logout-everywhere succeeded; if
+  // it didn't, bouncing straight back to the IDP re-authenticates the user we just
+  // signed out, which reads as "sign out did nothing". In that case render this
+  // page so signing back in is a deliberate click.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hasIncomingToken =
       params.has('access_token') || params.has('token') || params.has('sso_token');
     if (hasIncomingToken) return;
+    if (consumeSignedOutFlag()) return;
     redirectToOIDC();
   }, []);
 

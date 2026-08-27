@@ -5,7 +5,7 @@
  * Canvas: drag-drop nodes, draw edges, click to edit
  * Right drawer: NodeEditDrawer — type-aware editor for any node
  */
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useId } from 'react';
 import posthog from 'posthog-js';
 import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -20,9 +20,11 @@ import {
 } from '../../api/composio';
 import {
   listWorkflows, createWorkflow, updateWorkflow, deleteWorkflow,
+  withWebhookIdentity, isExecutableApp, isExecutableTrigger,
   type FlowNode, type FlowEdge, type WorkflowGraph, type Workflow,
 } from '../../api/workflows';
-import NodeEditDrawer from './NodeEditDrawer';
+import logger from '../../utils/logger';
+import NodeEditDrawer, { LoadError, useDialogA11y } from './NodeEditDrawer';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TINT: Record<string, string> = {
@@ -39,6 +41,24 @@ const NODE_H  = 68;
 const HANDLE_R = 6;
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
+
+/** Data the page fetches on mount. Each is loaded and retried independently so
+ *  one failure can't hide the others, and so "failed" stays distinguishable
+ *  from "empty" at each surface. */
+type LoadKey = 'agents' | 'connections' | 'apps' | 'workflows';
+
+/** Enter/Space handler for a div that acts as a button. */
+function onActivate(fn: () => void) {
+  return (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
+  };
+}
+
+/** A fresh identity for a new inbound-webhook node. Stored inside actionConfig —
+ *  the only node field the backend persists that accepts arbitrary keys. */
+function newWebhookData(data: FlowNode['data']) {
+  return withWebhookIdentity(data, uid(), `whsec_${uid()}${uid()}`);
+}
 
 function bezier(x1: number, y1: number, x2: number, y2: number) {
   const cx = (x1 + x2) / 2;
@@ -118,6 +138,8 @@ export default function FlowsPage() {
   const [savedFlow,   setSavedFlow]   = useState<Workflow | null>(null);
   const [showWfPicker, setShowWfPicker] = useState(false);
 
+  const [loadFailed, setLoadFailed] = useState<Partial<Record<LoadKey, true>>>({});
+
   const [nodes, setNodes] = useState<FlowNode[]>([]);
   const [edges, setEdges] = useState<FlowEdge[]>([]);
 
@@ -166,31 +188,51 @@ export default function FlowsPage() {
   }, []);
 
   // ── Load ────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    listAgents().then(setAgents).catch(console.warn);
-    listConnections().then(setConnections).catch(console.warn);
+  // These used to end in `.catch(console.warn)`, so a failed fetch left the UI
+  // claiming there were simply no agents / no apps / no workflows. Each loader
+  // now records its own failure (rendered as a retryable notice on the surface
+  // that shows the data) and logs through the gated logger.
+  const runLoad = useCallback((key: LoadKey) => {
+    setLoadFailed(prev => { const next = { ...prev }; delete next[key]; return next; });
+    const fail = (err: unknown) => {
+      logger.warn(`[FlowsPage] failed to load ${key}`, err);
+      setLoadFailed(prev => ({ ...prev, [key]: true }));
+    };
 
-    // Load Composio apps + connections for the Apps panel
-    setAppsLoading(true);
-    Promise.all([getComposioApps(), getComposioConnections()])
-      .then(([apps, conns]) => {
-        setComposioApps(apps);
-        setComposioConns(new Set(conns.filter(isActiveConnection).map(connectedAppId)));
-      })
-      .catch(console.warn)
-      .finally(() => setAppsLoading(false));
-
-    listWorkflows().then(ws => {
-      setWorkflows(ws);
-      if (ws.length > 0) {
-        const w = ws[0];
-        setSavedFlow(w); setFlowName(w.name);
-        setNodes(w.graph.nodes); setEdges(w.graph.edges);
-      }
-    }).catch(console.warn);
-
-    return () => { if (appPollRef.current) clearInterval(appPollRef.current); };
+    switch (key) {
+      case 'agents':
+        listAgents().then(setAgents).catch(fail);
+        break;
+      case 'connections':
+        listConnections().then(setConnections).catch(fail);
+        break;
+      case 'apps':
+        setAppsLoading(true);
+        Promise.all([getComposioApps(), getComposioConnections()])
+          .then(([apps, conns]) => {
+            setComposioApps(apps);
+            setComposioConns(new Set(conns.filter(isActiveConnection).map(connectedAppId)));
+          })
+          .catch(fail)
+          .finally(() => setAppsLoading(false));
+        break;
+      case 'workflows':
+        listWorkflows().then(ws => {
+          setWorkflows(ws);
+          if (ws.length > 0) {
+            const w = ws[0];
+            setSavedFlow(w); setFlowName(w.name);
+            setNodes(w.graph.nodes); setEdges(w.graph.edges);
+          }
+        }).catch(fail);
+        break;
+    }
   }, []);
+
+  useEffect(() => {
+    (['agents', 'connections', 'apps', 'workflows'] as const).forEach(runLoad);
+    return () => { if (appPollRef.current) clearInterval(appPollRef.current); };
+  }, [runLoad]);
 
   // Prevent canvas-pan scroll while dragging a node — needs non-passive listener
   useEffect(() => {
@@ -215,10 +257,8 @@ export default function FlowsPage() {
     const x = Math.max(0, e.clientX - rect.left - NODE_W/2);
     const y = Math.max(0, e.clientY - rect.top  - NODE_H/2);
     const payload = JSON.parse(raw) as Omit<FlowNode,'id'|'x'|'y'>;
-    // For webhook nodes, assign a stable ID & secret placeholder
-    const extra = payload.type === 'webhook'
-      ? { data: { ...payload.data, webhookId: uid(), webhookSecret: `whsec_${uid()}${uid()}` } }
-      : {};
+    // For webhook nodes, assign a stable ID & signing secret
+    const extra = payload.type === 'webhook' ? { data: newWebhookData(payload.data) } : {};
     const newNode: FlowNode = { ...payload, ...extra, id: uid(), x, y };
     setNodes(prev => [...prev, newNode]);
     posthog.capture('workflow_canvas_node_added', { node_type: payload.type });
@@ -349,9 +389,7 @@ export default function FlowsPage() {
   function addNodeFromPanel(payload: Omit<FlowNode,'id'|'x'|'y'>) {
     const x = 30;
     const y = 30 + nodes.length * (NODE_H + 22);
-    const extra = payload.type === 'webhook'
-      ? { data: { ...payload.data, webhookId: uid(), webhookSecret: `whsec_${uid()}${uid()}` } }
-      : {};
+    const extra = payload.type === 'webhook' ? { data: newWebhookData(payload.data) } : {};
     const newNode: FlowNode = { ...payload, ...extra, id: uid(), x, y };
     setNodes(prev => [...prev, newNode]);
     setEditNode(newNode);
@@ -394,7 +432,15 @@ export default function FlowsPage() {
     try {
       let w: Workflow;
       if (savedFlow) {
-        w = await updateWorkflow(savedFlow.id, { name: flowName, graph });
+        // PUT is a full-model replace, not a patch — anything omitted is reset
+        // to the backend's Pydantic default (description → null, is_active →
+        // true). Carry the saved workflow's current values through explicitly.
+        w = await updateWorkflow(savedFlow.id, {
+          name:        flowName,
+          graph,
+          description: savedFlow.description ?? null,
+          is_active:   savedFlow.is_active,
+        });
         setWorkflows(prev => prev.map(x => x.id === w.id ? w : x));
       } else {
         w = await createWorkflow({ name: flowName, graph, is_active: true });
@@ -497,6 +543,10 @@ export default function FlowsPage() {
     }
   }
 
+  // Stable identities — useDialogA11y keys its focus/Escape effect off these.
+  const closeDrawer    = useCallback(() => setEditNode(null), []);
+  const closeCredModal = useCallback(() => { setCredModal(null); setConnectingAppId(null); }, []);
+
   // ── Node appearance ──────────────────────────────────────────────────────────
   function nodeColor(node: FlowNode) {
     if (node.type === 'agent')   return node.data.agentType === 'chat' ? 'var(--purple-hi)' : 'var(--blue)';
@@ -529,6 +579,7 @@ export default function FlowsPage() {
       {/* ── Mobile backdrop — closes panel on tap outside ── */}
       {isMobile && panelOpen && (
         <div
+          aria-hidden="true"
           onClick={() => setPanelOpen(false)}
           style={{
             position: 'absolute', inset: 0,
@@ -565,7 +616,7 @@ export default function FlowsPage() {
             <span style={{ fontSize:11, fontWeight:700, color:'var(--text-4)', letterSpacing:'0.08em' }}>
               ADD TO CANVAS
             </span>
-            <button onClick={() => setPanelOpen(false)}
+            <button onClick={() => setPanelOpen(false)} aria-label="Close panel"
               style={{ background:'none', border:'none', color:'var(--text-3)',
                 cursor:'pointer', fontSize:18, lineHeight:1, padding:'2px 6px' }}>
               ×
@@ -573,9 +624,11 @@ export default function FlowsPage() {
           </div>
         )}
         {/* Tabs */}
-        <div style={{ display:'flex', borderBottom:'1px solid var(--border)', padding:'0 6px', flexShrink:0, height:44, alignItems:'stretch' }}>
+        <div role="tablist" aria-label="Canvas building blocks"
+          style={{ display:'flex', borderBottom:'1px solid var(--border)', padding:'0 6px', flexShrink:0, height:44, alignItems:'stretch' }}>
           {(['agents','apps','webhooks'] as const).map(tab => (
-            <button key={tab} onClick={() => setLeftTab(tab)} style={leftTabBtn(leftTab===tab)}>
+            <button key={tab} role="tab" aria-selected={leftTab===tab}
+              onClick={() => setLeftTab(tab)} style={leftTabBtn(leftTab===tab)}>
               {tab.charAt(0).toUpperCase()+tab.slice(1)}
             </button>
           ))}
@@ -584,7 +637,9 @@ export default function FlowsPage() {
         <div style={{ padding:'8px 6px', overflowY:'auto', flex:1 }}>
           {/* ── Agents tab ── */}
           {leftTab === 'agents' && (
-            agents.length === 0
+            loadFailed.agents
+              ? <LoadError what="your agents" onRetry={() => runLoad('agents')} />
+              : agents.length === 0
               ? <p style={{ fontSize:12, color:'var(--text-4)', padding:'10px 6px' }}>
                   No agents — create one in Chatbots or Voice Bots.
                 </p>
@@ -597,9 +652,15 @@ export default function FlowsPage() {
                 const agentPayload = { type: 'agent' as const, data: { agentId: agent.id, agentName: agent.name, agentType: isChat ? 'chat' as const : 'voice' as const } };
                 return (
                   <div key={agent.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Add ${agent.name} (${isChat ? 'chatbot' : 'voice'}) to the canvas`}
                     draggable={!isMobile}
                     onDragStart={!isMobile ? (e => onPanelDragStart(e, agentPayload)) : undefined}
                     onClick={isMobile ? () => addNodeFromPanel(agentPayload) : undefined}
+                    // Drag-and-drop is pointer-only, so the keyboard path adds the
+                    // node directly — same as the mobile tap.
+                    onKeyDown={onActivate(() => addNodeFromPanel(agentPayload))}
                     style={panelCard(color)}
                   >
                     <span style={{ display:'inline-flex', color, flexShrink:0 }}><Icon name={isChat ? 'bot' : 'phone'} size={16} /></span>
@@ -620,6 +681,7 @@ export default function FlowsPage() {
             <>
               {/* Search */}
               <input
+                aria-label="Search apps"
                 value={appSearch}
                 onChange={e => setAppSearch(e.target.value)}
                 placeholder="Search apps…"
@@ -631,7 +693,9 @@ export default function FlowsPage() {
                 }}
               />
 
-              {appsLoading ? (
+              {loadFailed.apps ? (
+                <LoadError what="the app catalogue" onRetry={() => runLoad('apps')} />
+              ) : appsLoading ? (
                 <p style={{ fontSize:12, color:'var(--text-4)', padding:'10px 6px' }}>Loading apps…</p>
               ) : composioApps.length === 0 ? (
                 <p style={{ fontSize:12, color:'var(--text-4)', padding:'10px 6px' }}>
@@ -650,11 +714,20 @@ export default function FlowsPage() {
                       data: { appType: id, appLabel: app.name, appIcon: logo ?? 'plug' },
                     };
                     const isHovered = hoveredAppId === id;
+                    // Bug 4: the flow engine only knows how to act on a handful of
+                    // apps — anything else saves fine but is skipped at run time.
+                    const runnable = isExecutableApp(id);
                     return (
                       <div key={id}
+                        role={isConnected ? 'button' : undefined}
+                        tabIndex={isConnected ? 0 : undefined}
+                        aria-label={isConnected
+                          ? `Add ${app.name} to the canvas${runnable ? '' : ' — no flow action yet, this step will be skipped'}`
+                          : undefined}
                         draggable={!isMobile && isConnected}
                         onDragStart={(!isMobile && isConnected) ? (e => onPanelDragStart(e, appPayload)) : undefined}
                         onClick={isMobile && isConnected ? () => addNodeFromPanel(appPayload) : undefined}
+                        onKeyDown={isConnected ? onActivate(() => addNodeFromPanel(appPayload)) : undefined}
                         onMouseEnter={() => setHoveredAppId(id)}
                         onMouseLeave={() => setHoveredAppId(null)}
                         style={{
@@ -677,6 +750,15 @@ export default function FlowsPage() {
                             <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)', wordBreak:'break-word', lineHeight:1.3 }}>
                               {app.name}
                             </div>
+                            {!runnable && (
+                              <span
+                                title="Candy's flow engine has no action for this app yet — a flow step using it is skipped at run time"
+                                style={{ fontSize:9, fontWeight:700, color:'var(--amber)',
+                                  background:'rgba(255,181,71,0.14)', borderRadius:4, padding:'1px 5px' }}
+                              >
+                                no flow action yet
+                              </span>
+                            )}
                           </div>
                           {isConnected ? (
                             <span style={{ fontSize:9, fontWeight:700, flexShrink:0,
@@ -738,9 +820,13 @@ export default function FlowsPage() {
                 }
               </p>
               <div
+                role="button"
+                tabIndex={0}
+                aria-label="Add an Inbound Webhook node to the canvas"
                 draggable={!isMobile}
                 onDragStart={!isMobile ? (e => onPanelDragStart(e, WEBHOOK_TEMPLATE)) : undefined}
                 onClick={isMobile ? () => addNodeFromPanel(WEBHOOK_TEMPLATE) : undefined}
+                onKeyDown={onActivate(() => addNodeFromPanel(WEBHOOK_TEMPLATE))}
                 style={panelCard('var(--teal)')}
               >
                 <span style={{ display:'inline-flex', color:'var(--teal)', flexShrink:0 }}><Icon name="webhook" size={16} /></span>
@@ -793,7 +879,10 @@ export default function FlowsPage() {
           )}
           {/* Workflow switcher */}
           <div style={{ position:'relative', flexShrink:0 }}>
-            <button onClick={() => setShowWfPicker(p => !p)} style={{
+            <button onClick={() => setShowWfPicker(p => !p)}
+              aria-haspopup="true" aria-expanded={showWfPicker}
+              aria-label={`Switch workflow — currently ${savedFlow ? savedFlow.name : 'New workflow'}`}
+              style={{
               display:'flex', alignItems:'center', gap:6,
               padding:'6px 10px', borderRadius:8, border:'1px solid var(--border)',
               background:'var(--bg-0)', color:'var(--text-2)', fontSize:12,
@@ -816,7 +905,9 @@ export default function FlowsPage() {
                   letterSpacing:'0.08em', padding:'4px 8px 6px' }}>
                   SAVED WORKFLOWS ({workflows.length})
                 </div>
-                {workflows.length === 0 && (
+                {loadFailed.workflows ? (
+                  <LoadError what="your saved workflows" onRetry={() => runLoad('workflows')} />
+                ) : workflows.length === 0 && (
                   <div style={{ fontSize:12, color:'var(--text-4)', padding:'6px 8px' }}>
                     No saved workflows yet
                   </div>
@@ -831,8 +922,15 @@ export default function FlowsPage() {
                     onMouseEnter={e => (e.currentTarget.style.background='var(--tint-2)')}
                     onMouseLeave={e => (e.currentTarget.style.background = savedFlow?.id===w.id ? 'var(--tint-2)' : 'transparent')}
                   >
-                    <span style={{ display:'inline-flex', color:'var(--text-3)' }}><Icon name="hexagon" size={13} /></span>
-                    <div style={{ flex:1, minWidth:0 }} onClick={() => loadWorkflow(w)}>
+                    <span aria-hidden="true" style={{ display:'inline-flex', color:'var(--text-3)' }}><Icon name="hexagon" size={13} /></span>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Open workflow ${w.name}`}
+                      onClick={() => loadWorkflow(w)}
+                      onKeyDown={onActivate(() => loadWorkflow(w))}
+                      style={{ flex:1, minWidth:0 }}
+                    >
                       <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)',
                         overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                         {w.name}
@@ -845,6 +943,7 @@ export default function FlowsPage() {
                       style={{ background:'none', border:'none', color:'var(--text-4)',
                         cursor:'pointer', fontSize:14, padding:'2px 4px', borderRadius:4,
                         flexShrink:0 }}
+                      aria-label={`Delete workflow ${w.name}`}
                       title="Delete">×</button>
                   </div>
                 ))}
@@ -863,6 +962,7 @@ export default function FlowsPage() {
           </div>
 
           <input value={flowName} onChange={e => setFlowName(e.target.value)}
+            aria-label="Workflow name"
             style={{ fontSize: isMobile ? 13 : 14, fontWeight:600, color:'var(--text-1)', background:'transparent',
               border:'none', outline:'none', padding:'4px 0', minWidth:0, flex:1 }}
             placeholder="Workflow name…"
@@ -886,16 +986,16 @@ export default function FlowsPage() {
           </button>
         </div>
 
-        {/* Connecting mode banner — mobile only */}
-        {isMobile && connectingFrom && (
+        {/* Connecting mode banner — shown for touch and keyboard connect flows */}
+        {connectingFrom && (
           <div style={{
             position: 'absolute', top: 48, left: 0, right: 0, zIndex: 30,
             background: 'rgba(117,91,227,0.18)', borderBottom: '1px solid rgba(117,91,227,0.35)',
             padding: '7px 12px', fontSize: 12, color: 'var(--purple-hi)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
-            <span>Tap ◉ left handle of a target node to connect</span>
-            <button onClick={() => setConnectingFrom(null)}
+            <span role="status">Tap or focus the ◉ left handle of a target node to connect</span>
+            <button onClick={() => setConnectingFrom(null)} aria-label="Cancel connecting"
               style={{ background:'none', border:'none', color:'var(--purple-hi)',
                 cursor:'pointer', fontSize:16, padding:'0 4px', opacity:0.7 }}>×</button>
           </div>
@@ -960,6 +1060,10 @@ export default function FlowsPage() {
               const mx = (rh.x + lh.x)/2, my = (rh.y + lh.y)/2;
               const color  = TINT[edge.triggerType] ?? '#888';
               const isW2A  = edge.triggerType === 'webhook_to_agent';
+              // Bug 4: 'webhook_to_agent' is storable but the engine never matches
+              // it, so the edge is inert. Say so instead of dressing it up with an
+              // agent id, and keep it selectable so it can be retyped or deleted.
+              const inert = !isExecutableTrigger(edge.triggerType);
               // label text — for webhook→agent show agent id, else show trigger type
               const labelText = isW2A
                 ? `${tgt.data.agentName ?? 'agent'}`
@@ -967,16 +1071,34 @@ export default function FlowsPage() {
                 : edge.triggerType === 'demo_booking' ? 'demo booked'
                 : 'both';
               const labelW = isW2A ? Math.min(120, (tgt.data.agentName?.length ?? 5) * 7 + 18) : 76;
+              const edgeLabel =
+                `${labelText} connection${inert ? ' — never fires yet' : ''}. `
+                + 'Enter to change its trigger, Delete to remove it.';
+              const openPicker = (x: number, y: number) => {
+                setEditNode(null);
+                setSelectedEdge({ edge, x, y });
+              };
 
               return (
-                <g key={edge.id} style={{ pointerEvents:'all', cursor: isW2A ? 'default' : 'pointer' }}
+                <g key={edge.id}
+                   role="button"
+                   tabIndex={0}
+                   aria-label={edgeLabel}
+                   style={{ pointerEvents:'all', cursor:'pointer' }}
                    onClick={e => {
-                     if (isW2A) return; // webhook→agent edges aren't clickable for trigger type
                      e.stopPropagation();
                      const rect = canvasRef.current!.getBoundingClientRect();
-                     setEditNode(null);
-                     setSelectedEdge({ edge, x: e.clientX-rect.left, y: e.clientY-rect.top });
+                     openPicker(e.clientX-rect.left, e.clientY-rect.top);
+                   }}
+                   onKeyDown={e => {
+                     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(mx, my); }
+                     else if (e.key === 'Delete' || e.key === 'Backspace') {
+                       e.preventDefault();
+                       setEdges(prev => prev.filter(x => x.id !== edge.id));
+                       posthog.capture('workflow_canvas_edge_deleted', {});
+                     }
                    }}>
+                  <title>{edgeLabel}</title>
                   <path d={bezier(rh.x,rh.y,lh.x,lh.y)} fill="none" stroke="transparent" strokeWidth={12}/>
                   <path d={bezier(rh.x,rh.y,lh.x,lh.y)} fill="none"
                     stroke={color} strokeWidth={isW2A ? 2 : 1.8}
@@ -989,11 +1111,11 @@ export default function FlowsPage() {
                   <text x={mx} y={my+4} textAnchor="middle" fontSize={9} fontWeight={600} fill={color}>
                     {labelText}
                   </text>
-                  {/* Agent ID sub-label for webhook→agent */}
-                  {isW2A && tgt.data.agentId && (
+                  {/* Inert edges (webhook→agent) — the engine can never match them */}
+                  {inert && (
                     <text x={mx} y={my+16} textAnchor="middle" fontSize={7.5}
-                      fill={color} opacity={0.6}>
-                      id: {tgt.data.agentId.slice(0,8)}…
+                      fill="#ffb547" opacity={0.95}>
+                      never fires yet
                     </text>
                   )}
                 </g>
@@ -1014,12 +1136,29 @@ export default function FlowsPage() {
             const conn       = connections.find(c => c.app_type === node.data.appType);
             const isConnected = conn?.is_connected || composioConns.has(node.data.appType ?? '');
             const iconIsUrl  = typeof icon === 'string' && icon.startsWith('http');
+            const runnable   = node.type !== 'app' || isExecutableApp(node.data.appType);
 
             return (
-              <div key={node.id} style={{ position:'absolute', left:node.x, top:node.y,
-                width:NODE_W, height:NODE_H, zIndex:2 }}
+              <div key={node.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`${label} — ${node.type} node${runnable ? '' : ', no flow action yet'}. `
+                  + 'Enter to edit, Delete to remove.'}
+                aria-pressed={isActive}
+                style={{ position:'absolute', left:node.x, top:node.y,
+                  width:NODE_W, height:NODE_H, zIndex:2 }}
                 onMouseDown={e => { e.button === 0 && startNodeDrag(e, node.id); }}
                 onClick={e => onNodeClick(e, node)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedEdge(null); setConnectingFrom(null);
+                    setEditNode(prev => prev?.id === node.id ? null : node);
+                  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                    e.preventDefault();
+                    deleteNode(node.id);
+                  }
+                }}
               >
                 {/* Card */}
                 <div style={{
@@ -1046,8 +1185,13 @@ export default function FlowsPage() {
                       <span style={tagChip(color)}>{node.data.agentType}</span>
                     )}
                     {node.type==='app' && (
-                      <span style={{ fontSize:9.5, color: isConnected ? 'var(--green)' : 'var(--text-4)' }}>
-                        {isConnected ? '● connected' : '○ click to connect'}
+                      <span style={{ fontSize:9.5,
+                        color: !runnable ? 'var(--amber)'
+                             : loadFailed.connections ? '#ff8194'
+                             : isConnected ? 'var(--green)' : 'var(--text-4)' }}>
+                        {!runnable ? '⚠ no flow action yet'
+                          : loadFailed.connections ? '⚠ connection status unavailable'
+                          : isConnected ? '● connected' : '○ click to connect'}
                       </span>
                     )}
                     {node.type==='webhook' && (
@@ -1056,6 +1200,7 @@ export default function FlowsPage() {
                   </div>
                   {/* Delete button */}
                   <button onClick={e => { e.stopPropagation(); deleteNode(node.id); }}
+                    aria-label={`Delete ${label} node`}
                     style={{ background:'none', border:'none', color:'var(--text-4)',
                       cursor:'pointer', padding:'2px 4px', fontSize:13, flexShrink:0,
                       lineHeight:1, borderRadius:4 }}>×</button>
@@ -1066,6 +1211,17 @@ export default function FlowsPage() {
                   <div
                     data-handle="right"
                     data-nodeid={node.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={connectingFrom === node.id
+                      ? `Cancel connecting from ${label}`
+                      : `Start a connection from ${label}`}
+                    // Keyboard-only activation: a desktop click here would race the
+                    // mousedown-to-drag path and leave the canvas stuck in connect mode.
+                    onKeyDown={onActivate(() => {
+                      setConnectingFrom(prev => prev === node.id ? null : node.id);
+                      setEditNode(null);
+                    })}
                     style={handle('right', color, isMobile, connectingFrom === node.id)}
                     onMouseDown={!isMobile ? (e => startDrawEdge(e, node.id)) : undefined}
                     onClick={isMobile ? (e => {
@@ -1084,7 +1240,18 @@ export default function FlowsPage() {
                   <div
                     data-handle="left"
                     data-nodeid={node.id}
-                    style={handle('left', color, isMobile, isMobile && connectingFrom !== null && connectingFrom !== node.id)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={connectingFrom && connectingFrom !== node.id
+                      ? `Finish the connection at ${label}`
+                      : `Connection target for ${label}`}
+                    onKeyDown={onActivate(() => {
+                      if (connectingFrom && connectingFrom !== node.id) {
+                        tryConnect(connectingFrom, node.id);
+                        setConnectingFrom(null);
+                      }
+                    })}
+                    style={handle('left', color, isMobile, connectingFrom !== null && connectingFrom !== node.id)}
                     onMouseUp={!isMobile ? (e => finishDrawEdge(e, node.id)) : undefined}
                     onClick={isMobile ? (e => {
                       e.stopPropagation();
@@ -1122,6 +1289,12 @@ export default function FlowsPage() {
             {(['escalation','demo_booking','both','webhook_to_agent'] as const).map(t => (
               <span key={t} style={{ fontSize:11, color:TINT[t], marginRight:10 }}>
                 ● {t.replace(/_/g,' ')}
+                {!isExecutableTrigger(t) && (
+                  <em
+                    title="The flow engine only matches escalation, demo_booking and both — this edge type is stored but never fires"
+                    style={{ color:'var(--amber)', fontStyle:'normal', marginLeft:3 }}
+                  > (never fires yet)</em>
+                )}
               </span>
             ))}
             {!isTablet && (
@@ -1138,7 +1311,7 @@ export default function FlowsPage() {
         <NodeEditDrawer
           node={editNode}
           connection={connections.find(c => c.app_type === editNode.data.appType)}
-          onClose={() => setEditNode(null)}
+          onClose={closeDrawer}
           onUpdate={updateNodeData}
           onConnectionSaved={conn => {
             setConnections(prev => {
@@ -1152,60 +1325,104 @@ export default function FlowsPage() {
 
       {/* ── API-key credentials modal ────────────────────────────────────────── */}
       {credModal && (
-        <div style={{
+        <div role="presentation" style={{
           position: 'fixed', inset: 0, zIndex: 300,
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }} onClick={() => { setCredModal(null); setConnectingAppId(null); }}>
-          <div style={{
-            background: 'var(--card-bg)', border: '1px solid var(--border)',
-            borderRadius: 14, padding: '24px 28px', width: 'min(380px, 90vw)',
-            boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 4 }}>
-              Connect {credModal.app.name}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-4)', marginBottom: 18 }}>
-              Enter your credentials to connect this app.
-            </div>
-            {credModal.fields.map(field => (
-              <div key={field.name} style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600,
-                  color: 'var(--text-3)', marginBottom: 5 }}>
-                  {field.label}
-                </label>
-                <input
-                  type={field.type === 'password' ? 'password' : 'text'}
-                  value={credValues[field.name] ?? ''}
-                  onChange={e => setCredValues(prev => ({ ...prev, [field.name]: e.target.value }))}
-                  placeholder={field.label}
-                  style={{
-                    width: '100%', boxSizing: 'border-box',
-                    padding: '8px 12px', borderRadius: 8,
-                    background: 'var(--tint-2)', border: '1px solid var(--border)',
-                    color: 'var(--text-1)', fontSize: 13, outline: 'none',
-                  }}
-                />
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
-              <button onClick={() => { setCredModal(null); setConnectingAppId(null); }}
-                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)',
-                  background: 'transparent', color: 'var(--text-3)', fontSize: 13, cursor: 'pointer' }}>
-                Cancel
-              </button>
-              <button
-                onClick={handleCredSubmit}
-                disabled={connectingAppId === composioAppId(credModal.app)}
-                style={{ padding: '8px 18px', borderRadius: 8, border: 'none',
-                  background: 'var(--grad-brand)', color: '#fff', fontSize: 13,
-                  fontWeight: 600, cursor: 'pointer', opacity: connectingAppId ? 0.7 : 1 }}>
-                {connectingAppId ? 'Connecting…' : 'Connect'}
-              </button>
-            </div>
-          </div>
+        }} onClick={closeCredModal}>
+          <CredModalCard
+            app={credModal.app}
+            fields={credModal.fields}
+            values={credValues}
+            onChange={(name, value) => setCredValues(prev => ({ ...prev, [name]: value }))}
+            onCancel={closeCredModal}
+            onSubmit={handleCredSubmit}
+            submitting={connectingAppId === composioAppId(credModal.app)}
+          />
         </div>
       )}
+    </div>
+  );
+}
+
+// ── API-key credentials dialog ────────────────────────────────────────────────
+// Split out purely so useDialogA11y (a hook) can run only while it is mounted.
+function CredModalCard({
+  app, fields, values, onChange, onCancel, onSubmit, submitting,
+}: {
+  app: ComposioApp;
+  fields: AuthInfoField[];
+  values: Record<string, string>;
+  onChange: (name: string, value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+  submitting: boolean;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const descId  = useId();
+  // A true modal: it covers the page and nothing behind it should be reachable,
+  // so focus is trapped here until Escape / Cancel / Connect.
+  useDialogA11y(cardRef, onCancel, true);
+
+  return (
+    <div
+      ref={cardRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descId}
+      tabIndex={-1}
+      onClick={e => e.stopPropagation()}
+      style={{
+        background: 'var(--card-bg)', border: '1px solid var(--border)',
+        borderRadius: 14, padding: '24px 28px', width: 'min(380px, 90vw)',
+        boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
+      }}
+    >
+      <div id={titleId} style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 4 }}>
+        Connect {app.name}
+      </div>
+      <div id={descId} style={{ fontSize: 12, color: 'var(--text-4)', marginBottom: 18 }}>
+        Enter your credentials to connect this app.
+      </div>
+      {fields.map(field => (
+        <div key={field.name} style={{ marginBottom: 14 }}>
+          <label htmlFor={`cred-${field.name}`}
+            style={{ display: 'block', fontSize: 11.5, fontWeight: 600,
+            color: 'var(--text-3)', marginBottom: 5 }}>
+            {field.label}
+          </label>
+          <input
+            id={`cred-${field.name}`}
+            type={field.type === 'password' ? 'password' : 'text'}
+            value={values[field.name] ?? ''}
+            onChange={e => onChange(field.name, e.target.value)}
+            placeholder={field.label}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              padding: '8px 12px', borderRadius: 8,
+              background: 'var(--tint-2)', border: '1px solid var(--border)',
+              color: 'var(--text-1)', fontSize: 13, outline: 'none',
+            }}
+          />
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+        <button onClick={onCancel}
+          style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)',
+            background: 'transparent', color: 'var(--text-3)', fontSize: 13, cursor: 'pointer' }}>
+          Cancel
+        </button>
+        <button
+          onClick={onSubmit}
+          disabled={submitting}
+          style={{ padding: '8px 18px', borderRadius: 8, border: 'none',
+            background: 'var(--grad-brand)', color: '#fff', fontSize: 13,
+            fontWeight: 600, cursor: 'pointer', opacity: submitting ? 0.7 : 1 }}>
+          {submitting ? 'Connecting…' : 'Connect'}
+        </button>
+      </div>
     </div>
   );
 }

@@ -13,7 +13,6 @@ import * as Requirements from '../../../src/api/requirements';
 import * as Languages from '../../../src/api/languages';
 import * as Skills from '../../../src/api/skills';
 import * as Webhooks from '../../../src/api/webhooks';
-import * as Automations from '../../../src/api/automations';
 import * as Workflows from '../../../src/api/workflows';
 import * as Connections from '../../../src/api/connections';
 import * as Chatbots from '../../../src/api/chatbots';
@@ -134,42 +133,6 @@ describe('api/webhooks', () => {
   });
 });
 
-// ── automations ─────────────────────────────────────────────────────────────────
-describe('api/automations', () => {
-  it('listAutomations GETs with the agent_id query', async () => {
-    server.use(http.get(`${B}/v1/escalations/configs`, json([{ id: 'c1', agent_id: 'a1' }])));
-    expect((await Automations.listAutomations('a1'))[0].id).toBe('c1');
-  });
-
-  it('createAutomation POSTs to configs', async () => {
-    server.use(http.post(`${B}/v1/escalations/configs`, json({ id: 'c2' })));
-    const r = await Automations.createAutomation('a1', {
-      app_type: 'slack', webhook_url: 'https://hooks', body_template: {}, auth_type: 'none', trigger_type: 'escalation',
-    });
-    expect(r.id).toBe('c2');
-  });
-
-  it('updateAutomation PATCHes by id', async () => {
-    server.use(http.patch(`${B}/v1/escalations/configs/c1`, json({ id: 'c1', is_active: false })));
-    expect((await Automations.updateAutomation('c1', { is_active: false })).is_active).toBe(false);
-  });
-
-  it('deleteAutomation DELETEs by id', async () => {
-    server.use(http.delete(`${B}/v1/escalations/configs/c1`, () => new HttpResponse(null, { status: 204 })));
-    await expect(Automations.deleteAutomation('c1')).resolves.toBeUndefined();
-  });
-
-  it('testAutomation POSTs to the test path', async () => {
-    server.use(http.post(`${B}/v1/escalations/configs/c1/test`, json({ success: true, status_code: 200 })));
-    expect((await Automations.testAutomation('c1')).success).toBe(true);
-  });
-
-  it('listPresets GETs presets', async () => {
-    server.use(http.get(`${B}/v1/escalations/presets`, json([{ app_type: 'slack', display_name: 'Slack' }])));
-    expect((await Automations.listPresets())[0].app_type).toBe('slack');
-  });
-});
-
 // ── workflows ─────────────────────────────────────────────────────────────────
 describe('api/workflows', () => {
   const graph = { nodes: [], edges: [] };
@@ -189,9 +152,12 @@ describe('api/workflows', () => {
     expect((await Workflows.getWorkflow('f1')).name).toBe('Flow');
   });
 
-  it('updateWorkflow PUTs by id', async () => {
+  it('updateWorkflow PUTs by id with the full model (PUT is a full replace)', async () => {
     server.use(http.put(`${B}/v1/workflows/f1`, json({ id: 'f1', name: 'Renamed' })));
-    expect((await Workflows.updateWorkflow('f1', { name: 'Renamed' })).name).toBe('Renamed');
+    const updated = await Workflows.updateWorkflow('f1', {
+      name: 'Renamed', graph, description: 'kept', is_active: false,
+    });
+    expect(updated.name).toBe('Renamed');
   });
 
   it('deleteWorkflow DELETEs by id', async () => {

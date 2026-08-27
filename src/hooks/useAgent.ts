@@ -17,6 +17,7 @@ import { listKnowledge, type KnowledgeDoc } from '../api/knowledge';
 import { listLanguages, type Language } from '../api/languages';
 import { ApiError, getToken } from '../api/client';
 import { logger } from '../utils/logger';
+import { errorMessage } from '../utils/apiError';
 
 export interface UseAgentResult {
   // Agent set
@@ -167,12 +168,12 @@ export function useAgent(slug: string, defaultName: string, initialSelectedId?: 
           logger.info('[useAgent] No existing agents for slug — UI will prompt creation', { slug });
           setLoading(false);
         }
-      } catch (e: any) {
+      } catch (e) {
         if (cancelled) return;
         const msg = e instanceof ApiError
-          ? `${e.status}: ${typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message)}`
-          : (e?.message || 'Failed to load agents');
-        logger.error('[useAgent] Bootstrap failed', { slug, error: e, message: msg, stack: e?.stack });
+          ? `${e.status}: ${errorMessage(e)}`
+          : errorMessage(e, 'Failed to load agents');
+        logger.error('[useAgent] Bootstrap failed', { slug, error: e, message: msg });
         setError(msg);
         setLoading(false);
       }
@@ -298,10 +299,10 @@ export function useAgent(slug: string, defaultName: string, initialSelectedId?: 
       if (matched.length > 0 && !selectedId) {
         setSelectedId(matched[0].id);
       }
-    } catch (e: any) {
+    } catch (e) {
       const msg = e instanceof ApiError
-        ? `${e.status}: ${typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message)}`
-        : (e?.message || 'Failed to load agents');
+        ? `${e.status}: ${errorMessage(e)}`
+        : errorMessage(e, 'Failed to load agents');
       logger.error('[useAgent] reloadAgents failed', { slug, error: e, message: msg });
       setError(msg);
     } finally {

@@ -41,17 +41,40 @@ export interface WebhookDelivery {
   [key: string]: unknown;
 }
 
+// ── Normalisation ─────────────────────────────────────────────────────────────
+// `webhooks.event_types` is a Postgres `jsonb` column and the backend registers
+// no asyncpg codec for it, so it arrives here as a RAW JSON STRING
+// (`'["session.ended"]'`) rather than an array. Normalise at the boundary so no
+// consumer ever sees anything but a real string[].
+function normalizeEventTypes(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function normalizeWebhook(w: Webhook): Webhook {
+  return { ...w, event_types: normalizeEventTypes(w?.event_types) };
+}
+
 // ── API functions ─────────────────────────────────────────────────────────────
 export async function listWebhooks(): Promise<Webhook[]> {
-  return api<Webhook[]>('/v1/webhooks');
+  const data = await api<Webhook[]>('/v1/webhooks');
+  return Array.isArray(data) ? data.map(normalizeWebhook) : [];
 }
 
 export async function createWebhook(body: WebhookCreate): Promise<Webhook> {
-  return api<Webhook>('/v1/webhooks', { method: 'POST', body });
+  return normalizeWebhook(await api<Webhook>('/v1/webhooks', { method: 'POST', body }));
 }
 
 export async function updateWebhook(webhookId: string, body: WebhookUpdate): Promise<Webhook> {
-  return api<Webhook>(`/v1/webhooks/${webhookId}`, { method: 'PATCH', body });
+  return normalizeWebhook(await api<Webhook>(`/v1/webhooks/${webhookId}`, { method: 'PATCH', body }));
 }
 
 export async function deleteWebhook(webhookId: string): Promise<void> {
@@ -62,6 +85,15 @@ export async function listWebhookDeliveries(webhookId: string): Promise<WebhookD
   return api<WebhookDelivery[]>(`/v1/webhooks/${webhookId}/deliveries`);
 }
 
-export async function pingWebhook(webhookId: string): Promise<{ ok: boolean; [key: string]: unknown }> {
+/**
+ * Enqueues a `ping` event for the endpoint. The backend responds
+ * `{"queued": true, "event_type": "ping"}` — there is no `ok` field, and the
+ * response says nothing about whether the endpoint was actually reached (the
+ * dispatcher does not treat `ping` as a deliverable event, so subscribed
+ * endpoints will not receive it). Callers must not report this as a delivery.
+ */
+export async function pingWebhook(
+  webhookId: string,
+): Promise<{ queued: boolean; event_type?: string; [key: string]: unknown }> {
   return api(`/v1/webhooks/${webhookId}/ping`, { method: 'POST' });
 }

@@ -23,25 +23,56 @@ export interface TokenResponse {
 
 const USER_KEY = 'candy.user';
 
-// SSO sessions are stored in sessionStorage; regular login in localStorage.
+/** Set by fullLogout(), consumed once by LandingPage to skip its auto-redirect. */
+export const SIGNED_OUT_KEY = 'candy.signed_out';
+
+/**
+ * True after a sign-out, so the landing page shows the sign-in prompt instead of
+ * bouncing straight back to an IDP that may still hold a live cookie.
+ *
+ * The answer is cached at module scope because React 18 StrictMode invokes
+ * effects TWICE in dev: a naive read-and-clear returned true on the first invoke
+ * and false on the second, so the page redirected anyway. Confirmed live via
+ * `[LandingPage] mount / unmount / mount` followed by `[redirectToOIDC] start`.
+ * Both invocations must get the same answer.
+ */
+let signedOutDecision: boolean | null = null;
+
+export function consumeSignedOutFlag(): boolean {
+  if (signedOutDecision !== null) return signedOutDecision;
+  let flagged = false;
+  try {
+    if (sessionStorage.getItem(SIGNED_OUT_KEY)) {
+      sessionStorage.removeItem(SIGNED_OUT_KEY);
+      flagged = true;
+    }
+  } catch { /* storage blocked */ }
+  signedOutDecision = flagged;
+  return flagged;
+}
+
+/** Test-only: clear the cached decision so each case starts fresh. */
+export function _resetSignedOutDecision(): void {
+  signedOutDecision = null;
+}
+
+// Session-scoped, matching the token in client.ts: the stored user lives in
+// sessionStorage only, so closing the browser ends the session. Reading
+// localStorage here is what previously let a days-old session reappear.
 export function loadStoredUser(): AuthUser | null {
   try {
-    const raw = sessionStorage.getItem(USER_KEY) || localStorage.getItem(USER_KEY);
+    const raw = sessionStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 export function storeUser(u: AuthUser | null) {
   try {
-    if (u) localStorage.setItem(USER_KEY, JSON.stringify(u));
-    else   localStorage.removeItem(USER_KEY);
-  } catch {}
-}
-function storeSessionUser(u: AuthUser | null) {
-  try {
     if (u) sessionStorage.setItem(USER_KEY, JSON.stringify(u));
     else   sessionStorage.removeItem(USER_KEY);
   } catch {}
 }
+/** Kept as a distinct name for the SSO call sites; same store as `storeUser` now. */
+const storeSessionUser = storeUser;
 
 export async function login(email: string, password: string): Promise<{ token: TokenResponse; user: AuthUser }> {
   logger.info('[auth] login attempt', { email });
@@ -113,7 +144,7 @@ export function logout() {
  *  Local state (every key in localStorage/sessionStorage, not just the known auth ones — a
  *  hand-maintained key list is exactly how a stale token survives a "complete" sign-out) is wiped
  *  unconditionally before any of that, so the app is logged out immediately either way. */
-export async function fullLogout() {
+export async function fullLogout(): Promise<{ navigated: boolean }> {
   logger.info('[auth] fullLogout — initiating single-logout across all apps');
 
   // 1. Capture the token + origin BEFORE wiping anything (the backend call needs the token).
@@ -148,11 +179,24 @@ export async function fullLogout() {
   // machine with VITE_DEV_TOKEN set silently logs the user back in on the next page load.
   // Set AFTER the clear() above, which would otherwise wipe this flag too.
   try { localStorage.setItem('candy.dev_logout', '1'); } catch {}
+  // One-shot marker telling LandingPage NOT to auto-redirect to the IDP on the
+  // next mount. If logout-everywhere didn't succeed we could not clear the IDP's
+  // cookie, so auto-bouncing there would silently re-authenticate the user we
+  // just signed out — the "sign out did nothing" symptom. Survives the reload
+  // because sessionStorage is per-tab, and LandingPage consumes it exactly once.
+  try { sessionStorage.setItem(SIGNED_OUT_KEY, '1'); } catch {}
 
   // 4. Only now, with local state already gone, attempt the real cookie-clearing redirect.
+  //    `replace` (not `href`) so the signed-in page leaves no history entry — otherwise
+  //    Back lands the user on a rendered-but-logged-out app.
+  //    We report whether we navigated so the caller does NOT fire a second, competing
+  //    navigation: two concurrent location changes on one click is what made sign-out
+  //    need multiple clicks.
   if (endSessionUrl && typeof window !== 'undefined') {
-    window.location.href = endSessionUrl;
+    window.location.replace(endSessionUrl);
+    return { navigated: true };
   }
+  return { navigated: false };
 }
 
 export async function ssoCallback(token: string): Promise<{ user: AuthUser }> {
@@ -162,7 +206,7 @@ export async function ssoCallback(token: string): Promise<{ user: AuthUser }> {
       method: 'GET',
       auth: false,
     });
-    // Persist in localStorage so the session survives tab close/reopen
+    // Session-scoped on purpose: closing the browser must end the session.
     setToken(tok.access_token);
     const user: AuthUser = {
       user_id:      tok.user_id,

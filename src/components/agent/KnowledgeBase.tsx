@@ -14,11 +14,61 @@ import { uploadKnowledgeFile, deleteKnowledge, crawlWebsite, getKnowledgeDoc, ty
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { logger } from '../../utils/logger';
+import { sectionHeader, sectionTitle, sectionPill } from '../../styles/tokens';
+import { useConfirm } from '../ConfirmDialog';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
-  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)',
+  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)', violet: 'var(--violet)',
 };
+
+/** Lowercased extension, or '' when the filename has none. */
+export function extOf(filename: string): string {
+  const parts = filename.split('.');
+  return parts.length > 1 ? (parts.pop() as string).toLowerCase() : '';
+}
+
+/**
+ * File types we can render inline as plain text. Deliberately an allowlist —
+ * fetching an arbitrary binary and dumping it into a <pre> produces garbage.
+ */
+const TEXT_EXTS = new Set([
+  'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'yaml', 'yml',
+  'log', 'xml', 'html', 'htm', 'sql', 'ini', 'conf',
+]);
+
+export function isTextExt(ext: string): boolean {
+  return TEXT_EXTS.has(ext);
+}
+
+/**
+ * Cap on inline text. Uploads are allowed up to 50 MB, and pushing that into a
+ * <pre> would lock the tab — anything larger stays a download.
+ */
+export const MAX_INLINE_TEXT_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Set once a signed-URL read is refused by the browser (the knowledge-base
+ * bucket currently serves no Access-Control-Allow-Origin header, so every
+ * cross-origin read fails). The browser logs its own CORS error that we cannot
+ * suppress, so we stop after the first refusal instead of emitting a pair of
+ * console errors for every file the user opens.
+ *
+ * Clears on reload, so it starts working the moment the bucket gains a CORS rule
+ * or the backend grows a GET for /knowledge/{kb_id}.
+ */
+let inlineTextBlocked = false;
+
+/**
+ * Set once the document-detail call returns 405. The backend exposes only PATCH
+ * and DELETE on /v1/agents/{id}/knowledge/{kb_id} — there is no GET — so that
+ * request can never succeed, and retrying it for every file the user opens just
+ * fires a red network error each time.
+ *
+ * Latch on 405 only: a 500 or a dropped connection is transient and worth
+ * retrying. Clears on reload, so it picks the route up the moment it exists.
+ */
+let docDetailUnavailable = false;
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -43,6 +93,7 @@ interface Props {
 
 export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshDocs }: Props) {
   const { addToast } = useApp();
+  const confirm = useConfirm();
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState<string[]>([]);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -60,14 +111,58 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
     setViewingDoc(d as any);
     setLoadingDoc(true);
     logger.debug('[KnowledgeBase] openDoc', { agentId, docId: d.id, filename: d.filename });
-    try {
-      const full = await getKnowledgeDoc(agentId!, d.id);
-      setViewingDoc(full);
-    } catch (e) {
-      logger.warn('[KnowledgeBase] openDoc failed — showing partial info', { docId: d.id, error: e });
-    } finally {
-      setLoadingDoc(false);
+
+    let full: KnowledgeDoc & { content_text?: string } = d;
+    if (!docDetailUnavailable) {
+      try {
+        full = await getKnowledgeDoc(agentId!, d.id);
+      } catch (e) {
+        // No GET route exists (only PATCH/DELETE), so this 405s and `content_text`
+        // never arrives — which is why text files fell through to a download
+        // prompt. Latch a 405 so we stop firing a doomed request per file, and
+        // recover the content from the signed URL below instead.
+        if (e instanceof ApiError && e.status === 405) {
+          docDetailUnavailable = true;
+          logger.warn(
+            '[KnowledgeBase] GET /knowledge/{kb_id} is not implemented (405) — using the '
+            + 'signed URL for content and not retrying this session.',
+            { docId: d.id },
+          );
+        } else {
+          logger.warn('[KnowledgeBase] doc detail failed — falling back to signed URL', {
+            docId: d.id, error: e,
+          });
+        }
+      }
     }
+
+    // Text-like files: fetch the bytes from the same presigned URL the Download
+    // link uses and render them inline, so the viewer shows the actual content
+    // instead of asking the user to download the file in order to read it.
+    const url = full.signed_url ?? d.signed_url;
+    if (!full.content_text && url && !inlineTextBlocked
+        && isTextExt(extOf(full.filename))
+        && full.size_bytes <= MAX_INLINE_TEXT_BYTES) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) full = { ...full, content_text: await res.text() };
+        else logger.warn('[KnowledgeBase] signed URL fetch failed', { docId: d.id, status: res.status });
+      } catch (e) {
+        // The bucket serves no Access-Control-Allow-Origin header, so the browser
+        // refuses to let us read a response it fetched successfully. Latch it and
+        // stop retrying — the download CTA still works, and the viewer shows an
+        // honest message instead of an error the user can act on.
+        inlineTextBlocked = true;
+        logger.warn(
+          '[KnowledgeBase] inline text read blocked by bucket CORS — not retrying this session. '
+          + 'Fix: add a CORS rule to the knowledge-base bucket, or add GET /v1/agents/{id}/knowledge/{kb_id}.',
+          { docId: d.id, error: e },
+        );
+      }
+    }
+
+    setViewingDoc(full);
+    setLoadingDoc(false);
   }
 
   async function addFiles(list: FileList | null) {
@@ -165,7 +260,12 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
   async function deleteAll() {
     if (!agentId || bulkDeleting) return;
     if (docs.length === 0) return;
-    if (!window.confirm(`Delete all ${docs.length} files from this agent's knowledge base?`)) return;
+    if (!await confirm({
+      title: `Delete all ${docs.length} knowledge base file${docs.length === 1 ? '' : 's'}?`,
+      body: 'The agent will lose everything it has been taught from these documents.',
+      consequence: 'Uploaded files and their embeddings are removed permanently. This cannot be undone.',
+      confirmLabel: `Delete ${docs.length} file${docs.length === 1 ? '' : 's'}`,
+    })) return;
     logger.info('[KnowledgeBase] deleteAll start', { agentId, count: docs.length });
     setBulkDeleting(true);
     let ok = 0, fail = 0;
@@ -192,7 +292,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
           <h3 style={sectionTitle}>Knowledge base</h3>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={pill}>{docs.length} {docs.length === 1 ? 'file' : 'files'}</span>
+          <span style={sectionPill}>{docs.length} {docs.length === 1 ? 'file' : 'files'}</span>
           {docs.length > 0 && (
             <button
               onClick={deleteAll}
@@ -413,7 +513,7 @@ export default function KnowledgeBase({ tint = 'purple', agentId, docs, refreshD
                     }
                   }}
                 >
-                  <Icon name={deleting ? 'refresh' : 'x'} size={12} />
+                  <Icon name={deleting ? 'refresh' : 'trash'} size={13} />
                 </button>
               </li>
             );
@@ -584,10 +684,14 @@ function DocViewerModal({
             <div style={{ textAlign: 'center', padding: '48px 24px' }}>
               <div style={{ marginBottom: 12, color: 'var(--text-3)' }}><Icon name="file" size={32} /></div>
               <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)', marginBottom: 6 }}>
-                Preview not available for .{ext} files
+                {isTextExt(ext)
+                  ? 'Couldn’t load this file’s text'
+                  : `Preview not available for .${ext} files`}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 20 }}>
-                Download the file to view it in your local application.
+                {isTextExt(ext)
+                  ? 'The file is readable, but the browser was blocked from fetching it. Download it to read the contents.'
+                  : 'Download the file to view it in your local application.'}
               </div>
               <a
                 href={signedUrl}
@@ -634,16 +738,6 @@ const section = {
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius)',
   padding: 22,
-};
-const sectionHeader = {
-  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  marginBottom: 16,
-};
-const sectionTitle = { fontSize: 14, fontWeight: 600, color: 'var(--text-1)', margin: 0 };
-const pill = {
-  fontSize: 11, fontWeight: 500, color: 'var(--text-3)',
-  padding: '3px 8px', borderRadius: 99,
-  background: 'var(--card-bg)', border: '1px solid var(--border)',
 };
 const dropZone = {
   cursor: 'pointer',

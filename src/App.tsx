@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
+import { ConfirmProvider } from './components/ConfirmDialog';
 import PromptTicketHandler from './components/PromptTicketHandler';
 import PromptAgentPickerModal from './components/agent/PromptAgentPickerModal';
 import AppLayout   from './layouts/AppLayout';
@@ -24,7 +25,6 @@ const SSOCallbackPage  = lazy(() => import('./pages/sso'));
 const OIDCCallbackPage = lazy(() => import('./pages/sso/oidc-callback'));
 
 // App-layout pages
-const DashboardPage  = lazy(() => import('./pages/dashboard'));
 const LiveCallsPage  = lazy(() => import('./pages/live'));
 const HRFlowPage     = lazy(() => import('./pages/hrflow'));
 const AnalyticsPage  = lazy(() => import('./pages/analytics'));
@@ -119,11 +119,21 @@ function RootRedirect() {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user } = useApp();
-  if (!user) {
-    redirectToOIDC();
-    return null;
-  }
+  const { user, signingOut } = useApp();
+
+  // Navigating away is a side effect, so it belongs in an effect. Calling
+  // redirectToOIDC() in the render body fired on discarded/StrictMode render
+  // passes and, critically, raced sign-out's own navigation.
+  //
+  // The `signingOut` guard is the actual sign-out fix: during sign-out `user`
+  // becomes null, and redirecting to the IDP at that moment — while its cookie
+  // may still be alive — silently re-authenticates the user we just logged out.
+  // That is why sign-out appeared to need two clicks.
+  useEffect(() => {
+    if (!user && !signingOut) redirectToOIDC();
+  }, [user, signingOut]);
+
+  if (!user) return null;
   return <>{children}</>;
 }
 
@@ -157,7 +167,9 @@ function AppRoute({
 export default function App() {
   const { claimedPrompt, setClaimedPrompt } = useApp();
   return (
-    <>
+    // Supplies useConfirm() to the destructive-delete call sites. Wraps the whole
+    // tree so the dialog renders above every route and layout.
+    <ConfirmProvider>
       <AmbientBg />
       <RouteLogger />
       <Suspense fallback={<PageLoader />}>
@@ -229,6 +241,6 @@ export default function App() {
         />
       )}
       <ToastHost />
-    </>
+    </ConfirmProvider>
   );
 }

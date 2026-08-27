@@ -9,6 +9,13 @@ import './styles/globals.css'
 import { GlobalErrorBoundary } from './components/ErrorBoundary'
 import { logger } from './utils/logger'
 import { installDevAuth } from './utils/devAuth'
+import { purgeLegacyAuthStorage } from './api/client'
+
+// The session is sessionStorage-scoped (see client.ts). Drop any auth left in
+// localStorage by an earlier build or a sibling app FIRST — otherwise a stale
+// token there would keep resurrecting a session that should have ended when the
+// browser closed. Runs before anything reads the stored user.
+purgeLegacyAuthStorage()
 
 // Localhost-only: seed a dev session before React mounts so the app doesn't
 // bounce to the (production-only) OIDC callback. No-op in production builds.

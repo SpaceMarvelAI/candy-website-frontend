@@ -17,6 +17,7 @@ import { resolveAgentRoute, resolveAgentRouteFor } from '../../utils/agentRoutes
 import type { MatchingAgent } from '../../api/prompts';
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
+import { errorMessage } from '../../utils/apiError';
 import { logger } from '../../utils/logger';
 
 const SLUG_LABEL: Record<string, string> = {
@@ -39,7 +40,7 @@ export default function PromptAgentPickerModal({
   const navigate = useNavigate();
   const { addToast } = useApp();
 
-  console.log('[PromptAgentPickerModal] render', { title: promptTitle, matches: matchingAgents.length });
+  logger.debug('[PromptAgentPickerModal] render', { title: promptTitle, matches: matchingAgents.length });
 
   const [showAll, setShowAll]         = useState(matchingAgents.length === 0);
   const [allAgents, setAllAgents]     = useState<Agent[] | null>(null);
@@ -98,9 +99,7 @@ export default function PromptAgentPickerModal({
       logger.info('[PromptAgentPickerModal] created agent for prompt handoff', { agentId: created.id, slug: newSlug });
       goToAgent(created.id, resolveAgentRoute(created.use_case_slug, created.call_direction));
     } catch (e) {
-      const msg = e instanceof ApiError
-        ? (typeof e.detail === 'string' ? e.detail : (e.detail?.detail ?? e.message))
-        : (e as Error).message;
+      const msg = errorMessage(e);
       addToast(`Couldn't create agent: ${msg}`, 'error');
     } finally {
       setCreating(false);
@@ -109,7 +108,7 @@ export default function PromptAgentPickerModal({
 
   function onBackdrop(e: React.MouseEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
-    console.log('[PromptAgentPickerModal] backdrop click', {
+    logger.debug('[PromptAgentPickerModal] backdrop click', {
       ready: readyRef.current,
       targetId: target.id,
       targetClass: target.className,
@@ -117,9 +116,6 @@ export default function PromptAgentPickerModal({
     });
     if (readyRef.current && target.id === 'prompt-picker-backdrop') onClose();
   }
-
-  const visibleList: { id: string; name: string; use_case_slug: string; call_direction: string; agent_flow_status: string }[] =
-    showAll ? (allAgents ?? []) : matchingAgents;
 
   return (
     <div

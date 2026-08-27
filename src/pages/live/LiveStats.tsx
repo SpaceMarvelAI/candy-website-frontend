@@ -1,34 +1,48 @@
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 
-export default function LiveStats({ counts }) {
+export interface LiveCounts {
+  total:      number;
+  completed:  number;
+  inprogress: number;
+  declined:   number;
+  pending:    number;
+}
+
+export default function LiveStats({ counts }: { counts: LiveCounts }) {
   const isMobile = useMediaQuery('(max-width: 640px)');
   const isTablet = useMediaQuery('(max-width: 1024px)');
   const cols     = isMobile ? 2 : isTablet ? 3 : 5;
 
+  // counts.total is 0 whenever the recordings list is empty (new account, or a
+  // tab with nothing in it) — 0/0 rendered a literal "NaN% success rate".
+  const successRate = counts.total > 0
+    ? Math.round((counts.completed / counts.total) * 100)
+    : null;
+
   const stats = [
     { key: 'total',      label: 'Total contacts', val: counts.total,      sub: 'Imported from xlsx',    dotColor: 'var(--purple)' },
-    { key: 'completed',  label: 'Completed',       val: counts.completed,  sub: `${Math.round(counts.completed / counts.total * 100)}% success rate`, dotColor: 'var(--green)', dotGlow: true },
+    { key: 'completed',  label: 'Completed',       val: counts.completed,  sub: successRate === null ? 'No recordings yet' : `${successRate}% success rate`, dotColor: 'var(--green)', dotGlow: true },
     { key: 'inprogress', label: 'In progress',     val: counts.inprogress, sub: 'Active calls now',      dotColor: 'var(--blue)',  dotPulse: true },
     { key: 'declined',   label: 'Declined',        val: counts.declined,   sub: 'Not interested',        dotColor: 'var(--red)' },
     { key: 'pending',    label: 'Pending',         val: counts.pending,    sub: 'Retry queue',           dotColor: 'var(--amber)' },
   ];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: isMobile ? 10 : 14, marginBottom: 24 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: isMobile ? 10 : 12, marginBottom: 14 }}>
       {stats.map(s => (
         <div
           key={s.key}
           style={{
             background: 'var(--card-bg)',
             border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            padding: 18,
+            borderRadius: 10,
+            padding: '14px 16px',
             position: 'relative', overflow: 'hidden',
           }}
         >
           <div
             style={{
-              fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em',
+              fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em',
               color: 'var(--text-3)', marginBottom: 10,
               display: 'flex', alignItems: 'center',
             }}
@@ -45,10 +59,10 @@ export default function LiveStats({ counts }) {
             />
             {s.label}
           </div>
-          <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-1)' }}>
+          <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--text-1)' }}>
             {s.val}
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 4 }}>{s.sub}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>{s.sub}</div>
         </div>
       ))}
     </div>

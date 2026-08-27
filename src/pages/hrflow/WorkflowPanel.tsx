@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
 
@@ -17,10 +17,8 @@ export default function WorkflowPanel() {
   const [completed,  setCompleted]  = useState(94);
   const [inProgress, setInProgress] = useState(12);
   const [declined,   setDeclined]   = useState(14);
-  const timerRef = useRef(null);
-
   useEffect(() => {
-    timerRef.current = setInterval(() => {
+    const timer = setInterval(() => {
       if (currentView !== 'hr') return;
       setProgress(p => {
         if (p >= 92) return p;
@@ -32,7 +30,7 @@ export default function WorkflowPanel() {
         return np;
       });
     }, 2200);
-    return () => clearInterval(timerRef.current);
+    return () => clearInterval(timer);
   }, [currentView]);
 
   const callsVal = Math.floor((progress / 100) * 248);

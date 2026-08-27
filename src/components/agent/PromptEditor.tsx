@@ -12,10 +12,11 @@ import { saveRequirements } from '../../api/requirements';
 import { ApiError } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { logger } from '../../utils/logger';
+import { sectionHeader, sectionTitle } from '../../styles/tokens';
 
 const tintColor = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
-  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)',
+  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)', violet: 'var(--violet)',
 };
 
 const STYLE_OPTIONS = [
@@ -247,11 +248,6 @@ const section = {
   borderRadius: 'var(--radius)',
   padding: 22,
 };
-const sectionHeader = {
-  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  marginBottom: 14,
-};
-const sectionTitle = { fontSize: 14, fontWeight: 600, color: 'var(--text-1)', margin: 0 };
 const textarea = {
   width: '100%',
   background: 'var(--input-bg-strong)',

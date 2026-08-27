@@ -1,10 +1,14 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import {
+  createContext, useContext, useState, useCallback, useEffect, useMemo, useRef,
+  type Dispatch, type ReactNode, type SetStateAction,
+} from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import posthog from 'posthog-js';
-import { seedChatMessages } from '../utils/mockData';
 import { loadStoredUser, logout as apiLogout, fullLogout, ssoCallback, type AuthUser } from '../api/auth';
 import { themeStore } from '../hooks/useTheme';
+import { addToast, type AddToast } from '../hooks/useToast';
 import { logger } from '../utils/logger';
+import { errorMessage } from '../utils/apiError';
 import { PENDING_PROMPT_TICKET_KEY } from '../utils/sso';
 import { claimPromptTicket, type ClaimedPrompt } from '../api/prompts';
 
@@ -36,9 +40,40 @@ const PATH_TO_VIEW: Record<string, string> = Object.fromEntries(
   Object.entries(VIEW_TO_PATH).map(([k, v]) => [v, k])
 );
 
-const AppContext = createContext(null);
+/** One turn in the HR demo chat (src/pages/hrflow/ChatPanel.tsx). `role: 'typing'`
+ *  is a placeholder bubble with no text, hence the optional fields. */
+export interface ChatMessage {
+  role:  'ai' | 'user' | 'typing';
+  text?: string;
+  time?: string;
+  file?: { name: string; size: string };
+}
 
-export function AppProvider({ children }) {
+export interface AppContextValue {
+  user:             AuthUser | null;
+  signedIn:         (u: AuthUser) => void;
+  signOut:          () => Promise<void>;
+  /** Sign-out is in flight. Consumers use this to disable the control and to
+   *  suppress any auth redirect that would otherwise re-trigger SSO login. */
+  signingOut:       boolean;
+  ssoLoading:       boolean;
+  currentView:      string;
+  showView:         (name: string) => void;
+  activeNav:        string;
+  setActiveNav:     Dispatch<SetStateAction<string>>;
+  chatMessages:     ChatMessage[];
+  setChatMessages:  Dispatch<SetStateAction<ChatMessage[]>>;
+  /** Stable module-level function — see src/hooks/useToast.ts. The toast queue
+   *  itself is deliberately NOT on this context; read it with useToasts(). */
+  addToast:         AddToast;
+  claimedPrompt:    ClaimedPrompt | null;
+  setClaimedPrompt: Dispatch<SetStateAction<ClaimedPrompt | null>>;
+  claimingPrompt:   boolean;
+}
+
+const AppContext = createContext<AppContextValue | null>(null);
+
+export function AppProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -54,10 +89,18 @@ export function AppProvider({ children }) {
 
   const [user, setUser]                = useState<AuthUser | null>(initialUser);
   const [ssoLoading, setSsoLoading]    = useState(hasSsoToken);
+  // True from the moment Sign out is clicked until the tab navigates away.
+  // ProtectedRoute reads this to suppress the OIDC redirect during sign-out —
+  // without it, dropping `user` bounces the browser to the IDP, which still has
+  // a live cookie and silently signs the user back in.
+  const [signingOut, setSigningOut]    = useState(false);
+  // Ref mirror so a second click is rejected synchronously, before React has
+  // re-rendered with the new state.
+  const signingOutRef                  = useRef(false);
   const [activeNav,   setActiveNav]    = useState('dashboard');
-  const [chatMessages,setChatMessages] = useState(seedChatMessages);
-  const [calls,       setCalls]        = useState([]);
-  const [toasts,      setToasts]       = useState([]);
+  // Starts empty. This used to be seeded with a fabricated HR conversation from
+  // utils/mockData.ts, which every real user saw on their first visit to /hrchat.
+  const [chatMessages,setChatMessages] = useState<ChatMessage[]>([]);
   const [claimedPrompt, setClaimedPrompt] = useState<ClaimedPrompt | null>(null);
   // True from the moment a ticket is detected in the OIDC redirect until the claim
   // resolves (success or failure). RootRedirect must not navigate to /dashboard while
@@ -76,23 +119,6 @@ export function AppProvider({ children }) {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [navigate]);
 
-  const addToast = useCallback((msg: string, kind = 'success', opts?: { skipCapture?: boolean }) => {
-    const id = Date.now() + Math.random();
-    logger.debug('[AppContext] addToast', { msg, kind });
-    if (kind === 'error' && !opts?.skipCapture) {
-      // Single, app-wide capture point for user-facing failures — covers every
-      // component that calls addToast(msg, 'error') without needing its own
-      // posthog.capture() call site. Callers that already fire a more specific,
-      // richer event for the same failure (e.g. TestPanel's mic/TTS errors) pass
-      // skipCapture to avoid double-counting the same failure under two names.
-      posthog.capture('error_toast_shown', { message: msg });
-    }
-    setToasts(prev => [...prev, { id, msg, kind }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 3100);
-  }, []);
-
   const signedIn = useCallback((u: AuthUser) => {
     logger.info('[AppContext] signedIn', { userId: u.user_id, email: u.email, role: u.role, company: u.company_name });
     themeStore.set('light');
@@ -104,27 +130,57 @@ export function AppProvider({ children }) {
     }
   }, [navigate]);
 
+  /**
+   * Sign out in ONE click.
+   *
+   * The old version called `setUser(null)` first. That re-rendered
+   * ProtectedRoute, which saw "no user" and fired `redirectToOIDC()` — sending
+   * the browser to the IDP *while* `fullLogout()` was still awaiting the backend
+   * call that clears the httpOnly SSO cookie. The IDP therefore still had a live
+   * session, auto-reauthenticated, and bounced the user straight back in. That
+   * is the "must click sign out twice" bug.
+   *
+   * The ordering below is load-bearing:
+   *   1. latch `signingOut` — ProtectedRoute stops redirecting to the IDP
+   *   2. await fullLogout() — backend revoke + full storage wipe FIRST
+   *   3. drop the user      — safe now; nothing can auto-reauth
+   *   4. exactly ONE navigation, and only if fullLogout() didn't already do it
+   */
   const signOut = useCallback(async () => {
+    if (signingOutRef.current) {
+      logger.info('[AppContext] signOut ignored — already in progress');
+      return;
+    }
+    signingOutRef.current = true;
+    setSigningOut(true);
     logger.info('[AppContext] signOut — full single-logout');
-    // Clear UI state immediately so the app looks logged out right away.
-    setUser(null);
-    // Clears PostHog's distinct_id + group state — otherwise the next person to use
-    // this browser/device gets misattributed to the previous user/company.
+
+    // Clears PostHog's distinct_id + group state — otherwise the next person to
+    // use this browser/device gets misattributed to the previous user/company.
     posthog.reset();
-    // fullLogout() calls the backend logout-everywhere (blocklist + broadcast + token revoke),
-    // wipes every localStorage/sessionStorage key, and — only on confirmed backend success —
-    // navigates the tab to end_session_url to clear the dashboard's httpOnly SSO cookie (a
-    // real top-level request; nothing less can touch that cookie). If the backend call itself
-    // failed, it skips that redirect instead of guessing a URL, so we always still navigate
-    // home in the SPA below on this same click.
+
+    let navigated = false;
     try {
-      await fullLogout();
+      ({ navigated } = await fullLogout());
     } catch (err) {
       logger.warn('[AppContext] fullLogout failed — clearing local state anyway', { error: err });
       try { localStorage.clear(); } catch {}
       try { sessionStorage.clear(); } catch {}
     }
-    navigate('/', { replace: true });
+
+    setUser(null);
+
+    if (navigated) return;  // fullLogout() is already navigating — don't race it.
+
+    // No end_session_url (backend unreachable, or no SSO session to end). Hard
+    // replace rather than an SPA navigate: it drops all in-memory state and boots
+    // the app fresh on the signed-out path, so nothing stale can revive the
+    // session. `replace` keeps the signed-in page out of history.
+    if (typeof window !== 'undefined') {
+      window.location.replace(`${window.location.origin}${window.location.pathname}`);
+    } else {
+      navigate('/', { replace: true });
+    }
   }, [navigate]);
 
   // Clear user + redirect to SSO when the API client fires a 401
@@ -186,7 +242,16 @@ export function AppProvider({ children }) {
     // Set BEFORE setUser() below — RootRedirect reads this on the very next render
     // (the same one where `user` first becomes truthy) and must see it already true,
     // or it navigates to /dashboard before the claim call even starts.
-    if (ticketFromUrl) setClaimingPrompt(true);
+    if (ticketFromUrl) {
+      setClaimingPrompt(true);
+      // This effect owns this ticket now. redirectToOIDC() stashed the SAME single-use
+      // ticket in sessionStorage as a cookie-failure fallback, and nothing ever removed
+      // it — so on the happy path PromptTicketHandler found it once `user` turned truthy
+      // and claimed it a second time, the backend rejected it as already used, and the
+      // user got "That prompt link is invalid or has expired." alongside the picker that
+      // had just opened correctly (plus an error_toast_shown capture on every success).
+      try { sessionStorage.removeItem(PENDING_PROMPT_TICKET_KEY); } catch {}
+    }
 
     ssoCallback(token)
       .then(({ user: u }) => {
@@ -218,12 +283,10 @@ export function AppProvider({ children }) {
           navigate('/healthcare', { replace: true });
         }
       })
-      .catch((err: any) => {
-        const msg = err?.detail
-          ? (typeof err.detail === 'string' ? err.detail : err.detail?.detail)
-          : err?.message;
+      .catch((err: unknown) => {
+        const msg = errorMessage(err, 'invalid or expired token');
         logger.error('[AppContext] SSO exchange failed', { err, message: msg });
-        addToast('SSO sign-in failed: ' + (msg || 'invalid or expired token'), 'error');
+        addToast('SSO sign-in failed: ' + msg, 'error');
       })
       .finally(() => {
         setSsoLoading(false);
@@ -231,24 +294,26 @@ export function AppProvider({ children }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
-    <AppContext.Provider value={{
-      user, signedIn, signOut,
-      ssoLoading,
-      currentView, showView,
-      activeNav, setActiveNav,
-      chatMessages, setChatMessages,
-      calls, setCalls,
-      toasts, addToast,
-      claimedPrompt, setClaimedPrompt,
-      claimingPrompt,
-    }}>
-      {children}
-    </AppContext.Provider>
-  );
+  // Memoized so a re-render of AppProvider (or, previously, every single toast)
+  // doesn't hand ~30 consumers a brand-new object and re-render all of them.
+  const value = useMemo<AppContextValue>(() => ({
+    user, signedIn, signOut, signingOut,
+    ssoLoading,
+    currentView, showView,
+    activeNav, setActiveNav,
+    chatMessages, setChatMessages,
+    addToast,
+    claimedPrompt, setClaimedPrompt,
+    claimingPrompt,
+  }), [
+    user, signedIn, signOut, signingOut, ssoLoading, currentView, showView,
+    activeNav, chatMessages, claimedPrompt, claimingPrompt,
+  ]);
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
-export function useApp() {
+export function useApp(): AppContextValue {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error('useApp must be used within AppProvider');
   return ctx;

@@ -1,6 +1,6 @@
 import AgentWorkspace from '../../components/agent/AgentWorkspace';
 
-const TINT = 'teal' as const;
+const TINT = 'violet' as const;
 
 // Plain-English brief — domain is appointment-booking, but the same
 // pattern works for any service business that books slots (clinics,

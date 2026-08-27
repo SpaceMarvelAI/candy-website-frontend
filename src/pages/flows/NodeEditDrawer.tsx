@@ -6,30 +6,68 @@
  *   'app'     → connection setup + action config (Jira project, Slack channel…)
  *   'webhook' → generated inbound URL + secret + editable name
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId, useRef, useCallback } from 'react';
 import posthog from 'posthog-js';
 import type { FlowNode, FlowNodeData } from '../../api/workflows';
+import { webhookIdentity, isExecutableApp } from '../../api/workflows';
 import type { AppConnection } from '../../api/connections';
-import { createConnection, testConnection, startOAuth, APP_CATALOGUE } from '../../api/connections';
+import { saveConnection, connectionSaveErrorMessage, testConnection, startOAuth, APP_CATALOGUE } from '../../api/connections';
 import { createEmbedInstall, listEmbedInstalls, type EmbedInstall } from '../../api/agents';
 import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import logger from '../../utils/logger';
 import Icon from '../../assets/icons';
 
-const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8002';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8002';
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * Labelled form row. `children` is a render prop so the generated id lands on
+ * the *actual* control rather than on a wrapper div — a <label> is only
+ * programmatically associated when htmlFor matches a labelable element's id.
+ */
+function Field({ label, children }: { label: string; children: (id: string) => React.ReactNode }) {
+  const id = useId();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <label style={labelSt}>{label}</label>
-      {children}
+      <label style={labelSt} htmlFor={id}>{label}</label>
+      {children(id)}
     </div>
   );
 }
 
-function CopyBox({ value, mono = true }: { value: string; mono?: boolean }) {
+// Moved to src/hooks/useDialogA11y.ts so shared components (ConfirmDialog) can
+// use it without importing from a page — the relocation the previous comment here
+// asked for. Imported (this file uses it too) and re-exported, because
+// flows/index.tsx has imported it from this module since before the move.
+import { useDialogA11y } from '../../hooks/useDialogA11y';
+export { useDialogA11y };
+
+/** Failed-to-load notice with a retry — distinct from a genuinely empty list.
+ *  Exported for the flow page's panels; same caveat as useDialogA11y about
+ *  living here rather than in a shared module. */
+export function LoadError({ what, onRetry }: { what: string; onRetry: () => void }) {
+  return (
+    <div role="alert" style={{
+      display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+      fontSize: 11.5, color: '#ff8194', lineHeight: 1.5,
+      background: 'rgba(255,129,148,0.08)', border: '1px solid rgba(255,129,148,0.3)',
+      borderRadius: 8, padding: '8px 10px',
+    }}>
+      <Icon name="x" size={12} />
+      <span style={{ flex: 1, minWidth: 120 }}>Couldn't load {what}.</span>
+      <button onClick={onRetry} style={{ ...secondaryBtn, fontSize: 11, padding: '3px 9px', flexShrink: 0 }}>
+        Retry
+      </button>
+    </div>
+  );
+}
+
+// Renders the value in a readOnly <input> rather than a <code>: an input is a
+// labelable element, so Field's htmlFor actually associates, and the value stays
+// selectable with the keyboard.
+function CopyBox({ id, value, label }: { id?: string; value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   function copy() {
     navigator.clipboard.writeText(value).then(() => {
@@ -38,15 +76,18 @@ function CopyBox({ value, mono = true }: { value: string; mono?: boolean }) {
   }
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-      <code style={{
-        flex: 1, padding: '7px 10px', borderRadius: 7,
-        background: 'var(--bg-0)', border: '1px solid var(--border)',
-        fontSize: 11.5, color: 'var(--text-2)', overflowX: 'auto',
-        whiteSpace: 'nowrap', fontFamily: 'inherit',
-      }}>
-        {value}
-      </code>
-      <button onClick={copy} style={{
+      <input
+        id={id}
+        readOnly
+        value={value}
+        style={{
+          flex: 1, minWidth: 0, padding: '7px 10px', borderRadius: 7,
+          background: 'var(--bg-0)', border: '1px solid var(--border)',
+          fontSize: 11.5, color: 'var(--text-2)', fontFamily: 'inherit',
+          outline: 'none', boxSizing: 'border-box',
+        }}
+      />
+      <button onClick={copy} aria-label={label ? `Copy ${label}` : 'Copy to clipboard'} style={{
         ...secondaryBtn, flexShrink: 0, padding: '6px 10px', fontSize: 11,
         color: copied ? 'var(--green)' : 'var(--text-3)',
         borderColor: copied ? 'rgba(76,175,80,0.4)' : undefined,
@@ -84,12 +125,15 @@ function ActionConfigFields({
 }) {
   const inp = (key: string, label: string, placeholder: string) => (
     <Field key={key} label={label}>
-      <input
-        style={inputSt}
-        value={config[key] ?? ''}
-        placeholder={placeholder}
-        onChange={e => onChange(key, e.target.value)}
-      />
+      {id => (
+        <input
+          id={id}
+          style={inputSt}
+          value={config[key] ?? ''}
+          placeholder={placeholder}
+          onChange={e => onChange(key, e.target.value)}
+        />
+      )}
     </Field>
   );
 
@@ -175,7 +219,7 @@ function EmbedGuide({ agentId, agentName, agentType = 'chat' }: {
   agentId: string; agentName: string; agentType?: 'chat' | 'voice';
 }) {
   const { addToast } = useApp();
-  const BASE = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8002';
+  const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8002';
   const isVoice = agentType === 'voice';
 
   // Settings
@@ -191,10 +235,21 @@ function EmbedGuide({ agentId, agentName, agentType = 'chat' }: {
   const [installs, setInstalls]   = useState<EmbedInstall[]>([]);
   const [loading,  setLoading]    = useState(false);
   const [copied,   setCopied]     = useState<string|null>(null);
+  // A failed fetch used to be swallowed entirely, so the panel looked like
+  // "no embed code generated yet" and quietly offered to create a duplicate.
+  const [installsFailed, setInstallsFailed] = useState(false);
 
-  useEffect(() => {
-    listEmbedInstalls(agentId).then(setInstalls).catch(() => {});
+  const loadInstalls = useCallback(() => {
+    setInstallsFailed(false);
+    listEmbedInstalls(agentId)
+      .then(setInstalls)
+      .catch(err => {
+        logger.warn('[NodeEditDrawer] listEmbedInstalls failed', { agentId, err });
+        setInstallsFailed(true);
+      });
   }, [agentId]);
+
+  useEffect(loadInstalls, [loadInstalls]);
 
   function buildSnippet(inst: EmbedInstall) {
     return `<script
@@ -289,45 +344,59 @@ function EmbedGuide({ agentId, agentName, agentType = 'chat' }: {
         </div>
 
         <Field label="Your website URL">
-          <input style={inputSt} value={websiteUrl}
-            onChange={e => setWebsiteUrl(e.target.value)}
-            placeholder="https://yourwebsite.com" />
+          {id => (
+            <input id={id} style={inputSt} value={websiteUrl}
+              onChange={e => setWebsiteUrl(e.target.value)}
+              placeholder="https://yourwebsite.com" />
+          )}
         </Field>
 
         <Field label="Greeting message (shown before chat opens)">
-          <input style={inputSt} value={greeting}
-            onChange={e => setGreeting(e.target.value)}
-            placeholder="Hi! How can I help?" />
+          {id => (
+            <input id={id} style={inputSt} value={greeting}
+              onChange={e => setGreeting(e.target.value)}
+              placeholder="Hi! How can I help?" />
+          )}
         </Field>
 
         <div style={{ display:'flex', gap:8 }}>
           <Field label="Theme">
-            <select style={{ ...inputSt, cursor:'pointer' }} value={theme}
-              onChange={e => setTheme(e.target.value as any)}>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-              <option value="auto">Auto (follows OS)</option>
-            </select>
+            {id => (
+              <select id={id} style={{ ...inputSt, cursor:'pointer' }} value={theme}
+                onChange={e => setTheme(e.target.value as any)}>
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="auto">Auto (follows OS)</option>
+              </select>
+            )}
           </Field>
           <Field label="Position">
-            <select style={{ ...inputSt, cursor:'pointer' }} value={position}
-              onChange={e => setPosition(e.target.value as any)}>
-              <option value="bottom-right">Bottom right</option>
-              <option value="bottom-left">Bottom left</option>
-            </select>
+            {id => (
+              <select id={id} style={{ ...inputSt, cursor:'pointer' }} value={position}
+                onChange={e => setPosition(e.target.value as any)}>
+                <option value="bottom-right">Bottom right</option>
+                <option value="bottom-left">Bottom left</option>
+              </select>
+            )}
           </Field>
         </div>
 
         <Field label="Bubble colour">
-          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-            <input type="color" value={color} onChange={e => setColor(e.target.value)}
-              style={{ width:40, height:36, borderRadius:7, border:'1px solid var(--border)',
-                padding:3, background:'var(--bg-0)', cursor:'pointer' }} />
-            <input style={{ ...inputSt, flex:1 }} value={color}
-              onChange={e => setColor(e.target.value)} placeholder="#7B5BE6" />
-          </div>
+          {id => (
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <input id={id} type="color" value={color} onChange={e => setColor(e.target.value)}
+                style={{ width:40, height:36, borderRadius:7, border:'1px solid var(--border)',
+                  padding:3, background:'var(--bg-0)', cursor:'pointer' }} />
+              <input aria-label="Bubble colour hex value" style={{ ...inputSt, flex:1 }} value={color}
+                onChange={e => setColor(e.target.value)} placeholder="#7B5BE6" />
+            </div>
+          )}
         </Field>
       </div>
+
+      {installsFailed && (
+        <LoadError what="your existing embed codes" onRetry={loadInstalls} />
+      )}
 
       {/* Generate button */}
       <button onClick={generate} disabled={loading} style={{
@@ -481,7 +550,7 @@ function AgentEditor({ node }: { node: FlowNode }) {
       {tab === 'hosted' && (
         <>
           <Field label="Live hosted URL">
-            <CopyBox value={hostedUrl} />
+            {id => <CopyBox id={id} value={hostedUrl} label="hosted URL" />}
           </Field>
           <InfoBox>
             Share this URL directly — no embed needed.{' '}
@@ -495,7 +564,7 @@ function AgentEditor({ node }: { node: FlowNode }) {
 
       <Divider />
       <Field label="Agent ID">
-        <CopyBox value={agentId} />
+        {id => <CopyBox id={id} value={agentId} label="agent ID" />}
       </Field>
     </div>
   );
@@ -562,17 +631,23 @@ function AppEditor({
     if (!appMeta) return;
     setSaving(true);
     try {
-      const conn = await createConnection({
+      // Upsert: POSTing a second connection for an app that already has one
+      // trips UNIQUE (company_id, app_type) and comes back as a raw 500 —
+      // see saveConnection() in api/connections.ts.
+      const conn = await saveConnection({
         app_type:     appMeta.type,
         display_name: appMeta.label,
         auth_scheme:  appMeta.authScheme,
         credential:   apiKey || undefined,
         meta:         actionConfig,
-      });
+      }, connection);
       onConnectionSaved(conn);
       onUpdate({ connectionId: conn.id });
       addToast(`${appMeta.label} connected!`, 'success');
-    } catch { addToast('Failed to save', 'error'); }
+    } catch (err) {
+      logger.warn('[NodeEditDrawer] saveConnection failed', { appType: appMeta.type, err });
+      addToast(connectionSaveErrorMessage(err, appMeta.label, !!connection), 'error');
+    }
     finally { setSaving(false); }
   }
 
@@ -588,6 +663,19 @@ function AppEditor({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {!isExecutableApp(node.data.appType) && (
+        <div role="note" style={{
+          fontSize: 12, lineHeight: 1.6, color: 'var(--text-2)',
+          background: 'rgba(255,181,71,0.09)', border: '1px solid rgba(255,181,71,0.35)',
+          borderRadius: 8, padding: '10px 12px',
+        }}>
+          <strong style={{ color: 'var(--amber)' }}>Not automated yet.</strong>{' '}
+          You can connect {appMeta.label} and save it in a flow, but Candy's flow engine
+          has no action for it yet — when the flow fires, this step is skipped. Credentials
+          and the config below are stored, ready for when support lands.
+        </div>
+      )}
+
       {/* Connection status */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
@@ -661,18 +749,21 @@ function AppEditor({
             </InfoBox>
           )}
           <Field label={appMeta.authScheme === 'bearer' ? 'Bearer Token' : 'API Key'}>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input
-                type="password"
-                placeholder={connection?.masked_key ?? 'Paste key…'}
-                value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
-                style={{ ...inputSt, flex: 1 }}
-              />
-              <button onClick={handleSave} disabled={saving || !apiKey} style={{ ...primaryBtn, flexShrink: 0, padding: '8px 12px' }}>
-                {saving ? '…' : 'Save'}
-              </button>
-            </div>
+            {id => (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  id={id}
+                  type="password"
+                  placeholder={connection?.masked_key ?? 'Paste key…'}
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
+                  style={{ ...inputSt, flex: 1 }}
+                />
+                <button onClick={handleSave} disabled={saving || !apiKey} style={{ ...primaryBtn, flexShrink: 0, padding: '8px 12px' }}>
+                  {saving ? '…' : 'Save'}
+                </button>
+              </div>
+            )}
           </Field>
         </>
       ) : appMeta.authScheme === 'none' && appMeta.type === 'calendly' ? (
@@ -743,9 +834,13 @@ function WebhookEditor({
   node: FlowNode;
   onUpdate: (data: Partial<FlowNodeData>) => void;
 }) {
-  const webhookId   = node.data.webhookId   ?? node.id;
+  // Both identifiers live inside actionConfig — the only node field the backend
+  // model declares that round-trips arbitrary keys. See webhookIdentity() in
+  // api/workflows.ts for why they cannot sit at the top level of node.data.
+  const identity    = webhookIdentity(node.data);
+  const webhookId   = identity.webhookId ?? node.id;
   const webhookUrl  = `${BASE_URL}/v1/inbound-webhooks/${webhookId}/receive`;
-  const secret      = node.data.webhookSecret ?? '(generated on first save)';
+  const secret      = identity.webhookSecret;
   const [name, setName] = useState(node.data.appLabel ?? 'Inbound Webhook');
   const [eventFilter, setEventFilter] = useState(node.data.actionConfig?.event_filter ?? '');
 
@@ -757,26 +852,57 @@ function WebhookEditor({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <InfoBox color="var(--teal)">
         <strong style={{ color: 'var(--teal)' }}>Inbound Webhook</strong> — external systems POST to this URL.
-        Candy verifies the signature and triggers connected actions.
+        Candy is meant to verify the signature and trigger the connected actions.
       </InfoBox>
 
+      {/* The receiver reads node.data.webhookId / node.data.webhookSecret
+          (backend api/v1/inbound_webhooks.py:62,73), but FlowNodeData declares
+          neither field — so every inbound POST raises AttributeError before it
+          can match. Fixing that needs a backend change; until then, say so. */}
+      <div role="note" style={{
+        fontSize: 12, lineHeight: 1.6, color: 'var(--text-2)',
+        background: 'rgba(255,181,71,0.09)', border: '1px solid rgba(255,181,71,0.35)',
+        borderRadius: 8, padding: '10px 12px',
+      }}>
+        <strong style={{ color: 'var(--amber)' }}>Not receiving yet.</strong>{' '}
+        The URL and secret below are saved and stable, but Candy's receive endpoint
+        can't process inbound calls yet — a POST to it currently fails. Set the node
+        up now if you like; don't point a production system at it until this notice
+        is gone.
+      </div>
+
       <Field label="Webhook Name">
-        <input
-          style={inputSt}
-          value={name}
-          onChange={e => setName(e.target.value)}
-          onBlur={commit}
-          placeholder="e.g. Stripe Payment Webhook"
-        />
+        {id => (
+          <input
+            id={id}
+            style={inputSt}
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onBlur={commit}
+            placeholder="e.g. Stripe Payment Webhook"
+          />
+        )}
       </Field>
 
       <Field label="Webhook Receive URL">
-        <CopyBox value={webhookUrl} />
+        {id => <CopyBox id={id} value={webhookUrl} label="webhook URL" />}
       </Field>
 
-      <Field label="Signing Secret (HMAC-SHA256)">
-        <CopyBox value={secret} />
-      </Field>
+      {secret ? (
+        <Field label="Signing Secret (HMAC-SHA256)">
+          {id => <CopyBox id={id} value={secret} label="signing secret" />}
+        </Field>
+      ) : (
+        <div role="note" style={{
+          fontSize: 12, lineHeight: 1.6, color: 'var(--text-2)',
+          background: 'rgba(255,181,71,0.09)', border: '1px solid rgba(255,181,71,0.35)',
+          borderRadius: 8, padding: '10px 12px',
+        }}>
+          <strong style={{ color: 'var(--amber)' }}>No signing secret on this node.</strong>{' '}
+          It was saved before secrets were persisted. Delete the node and add a fresh
+          Inbound Webhook to get a URL and secret that survive a reload.
+        </div>
+      )}
 
       <InfoBox>
         <strong style={{ color: 'var(--amber)' }}>Verify incoming calls</strong> in your server:
@@ -790,21 +916,25 @@ def verify(raw_body: bytes, header_sig: str) -> bool:
       </InfoBox>
 
       <Field label="Event Filter (optional)">
-        <input
-          style={inputSt}
-          value={eventFilter}
-          onChange={e => setEventFilter(e.target.value)}
-          onBlur={commit}
-          placeholder="e.g. payment.completed"
-        />
+        {id => (
+          <input
+            id={id}
+            style={inputSt}
+            value={eventFilter}
+            onChange={e => setEventFilter(e.target.value)}
+            onBlur={commit}
+            placeholder="e.g. payment.completed"
+          />
+        )}
       </Field>
 
       <Divider />
 
       <div style={{ fontSize: 11, color: 'var(--text-4)', lineHeight: 1.6 }}>
-        After saving the workflow, register{' '}
+        Once inbound receiving is live, register{' '}
         <code style={{ fontSize: 11, color: 'var(--teal)' }}>{webhookUrl.slice(0, 50)}…</code>{' '}
-        in your external app as the webhook endpoint. Candy handles the rest.
+        in your external app as the webhook endpoint. Saving the workflow keeps this
+        URL and its secret stable in the meantime.
       </div>
     </div>
   );
@@ -822,6 +952,11 @@ interface Props {
 export default function NodeEditDrawer({ node, connection, onClose, onUpdate, onConnectionSaved }: Props) {
   const isMobile = useMediaQuery('(max-width: 640px)');
   const isTablet = useMediaQuery('(max-width: 1024px)');
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const titleId   = useId();
+  // Non-modal: the canvas behind stays operable, so no focus trap (that would
+  // strand keyboard users). Escape-to-close and focus return are still required.
+  useDialogA11y(drawerRef, onClose, false);
 
   const appMeta = APP_CATALOGUE.find(a => a.type === node.data.appType);
 
@@ -854,15 +989,23 @@ export default function NodeEditDrawer({ node, connection, onClose, onUpdate, on
   } : drawerSt;
 
   return (
-    <div style={drawerStyle} onClick={e => e.stopPropagation()}>
+    <div
+      ref={drawerRef}
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby={titleId}
+      tabIndex={-1}
+      style={drawerStyle}
+      onClick={e => e.stopPropagation()}
+    >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-        <span style={{ display:'inline-flex', color: 'var(--text-2)' }}><Icon name={icon} size={24} /></span>
+        <span aria-hidden="true" style={{ display:'inline-flex', color: 'var(--text-2)' }}><Icon name={icon} size={24} /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>{title}</div>
+          <div id={titleId} style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>{title}</div>
           <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 1 }}>{subtitle}</div>
         </div>
-        <button onClick={onClose} style={closeBtn}>
+        <button onClick={onClose} aria-label="Close node editor" style={closeBtn}>
           <Icon name="x" size={14} />
         </button>
       </div>
