@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
 import { ApiError } from '../../api/client';
 import { SkeletonTable } from '../../components/Skeleton';
+import { useConfirm } from '../../components/ConfirmDialog';
 import {
   listWebhooks,
   createWebhook,
@@ -11,7 +12,6 @@ import {
   listWebhookDeliveries,
   pingWebhook,
   type Webhook,
-  type WebhookCreate,
   type WebhookDelivery,
 } from '../../api/webhooks';
 
@@ -122,9 +122,8 @@ function DeliveriesPanel({ webhookId }: { webhookId: string }) {
           {deliveries.map(d => {
             const isOpen = expanded === d.id;
             return (
-              <>
+              <Fragment key={d.id}>
                 <tr
-                  key={d.id}
                   style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
                   onClick={() => setExpanded(isOpen ? null : d.id)}
                 >
@@ -146,7 +145,7 @@ function DeliveriesPanel({ webhookId }: { webhookId: string }) {
                 </tr>
 
                 {isOpen && (
-                  <tr key={`${d.id}-detail`} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     <td colSpan={5} style={{ padding: '0 22px 16px' }}>
                       <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
                         {d.response_body ? (
@@ -172,7 +171,7 @@ function DeliveriesPanel({ webhookId }: { webhookId: string }) {
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             );
           })}
         </tbody>
@@ -308,38 +307,43 @@ function WebhookDrawer({ existing, onSave, onClose }: DrawerProps) {
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 7 }}>
               Events to subscribe *
             </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {ALL_EVENTS.map(ev => (
-                <label
-                  key={ev}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '9px 12px', borderRadius: 8, cursor: 'pointer',
-                    background: eventTypes.includes(ev) ? 'rgba(117,91,227,0.1)' : 'var(--bg-3)',
-                    border: `1px solid ${eventTypes.includes(ev) ? 'var(--border-accent)' : 'var(--border)'}`,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <div
+            <div role="group" aria-label="Events to subscribe" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {ALL_EVENTS.map(ev => {
+                const checked = eventTypes.includes(ev);
+                return (
+                  <button
+                    key={ev}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={checked}
+                    onClick={() => toggleEvent(ev)}
                     style={{
-                      width: 16, height: 16, borderRadius: 4,
-                      background: eventTypes.includes(ev) ? 'var(--purple)' : 'var(--tint-2)',
-                      border: `1px solid ${eventTypes.includes(ev) ? 'var(--purple)' : 'var(--border-strong)'}`,
-                      display: 'grid', placeItems: 'center', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      width: '100%', textAlign: 'left',
+                      padding: '9px 12px', borderRadius: 8, cursor: 'pointer',
+                      background: checked ? 'rgba(117,91,227,0.1)' : 'var(--bg-3)',
+                      border: `1px solid ${checked ? 'var(--border-accent)' : 'var(--border)'}`,
                       transition: 'all 0.15s',
                     }}
-                    onClick={() => toggleEvent(ev)}
                   >
-                    {eventTypes.includes(ev) && <Icon name="check" size={10} style={{ color: '#fff' }} />}
-                  </div>
-                  <span
-                    style={{ fontSize: 12.5, color: 'var(--text-2)', fontFamily: "'Zalando Sans'" }}
-                    onClick={() => toggleEvent(ev)}
-                  >
-                    {ev}
-                  </span>
-                </label>
-              ))}
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 16, height: 16, borderRadius: 4,
+                        background: checked ? 'var(--purple)' : 'var(--tint-2)',
+                        border: `1px solid ${checked ? 'var(--purple)' : 'var(--border-strong)'}`,
+                        display: 'grid', placeItems: 'center', flexShrink: 0,
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {checked && <Icon name="check" size={10} style={{ color: '#fff' }} />}
+                    </span>
+                    <span style={{ fontSize: 12.5, color: 'var(--text-2)', fontFamily: "'Zalando Sans'" }}>
+                      {ev}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -429,6 +433,7 @@ function WebhookDrawer({ existing, onSave, onClose }: DrawerProps) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function WebhooksPage() {
   const { addToast } = useApp();
+  const confirm = useConfirm();
 
   const [webhooks,    setWebhooks]    = useState<Webhook[]>([]);
   const [loading,     setLoading]     = useState(true);
@@ -469,8 +474,10 @@ export default function WebhooksPage() {
   function handleSaved(w: Webhook) {
     setWebhooks(prev => {
       const idx = prev.findIndex(x => x.id === w.id);
+      // PATCH echoes back only {id,url,event_types,is_active,description} — merge
+      // so created_at / total_delivered / last_success_at / last_failure_at survive.
       return idx >= 0
-        ? prev.map((x, i) => (i === idx ? w : x))
+        ? prev.map((x, i) => (i === idx ? { ...x, ...w } : x))
         : [w, ...prev];
     });
     setDrawerOpen(false);
@@ -481,7 +488,8 @@ export default function WebhooksPage() {
     setPingingId(w.id);
     try {
       await pingWebhook(w.id);
-      addToast(`Ping sent to ${w.url}`, 'success');
+      // The API only confirms the ping was queued — it does not confirm delivery.
+      addToast('Ping queued — check Deliveries to see if it arrived', 'info');
     } catch (e) {
       addToast(e instanceof ApiError ? e.message : (e as Error).message, 'error');
     } finally {
@@ -491,7 +499,12 @@ export default function WebhooksPage() {
 
   async function handleDelete(w: Webhook) {
     if (deletingId) return;
-    if (!window.confirm(`Delete this webhook permanently?\n\nURL: ${w.url}\nEvents: ${w.event_types.join(', ')}`)) return;
+    if (!await confirm({
+      title: 'Delete this webhook?',
+      body: `URL: ${w.url}\nEvents: ${w.event_types.join(', ')}`,
+      consequence: 'Candy will stop sending events to this endpoint. Delivery history is removed too.',
+      confirmLabel: 'Delete webhook',
+    })) return;
     setDeletingId(w.id);
     try {
       await deleteWebhook(w.id);
@@ -636,8 +649,8 @@ export default function WebhooksPage() {
                 const isDeleting = deletingId === w.id;
 
                 return (
-                  <>
-                    <tr key={w.id} style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border)' }}>
+                  <Fragment key={w.id}>
+                    <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border)' }}>
                       {/* URL */}
                       <td style={{ padding: '14px 22px', maxWidth: 280 }}>
                         <div
@@ -768,13 +781,13 @@ export default function WebhooksPage() {
 
                     {/* Deliveries inline panel */}
                     {isExpanded && (
-                      <tr key={`${w.id}-deliveries`} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         <td colSpan={5} style={{ padding: 0 }}>
                           <DeliveriesPanel webhookId={w.id} />
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>

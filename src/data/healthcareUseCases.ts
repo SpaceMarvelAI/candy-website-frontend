@@ -29,7 +29,7 @@ const hc = (key: string): string => `hc_${key}`;
 
 export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
   {
-    key: 'patient_intake', title: 'Patient Intake', direction: 'both', icon: 'team',
+    key: 'patient_intake', title: 'Patient Intake', direction: 'both', icon: 'user',
     purpose: 'Register a new patient and capture the details the clinic needs before a visit.',
     fields: [
       { name: 'full_name', ask: 'Full name', type: 'text', required: true },
@@ -41,7 +41,7 @@ export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
     skills: [hc('patient_intake'), 'appointment_booking', 'red_flag_alert'],
   },
   {
-    key: 'insurance_verification', title: 'Insurance Verification', direction: 'both', icon: 'lock',
+    key: 'insurance_verification', title: 'Insurance Verification', direction: 'both', icon: 'shield',
     purpose: 'Collect insurance details so staff can verify coverage before the visit.',
     fields: [
       { name: 'full_name', ask: 'Full name', type: 'text', required: true },
@@ -52,7 +52,7 @@ export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
     skills: [hc('insurance_verification'), 'red_flag_alert'],
   },
   {
-    key: 'referral_intake', title: 'Referral Intake', direction: 'both', icon: 'shuffle',
+    key: 'referral_intake', title: 'Referral Intake', direction: 'both', icon: 'repeat',
     purpose: 'Capture a referral so the clinic can schedule the right specialist.',
     fields: [
       { name: 'full_name', ask: 'Full name', type: 'text', required: true },
@@ -64,7 +64,7 @@ export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
     skills: [hc('referral_intake'), 'appointment_booking', 'red_flag_alert'],
   },
   {
-    key: 'prescription_refill', title: 'Prescription Refill', direction: 'both', icon: 'box',
+    key: 'prescription_refill', title: 'Prescription Refill', direction: 'both', icon: 'lock',
     purpose: 'Log a medication refill request for staff to review. Never approves or dispenses.',
     fields: [
       { name: 'full_name', ask: 'Full name', type: 'text', required: true },
@@ -87,7 +87,7 @@ export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
     skills: [hc('lab_result_request'), 'ticket_management', 'red_flag_alert'],
   },
   {
-    key: 'telehealth_request', title: 'Telehealth Coordination', direction: 'both', icon: 'mic',
+    key: 'telehealth_request', title: 'Telehealth Coordination', direction: 'both', icon: 'video',
     purpose: 'Set up a telehealth (video/phone) consult request.',
     fields: [
       { name: 'full_name', ask: 'Full name', type: 'text', required: true },
@@ -110,7 +110,7 @@ export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
     skills: [hc('payment_query'), 'ticket_management'],
   },
   {
-    key: 'after_hours_message', title: 'After-Hours Message', direction: 'inbound', icon: 'mail',
+    key: 'after_hours_message', title: 'After-Hours Message', direction: 'inbound', icon: 'chat',
     purpose: 'Take a message when the clinic is closed and route by urgency. Emergencies → 108/112.',
     fields: [
       { name: 'full_name', ask: 'Name', type: 'text', required: true },
@@ -121,7 +121,7 @@ export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
     skills: [hc('after_hours_message'), 'red_flag_alert'],
   },
   {
-    key: 'medical_records_request', title: 'Medical Records', direction: 'both', icon: 'book',
+    key: 'medical_records_request', title: 'Medical Records', direction: 'both', icon: 'file',
     purpose: 'Take a request for records/certificates. Verifies identity; documents released by staff.',
     fields: [
       { name: 'full_name', ask: 'Full name', type: 'text', required: true },
@@ -132,7 +132,7 @@ export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
     skills: [hc('medical_records_request'), 'ticket_management'],
   },
   {
-    key: 'feedback_intake', title: 'Feedback / Complaint', direction: 'both', icon: 'star',
+    key: 'feedback_intake', title: 'Feedback / Complaint', direction: 'both', icon: 'starOutline',
     purpose: 'Capture patient feedback or a complaint for the quality team.',
     fields: [
       { name: 'full_name', ask: 'Name', type: 'text', required: false },
@@ -150,7 +150,7 @@ export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
     skills: [hc('appointment_reminder_confirm'), 'appointment_booking'],
   },
   {
-    key: 'care_plan_followup', title: 'Care-Plan Follow-up', direction: 'outbound', icon: 'bulb',
+    key: 'care_plan_followup', title: 'Care-Plan Follow-up', direction: 'outbound', icon: 'heart',
     purpose: "Check in on a patient's recovery and flag concerns for the care team.",
     fields: [
       { name: 'recovery_status', ask: 'Recovery status', type: 'choice', required: true, choices: ['improving', 'same', 'worse'] },
@@ -159,7 +159,7 @@ export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
     skills: [hc('care_plan_followup'), 'red_flag_alert'],
   },
   {
-    key: 'medication_adherence', title: 'Medication Reminder', direction: 'outbound', icon: 'box',
+    key: 'medication_adherence', title: 'Medication Reminder', direction: 'outbound', icon: 'lock',
     purpose: 'Remind the patient to continue their medication and check adherence.',
     fields: [
       { name: 'still_taking', ask: 'Still taking it?', type: 'choice', required: true, choices: ['yes', 'no', 'ran_out'] },
@@ -168,7 +168,7 @@ export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
     skills: [hc('medication_adherence')],
   },
   {
-    key: 'satisfaction_survey', title: 'Satisfaction Survey', direction: 'outbound', icon: 'star',
+    key: 'satisfaction_survey', title: 'Satisfaction Survey', direction: 'outbound', icon: 'starOutline',
     purpose: 'Collect a short satisfaction rating and comments after a visit.',
     fields: [
       { name: 'rating', ask: 'Rating (1–5)', type: 'number', required: true },
@@ -177,7 +177,7 @@ export const HEALTHCARE_USE_CASES: HealthcareUseCase[] = [
     skills: [hc('satisfaction_survey')],
   },
   {
-    key: 'patient_reactivation', title: 'Patient Reactivation', direction: 'outbound', icon: 'broadcast',
+    key: 'patient_reactivation', title: 'Patient Reactivation', direction: 'outbound', icon: 'refresh',
     purpose: "Reach out to a lapsed patient and capture whether they'd like to book a visit.",
     fields: [
       { name: 'interested', ask: 'Interested in a visit?', type: 'choice', required: true, choices: ['yes', 'no', 'later'] },

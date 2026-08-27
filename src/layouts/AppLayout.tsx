@@ -6,7 +6,7 @@ import Topbar from '../components/Topbar';
 // Pages that need the full viewport — no padding, no maxWidth constraint.
 const FULL_BLEED = ['/flows', '/analytics'];
 
-export default function AppLayout({ children }) {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const fullBleed = FULL_BLEED.some(p => pathname === p || pathname.startsWith(p + '/'));
 

@@ -48,8 +48,8 @@ async function deleteTicketsForTestUser() {
 
 test.beforeEach(async ({ context }) => {
   await context.addInitScript((user) => {
-    localStorage.setItem('access_token', 'fake-e2e-token-not-verified-by-backend');
-    localStorage.setItem('candy.user', JSON.stringify(user));
+    sessionStorage.setItem('access_token', 'fake-e2e-token-not-verified-by-backend');
+    sessionStorage.setItem('candy.user', JSON.stringify(user));
   }, SEEDED_USER);
 });
 

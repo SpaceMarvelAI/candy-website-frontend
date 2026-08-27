@@ -1,5 +1,10 @@
-// Central SVG icon library — maps name → JSX path(s)
-const iconPaths = {
+import type { ReactNode } from 'react';
+
+// Central SVG icon library — maps name → JSX path(s).
+// Keyed by plain string, not a name union: most call sites pass a name computed
+// from a config array, and the `if (!paths) return null` guard below already
+// makes an unknown name render nothing rather than throw.
+const iconPaths: Record<string, ReactNode> = {
   grid: (
     <>
       <rect x="3" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.75"/>
@@ -286,9 +291,42 @@ const iconPaths = {
       <path d="m3 8 9 5 9-5M12 13v8" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
     </>
   ),
+  user: (
+    <>
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+    </>
+  ),
+  shield: (
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+  ),
+  repeat: (
+    <>
+      <polyline points="17 1 21 5 17 9" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="7 23 3 19 7 15" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+    </>
+  ),
+  video: (
+    <>
+      <polygon points="23 7 16 12 23 17 23 7" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+      <rect x="1" y="5" width="15" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+    </>
+  ),
+  heart: (
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+  ),
 };
 
-export function Icon({ name, size = 16, className = '', style = {} }) {
+export interface IconProps {
+  name:       string;
+  size?:      number;
+  className?: string;
+  style?:     React.CSSProperties;
+}
+
+export function Icon({ name, size = 16, className = '', style = {} }: IconProps) {
   const paths = iconPaths[name];
   if (!paths) return null;
   return (

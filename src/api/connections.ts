@@ -70,6 +70,36 @@ export const updateConnection = (id: string, body: Partial<CreateConnectionBody>
 export const deleteConnection = (id: string) =>
   api<void>(`/v1/connections/${id}`, { method: 'DELETE' });
 
+/**
+ * Create-or-update a connection for one app type.
+ *
+ * `candy.app_connections` carries `UNIQUE (company_id, app_type)`
+ * (backend schema.sql:2151) and POST /v1/connections does NOT catch the
+ * violation — a second POST for the same app returns a raw HTTP 500, not a
+ * 409. So when the caller already knows a connection exists for this app we
+ * PATCH it instead of attempting the duplicate insert.
+ *
+ * Pass the existing connection (e.g. the one found in the `listConnections()`
+ * result for this `app_type`); omit it only when there genuinely is none.
+ */
+export const saveConnection = (body: CreateConnectionBody, existing?: AppConnection) =>
+  existing ? updateConnection(existing.id, body) : createConnection(body);
+
+/**
+ * User-facing message for a failed saveConnection().
+ * A 500 on the create path is very likely the unhandled unique-constraint
+ * violation above (our own list may be stale, or another tab/user connected the
+ * same app first) — say so instead of showing a generic server error.
+ */
+export function connectionSaveErrorMessage(
+  err: any, appLabel: string, existed: boolean,
+): string {
+  if (!existed && err?.status === 500) {
+    return `${appLabel} looks like it is already connected. Reload the page to pick up the existing connection, then update it there.`;
+  }
+  return err?.message ? `Could not save ${appLabel}: ${err.message}` : `Could not save ${appLabel}`;
+}
+
 // Test a connection (Candy makes a lightweight API call to verify creds)
 export const testConnection = (id: string) =>
   api<{ ok: boolean; message?: string }>(`/v1/connections/${id}/test`, {

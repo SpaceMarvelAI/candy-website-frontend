@@ -9,6 +9,7 @@ import type React from 'react';
 import { createPortal } from 'react-dom';
 import Icon from '../assets/icons';
 import { useApp } from '../context/AppContext';
+import { errorMessage } from '../utils/apiError';
 import { useTheme } from '../hooks/useTheme';
 import { listMyIssues, createIssue, loadAttachment, type ReportedIssue } from '../api/reportIssues';
 
@@ -303,7 +304,7 @@ function IssueDetail({ issue, onImageClick }: { issue: ReportedIssue; onImageCli
 }
 
 export default function ReportIssuesModal({ onClose }: Props) {
-  const { user, addToast } = useApp() as any;
+  const { user, addToast } = useApp();
   const { theme } = useTheme();
 
   const [view, setView] = useState<'list' | 'new'>('list');
@@ -327,8 +328,8 @@ export default function ReportIssuesModal({ onClose }: Props) {
     setLoadingList(true);
     try {
       setIssues(await listMyIssues(user.user_id));
-    } catch (e: any) {
-      addToast(e?.message || 'Could not load reported issues.', 'error');
+    } catch (e) {
+      addToast(errorMessage(e, 'Could not load reported issues.'), 'error');
     } finally {
       setLoadingList(false);
     }
@@ -380,6 +381,15 @@ export default function ReportIssuesModal({ onClose }: Props) {
       addToast('Title and description are required.', 'error');
       return;
     }
+    // `user` can go null while this modal is open — the api client fires
+    // candy:auth-expired on a 401 and AppContext clears it, which the
+    // refreshList() call above can trigger. Without this guard the three
+    // user.* reads below threw a TypeError that landed in the catch as the
+    // misleading "Could not submit the report.", losing the typed-out report.
+    if (!user) {
+      addToast('Your session expired — sign in again to report an issue.', 'error');
+      return;
+    }
     setSubmitting(true);
     try {
       const created = await createIssue({
@@ -396,8 +406,8 @@ export default function ReportIssuesModal({ onClose }: Props) {
       resetForm();
       setView('list');
       addToast('Issue reported — thanks!', 'success');
-    } catch (e: any) {
-      addToast(e?.message || 'Could not submit the report.', 'error');
+    } catch (e) {
+      addToast(errorMessage(e, 'Could not submit the report.'), 'error');
     } finally {
       setSubmitting(false);
     }
@@ -562,7 +572,7 @@ export default function ReportIssuesModal({ onClose }: Props) {
 
               {files.length > 0 && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-                  {files.map((f, i) => (
+                  {files.map((_, i) => (
                     <div
                       key={i}
                       style={{

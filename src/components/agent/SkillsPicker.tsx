@@ -12,10 +12,12 @@ import {
   listSkills, getAgentSkills, attachSkill, detachSkill,
   type Skill, type SkillCategory,
 } from '../../api/skills';
+import { errorMessage, gateInfo, type GateInfo } from '../../utils/apiError';
+import PlanGateNotice from '../PlanGateNotice';
 
 const tintColor: Record<string, string> = {
   purple: 'var(--purple-hi)', blue: 'var(--blue)', teal: 'var(--teal)',
-  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)',
+  green: 'var(--green)', amber: 'var(--amber)', pink: 'var(--pink)', violet: 'var(--violet)',
 };
 
 // ── Category metadata (visual) ────────────────────────────────────────────────
@@ -83,6 +85,8 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
 
   const [skills,       setSkills]       = useState<Skill[]>(FALLBACK_SKILLS);
   const [attachedSlugs, setAttachedSlugs] = useState<Set<string>>(new Set());
+  // 402/403 plan / credit / role gate on attach/detach — shown as a notice.
+  const [gate, setGate] = useState<GateInfo | null>(null);
   const [loading,      setLoading]      = useState(false);
   const [toggling,     setToggling]     = useState<Set<string>>(new Set());
   const [filter,       setFilter]       = useState<SkillCategory | 'all'>('all');
@@ -125,6 +129,7 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
     const isAttached = attachedSlugs.has(skill.slug);
 
     // Optimistic
+    setGate(null);
     setToggling(s => new Set(s).add(skill.slug));
     setAttachedSlugs(prev => {
       const next = new Set(prev);
@@ -140,14 +145,18 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
         await attachSkill(agentId, skill.slug);
         addToast(`${skill.title} attached`, 'success');
       }
-    } catch (e: any) {
+    } catch (e) {
       // Rollback
       setAttachedSlugs(prev => {
         const next = new Set(prev);
-        isAttached ? next.add(skill.slug) : next.delete(skill.slug);
+        if (isAttached) next.add(skill.slug); else next.delete(skill.slug);
         return next;
       });
-      addToast(`Failed: ${e?.message ?? e}`, 'error');
+      // Skills are plan-gated (403 upgrade_required / 402 no_credits) — those are
+      // expected answers, not failures, so they get a notice instead of a red toast.
+      const g = gateInfo(e);
+      setGate(g);
+      if (!g) addToast(`Failed: ${errorMessage(e)}`, 'error');
     } finally {
       setToggling(s => { const n = new Set(s); n.delete(skill.slug); return n; });
     }
@@ -184,6 +193,12 @@ export default function SkillsPicker({ agentId, useCaseSlug, tint = 'purple', on
 
   return (
     <div style={{ padding: 0 }}>
+
+      {gate && (
+        <div style={{ padding: '12px 14px 0' }}>
+          <PlanGateNotice gate={gate} compact />
+        </div>
+      )}
 
       {/* ── Category filter tabs ─────────────────────────────────────────────── */}
       <div style={{

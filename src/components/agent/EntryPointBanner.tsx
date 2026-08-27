@@ -16,6 +16,8 @@
  */
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
+import { errorMessage, gateInfo, type GateInfo } from '../../utils/apiError';
+import PlanGateNotice from '../PlanGateNotice';
 import Icon from '../../assets/icons';
 
 // ── colours ──────────────────────────────────────────────────────────────────
@@ -26,6 +28,7 @@ const tintColor: Record<string, string> = {
   green:  'var(--green)',
   amber:  'var(--amber)',
   pink:   'var(--pink)',
+  violet: 'var(--violet)',
 };
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -109,16 +112,11 @@ export default function EntryPointBanner({
   const [routes, setRoutes] = useState<InboundRoute[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [requestingNumber, setRequestingNumber] = useState(false);
-  const [requestSent, setRequestSent] = useState(false);
   const [numberInput, setNumberInput] = useState('');
   const [assignError, setAssignError] = useState('');
-  // Outbound dial
-  const [dialNumber, setDialNumber] = useState('');
-  const [dialing, setDialing] = useState(false);
-  const [dialStatus, setDialStatus] = useState<'idle' | 'ringing' | 'error'>('idle');
-  const [dialError, setDialError] = useState('');
+  // 402/403 from the plan / credit / role gates — shown as a notice, not an error.
+  const [gate, setGate] = useState<GateInfo | null>(null);
 
-  const BASE_URL  = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8002';
   const hostedUrl = agentId
     ? `${window.location.protocol}//${window.location.host}/chat/${agentId}`
     : '';
@@ -130,8 +128,8 @@ export default function EntryPointBanner({
     if (!agentId || !isVoice) { setRoutes([]); return; }
     setLoadingRoutes(true);
     api<InboundRoute[]>(`/v1/agents/${agentId}/inbound-routes`)
-      .then(r => setRoutes(r))
-      .catch(() => setRoutes([]))
+      .then(r => { setRoutes(r); setGate(null); })
+      .catch(e => { setRoutes([]); setGate(gateInfo(e)); })
       .finally(() => setLoadingRoutes(false));
   }, [agentId, isVoice]);
 
@@ -139,6 +137,7 @@ export default function EntryPointBanner({
     const num = numberInput.trim();
     if (!agentId || !num || requestingNumber) return;
     setAssignError('');
+    setGate(null);
     setRequestingNumber(true);
     try {
       await api(`/v1/agents/${agentId}/inbound-routes`, {
@@ -148,32 +147,13 @@ export default function EntryPointBanner({
       const r = await api<InboundRoute[]>(`/v1/agents/${agentId}/inbound-routes`);
       setRoutes(r);
       setNumberInput('');
-    } catch (e: any) {
-      setAssignError(e?.detail || 'Failed to assign number');
+    } catch (e) {
+      // A plan/role gate is an expected answer — show the notice, not an error.
+      const g = gateInfo(e);
+      if (g) setGate(g);
+      else setAssignError(errorMessage(e, 'Failed to assign number'));
     } finally {
       setRequestingNumber(false);
-    }
-  }
-
-  async function dialOutbound() {
-    const num = dialNumber.trim();
-    if (!agentId || !num || dialing) return;
-    setDialing(true);
-    setDialError('');
-    setDialStatus('idle');
-    try {
-      await api('/v1/vobiz/dial', {
-        method: 'POST',
-        body: { to: num, agent_id: agentId },
-      });
-      setDialStatus('ringing');
-      setDialNumber('');
-      setTimeout(() => setDialStatus('idle'), 5000);
-    } catch (e: any) {
-      setDialStatus('error');
-      setDialError(e?.detail || e?.message || 'Dial failed');
-    } finally {
-      setDialing(false);
     }
   }
 
@@ -184,7 +164,12 @@ export default function EntryPointBanner({
       if (!r) return;
       await api(`/v1/agents/${agentId}/inbound-routes/${(r as any).id}`, { method: 'DELETE' });
       setRoutes(prev => prev.filter(x => x.twilio_number !== num));
-    } catch {}
+    } catch (e) {
+      // Deleting a route is admin-only; don't fail silently on the role gate.
+      const g = gateInfo(e);
+      if (g) setGate(g);
+      else setAssignError(errorMessage(e, 'Failed to remove number'));
+    }
   }
 
   if (!agentId) return null;
@@ -267,6 +252,10 @@ export default function EntryPointBanner({
 
       {/* Right: phone number or provision CTA */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {gate && <PlanGateNotice gate={gate} compact />}
+        {assignError && (
+          <div style={{ fontSize: 11, color: 'var(--red)' }}>{assignError}</div>
+        )}
         {loadingRoutes ? (
           <div style={{ fontSize: 12, color: 'var(--text-4)' }}>Loading…</div>
         ) : primaryRoute ? (
@@ -288,46 +277,45 @@ export default function EntryPointBanner({
               Inbound: set Answer URL in VoBiz → <code style={{ fontSize: 10 }}>POST /v1/vobiz/answer</code>
             </div>
 
-            {/* Outbound dial */}
+            {/* Outbound dial — no backend endpoint exists yet (VoBiz exposes only
+                /answer, /hangup, /audio), so the control is inert on purpose
+                rather than firing a 404. */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: 'var(--text-3)', minWidth: 60 }}>Dial out</span>
               <input
-                value={dialNumber}
-                onChange={e => setDialNumber(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && dialOutbound()}
+                disabled
+                readOnly
+                aria-label="Outbound number — dialling from the dashboard is not available yet"
                 placeholder="+91XXXXXXXXXX"
                 style={{
                   flex: 1, minWidth: 150, padding: '5px 9px',
                   borderRadius: 7, border: '1px solid var(--border)',
-                  background: 'var(--bg-1)', color: 'var(--text-1)',
+                  background: 'var(--bg-0)', color: 'var(--text-4)',
                   fontSize: 12.5, fontFamily: 'monospace',
+                  cursor: 'not-allowed',
                 }}
               />
               <button
-                onClick={dialOutbound}
-                disabled={dialing || !dialNumber.trim()}
+                type="button"
+                disabled
+                title="Dialling from the dashboard isn't available yet"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   padding: '5px 13px', borderRadius: 8,
-                  border: `1px solid ${color}44`,
-                  background: dialStatus === 'ringing' ? 'rgba(76,175,80,0.15)' : `${color}12`,
-                  color: dialStatus === 'ringing' ? 'var(--green)' : color,
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-0)',
+                  color: 'var(--text-4)',
                   fontSize: 12.5, fontWeight: 600,
-                  cursor: (dialing || !dialNumber.trim()) ? 'not-allowed' : 'pointer',
-                  opacity: (dialing || !dialNumber.trim()) ? 0.5 : 1,
-                  transition: 'all 0.2s',
+                  cursor: 'not-allowed',
                 }}
               >
-                {dialing
-                  ? <><Icon name="phone" size={13} /> Dialling…</>
-                  : dialStatus === 'ringing'
-                    ? <><Icon name="check" size={13} /> Ringing</>
-                    : <><Icon name="phone" size={13} /> Call</>}
+                <Icon name="phone" size={13} /> Call — coming soon
               </button>
             </div>
-            {dialStatus === 'error' && dialError && (
-              <div style={{ fontSize: 11, color: 'var(--red)' }}>{dialError}</div>
-            )}
+            <div style={{ fontSize: 11, color: 'var(--text-4)' }}>
+              Outbound dialling from the dashboard isn’t available yet. Place outbound
+              calls from VoBiz for now.
+            </div>
           </>
         ) : (
           <>
@@ -361,9 +349,6 @@ export default function EntryPointBanner({
                 {requestingNumber ? 'Assigning…' : '+ Assign'}
               </button>
             </div>
-            {assignError && (
-              <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 2 }}>{assignError}</div>
-            )}
           </>
         )}
       </div>

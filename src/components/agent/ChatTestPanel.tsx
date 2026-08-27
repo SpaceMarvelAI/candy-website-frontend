@@ -25,6 +25,7 @@ const tintColor: Record<string, string> = {
   green:  'var(--green)',
   amber:  'var(--amber)',
   pink:   'var(--pink)',
+  violet: 'var(--violet)',
 };
 const tintAlpha: Record<string, string> = {
   purple: 'rgba(117,91,227,0.18)',
@@ -33,6 +34,7 @@ const tintAlpha: Record<string, string> = {
   green:  'rgba(76,175,80,0.14)',
   amber:  'rgba(255,181,71,0.14)',
   pink:   'rgba(230,90,255,0.14)',
+  violet: 'rgba(117,91,227,0.18)',
 };
 const tintBorder: Record<string, string> = {
   purple: 'rgba(117,91,227,0.35)',
@@ -41,6 +43,7 @@ const tintBorder: Record<string, string> = {
   green:  'rgba(76,175,80,0.30)',
   amber:  'rgba(255,181,71,0.30)',
   pink:   'rgba(230,90,255,0.30)',
+  violet: 'rgba(117,91,227,0.35)',
 };
 
 interface Message {

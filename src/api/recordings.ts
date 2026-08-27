@@ -137,16 +137,34 @@ export async function listAllRecordings(opts: {
   return res.json();
 }
 
+/** JSON body returned by `GET /v1/recordings/{recording_id}/download`. */
+export interface RecordingDownloadMeta {
+  signed_url: string;
+  s3_key: string;
+  mime_type: string;
+  filename: string;
+}
+
+export interface RecordingDownload extends RecordingDownloadMeta {
+  /** Audio bytes, or null when the browser could not read the signed URL. */
+  blob: Blob | null;
+}
+
 /**
- * Download a recording blob via the backend proxy.
- * The backend fetches the S3 object server-side and streams it back with
- * `Content-Disposition: attachment`, bypassing any S3 CORS restrictions.
+ * Resolve a recording to downloadable audio.
  *
- * Backend must expose:
+ * The download endpoint is NOT an audio proxy — it returns JSON metadata with
+ * a freshly minted S3 signed URL:
  *   GET /v1/recordings/{recording_id}/download
- *   → 200 with audio/* body + Content-Disposition: attachment; filename="..."
+ *   → 200 { signed_url, s3_key, mime_type, filename }
+ *
+ * So we parse that, then fetch `signed_url` for the real bytes. That second
+ * fetch goes straight to S3 and can still be refused by bucket CORS; when it
+ * is, `blob` comes back null and the caller should navigate to `signed_url`
+ * instead. The fresh URL is worth having on its own — the one carried on a
+ * `RecordingRow` may already have expired.
  */
-export async function downloadRecordingBlob(recordingId: string): Promise<Blob> {
+export async function downloadRecordingBlob(recordingId: string): Promise<RecordingDownload> {
   const headers: Record<string, string> = {};
   const tok = getToken();
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
@@ -159,5 +177,16 @@ export async function downloadRecordingBlob(recordingId: string): Promise<Blob> 
     try { detail = await res.json(); } catch { detail = await res.text(); }
     throw new Error(typeof detail === 'string' ? detail : (detail?.detail ?? `HTTP ${res.status}`));
   }
-  return res.blob();
+  const meta: RecordingDownloadMeta = await res.json();
+  if (!meta?.signed_url) throw new Error('Backend returned no signed_url for this recording.');
+
+  let blob: Blob | null = null;
+  try {
+    const audio = await fetch(meta.signed_url);
+    // Re-wrap with the backend's mime type — S3 commonly serves
+    // application/octet-stream, which saves as an unplayable file.
+    if (audio.ok) blob = new Blob([await audio.arrayBuffer()], { type: meta.mime_type || 'audio/mpeg' });
+  } catch { /* CORS or network: caller falls back to opening signed_url */ }
+
+  return { ...meta, blob };
 }

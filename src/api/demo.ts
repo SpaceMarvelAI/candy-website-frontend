@@ -115,6 +115,11 @@ export async function streamDemoTurn(
   const decoder = new TextDecoder();
   let buffer = '';
   let fullText = '';
+  // Set once we've handed an error to cb.onError. Because onError is allowed to
+  // rethrow (TestPanel does, so send()'s catch renders it in the bubble), that
+  // throw lands in the outer catch below — which must NOT report the same error
+  // a second time.
+  let reportedError = false;
 
   try {
     while (true) {
@@ -131,33 +136,48 @@ export async function streamDemoTurn(
           if (!line.startsWith('data:')) continue;
           const data = line.slice(5).trim();
           if (!data) continue;
+          // ONLY the parse is guarded here. This try used to wrap the callbacks
+          // too, so an exception thrown by a callback — including the `onError`
+          // handler that deliberately rethrows so send()'s catch can render it —
+          // was logged as "bad SSE frame" and swallowed. The `return` below never
+          // ran, the stream just drained, and the user was left looking at an
+          // empty agent bubble with the real error only in the console. Seen live
+          // with a decommissioned LLM model: the backend sent
+          // {"error": "...model_not_found"} and the UI showed nothing at all.
+          let evt: any;
           try {
-            const evt = JSON.parse(data);
-            if (evt.error) {
-              cb.onError?.(new Error(evt.error));
-              return;
-            }
-            if (evt.sentence) {
-              fullText += (fullText ? ' ' : '') + evt.sentence;
-              cb.onSentence?.(evt.sentence, fullText);
-            }
-            if (evt.done) {
-              cb.onDone?.({
-                full_text:         evt.full_text || fullText,
-                latency_ms:        evt.latency_ms ?? 0,
-                active_language:   evt.active_language,
-                language_switched: evt.language_switched,
-                switch_ack:        evt.switch_ack,
-              });
-              return;
-            }
+            evt = JSON.parse(data);
           } catch (e) {
             console.warn('[demo] bad SSE frame', data, e);
+            continue;
+          }
+
+          if (evt.error) {
+            reportedError = true;
+            cb.onError?.(new Error(evt.error));
+            return;
+          }
+          if (evt.sentence) {
+            fullText += (fullText ? ' ' : '') + evt.sentence;
+            cb.onSentence?.(evt.sentence, fullText);
+          }
+          if (evt.done) {
+            cb.onDone?.({
+              full_text:         evt.full_text || fullText,
+              latency_ms:        evt.latency_ms ?? 0,
+              active_language:   evt.active_language,
+              language_switched: evt.language_switched,
+              switch_ack:        evt.switch_ack,
+            });
+            return;
           }
         }
       }
     }
   } catch (e: any) {
+    // Already surfaced above (and onError rethrew) — let it propagate untouched
+    // to the caller rather than reporting it twice.
+    if (reportedError) throw e;
     cb.onError?.(e);
   }
 }

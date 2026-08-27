@@ -24,16 +24,9 @@ const tintColor = {
   green:  'var(--green)',
   amber:  'var(--amber)',
   pink:   'var(--pink)',
+  violet: 'var(--violet)',
 };
 
-const tintGlow = {
-  purple: 'rgba(117,91,227,0.30)',
-  blue:   'rgba(24,218,252,0.30)',
-  teal:   'rgba(79,209,197,0.30)',
-  green:  'rgba(76,175,80,0.30)',
-  amber:  'rgba(255,181,71,0.30)',
-  pink:   'rgba(230,90,255,0.30)',
-};
 
 interface Props {
   category: string;
@@ -47,13 +40,18 @@ interface Props {
   publishing?: boolean;
   publishDisabled?: boolean;
   publishHint?: string;
+  /** Make <main> fill the viewport and drop its bottom padding, so a page whose
+   *  last child is the conversation reaches the bottom of the window instead of
+   *  floating above 60px of dead space. Opt-in: ChatbotWorkspace keeps the
+   *  normal scrolling page. */
+  flush?: boolean;
   children: any;
 }
 
 export default function AgentShell({
   category, icon, tint = 'purple', typeLabel = 'Voice Agent',
   status, agentId, onPublish, onEmbed, publishing, publishDisabled, publishHint,
-  children,
+  flush = false, children,
 }: Props) {
   const { showView, setActiveNav } = useApp();
   const { theme, toggleTheme } = useTheme();
@@ -68,10 +66,20 @@ export default function AgentShell({
   return (
     <div
       style={{
-        minHeight: '100vh',
         background: 'var(--bg-0)',
         position: 'relative',
         zIndex: 1,
+        // A `flush` page needs a DEFINITE height, not a minimum: `min-height`
+        // leaves the flex container auto-height, and a child's `height: 100%`
+        // (TestPanel's panel) has nothing to resolve against, so the card
+        // collapsed to its content and left dead space below.
+        // dvh so mobile browser chrome doesn't cause the classic 100vh overflow.
+        ...(flush
+          ? {
+              height: '100dvh', maxHeight: '100dvh', overflow: 'hidden',
+              display: 'flex', flexDirection: 'column',
+            }
+          : { minHeight: '100vh' }),
       }}
     >
       <header
@@ -257,7 +265,17 @@ export default function AgentShell({
 
       <main
         style={{
-          padding: isMobile ? '16px 14px 40px' : isTablet ? '20px 20px 48px' : '28px 28px 60px',
+          padding: flush
+            ? (isMobile ? '16px 14px 14px' : isTablet ? '20px 20px 20px' : '28px 28px 28px')
+            : (isMobile ? '16px 14px 40px' : isTablet ? '20px 20px 48px' : '28px 28px 60px'),
+          // overflowY so a tall top bar (or a wrapped picker row on a laptop)
+          // scrolls inside main rather than being clipped by the fixed height.
+          ...(flush
+            ? {
+                flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
+                overflowY: 'auto' as const,
+              }
+            : null),
         }}
       >
         {children}
