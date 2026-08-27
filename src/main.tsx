@@ -66,6 +66,12 @@ if (posthogKey) {
       return cr;
     },
   });
+  // Tags every event from this app with which SpaceMarvel product it came
+  // from — all three products (Chat, Candy, Finixy) share one PostHog
+  // project, so this is how a query/dashboard scopes to just one product
+  // (e.g. `WHERE properties.product = 'candy'`) without needing separate
+  // PostHog projects and losing cross-product user journeys.
+  posthog.register({ product: 'candy' });
 }
 
 // ── Global error listeners ────────────────────────────────────────────────────
