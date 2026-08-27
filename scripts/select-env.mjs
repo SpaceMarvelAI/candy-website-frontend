@@ -28,10 +28,10 @@ function render() {
 function run(mode) {
   console.clear();
   console.log(`Starting Vite dev server with mode=${mode}\n`);
-  const child = spawn("npx", ["vite", "--mode", mode], {
+  const vite = fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url));
+  const child = spawn(process.execPath, [vite, "--mode", mode], {
     cwd: ROOT,
     stdio: "inherit",
-    shell: process.platform === "win32",
   });
   child.on("exit", (code) => process.exit(code ?? 0));
 }
