@@ -28,7 +28,7 @@ const NAV_SECTIONS = [
     label: 'Products',
     items: [
       { id: 'metaspace', label: 'Meta Space', icon: '', img: '/Metaspace.svg',   path: null,
-        ssoTarget: import.meta.env.VITE_META_APP_URL || 'https://spacemarvel.ai', external: true },
+        ssoTarget: import.meta.env.VITE_META_APP_URL || 'https://dev.spacemarvel.ai', external: true },
       { id: 'finixy',    label: 'Finixy',     icon: '', img: '/FinixyLogo.svg', path: null,
         ssoTarget: import.meta.env.VITE_FINIXY_APP_URL || 'https://app.finixy.ai',        external: true },
     ],

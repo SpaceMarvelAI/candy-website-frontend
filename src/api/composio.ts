@@ -2,7 +2,7 @@ import { logger, truncateForLog } from '../utils/logger';
 
 const SM_API    = import.meta.env.VITE_SM_API_URL    || 'https://dashboard-api.spacemarvel.ai';
 const META_API  = import.meta.env.VITE_META_API_URL  || 'https://meta-api.spacemarvel.ai';
-const META_APP  = import.meta.env.VITE_META_APP_URL  || 'https://spacemarvel.ai';
+const META_APP  = import.meta.env.VITE_META_APP_URL  || 'https://dev.spacemarvel.ai';
 
 let _metaToken: string | null = null;
 let _metaTokenExpiry = 0;
