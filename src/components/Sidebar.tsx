@@ -28,7 +28,7 @@ const NAV_SECTIONS = [
     label: 'Products',
     items: [
       { id: 'metaspace', label: 'Meta Space', icon: '', img: '/Metaspace.svg',   path: null,
-        ssoTarget: import.meta.env.VITE_META_APP_URL || 'https://meta.spacemarvel.ai', external: true },
+        ssoTarget: import.meta.env.VITE_META_APP_URL || 'https://spacemarvel.ai', external: true },
       { id: 'finixy',    label: 'Finixy',     icon: '', img: '/FinixyLogo.svg', path: null,
         ssoTarget: import.meta.env.VITE_FINIXY_APP_URL || 'https://app.finixy.ai',        external: true },
     ],
@@ -335,7 +335,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     // Save intent so SSO callback can redirect there immediately after login
     localStorage.setItem('candy:sso_intent', item.ssoTarget);
     const candyCallback = window.location.origin + '/sso/callback';
-    window.location.href = `https://spacemarvel.com/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
+    window.location.href = `https://dev.spacemarvel.com/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 
   const panelExpanded = isMobileOrTablet ? true : expanded;
