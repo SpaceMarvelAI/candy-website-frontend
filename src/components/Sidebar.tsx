@@ -227,8 +227,8 @@ function ProfileMenu({
       {subMenu === 'help' && (
         <div style={flyoutStyle}>
           {menuItem('Report issue',       () => { onReportIssue(); onClose(); })}
-          {menuItem('Terms & conditions', () => window.open('https://spacemarvel.ai/terms', '_blank'))}
-          {menuItem('Privacy policy',     () => window.open('https://spacemarvel.ai/privacy', '_blank'))}
+          {menuItem('Terms & conditions', () => window.open('https://spacemarvel.com/terms', '_blank'))}
+          {menuItem('Privacy policy',     () => window.open('https://spacemarvel.com/privacy', '_blank'))}
           {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
         </div>
       )}
@@ -335,7 +335,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     // Save intent so SSO callback can redirect there immediately after login
     localStorage.setItem('candy:sso_intent', item.ssoTarget);
     const candyCallback = window.location.origin + '/sso/callback';
-    window.location.href = `https://spacemarvel.ai/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
+    window.location.href = `https://spacemarvel.com/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 
   const panelExpanded = isMobileOrTablet ? true : expanded;
