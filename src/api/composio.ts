@@ -2,7 +2,7 @@ import { logger, truncateForLog } from '../utils/logger';
 
 const SM_API    = import.meta.env.VITE_SM_API_URL    || 'https://dashboard-api.spacemarvel.ai';
 const META_API  = import.meta.env.VITE_META_API_URL  || 'https://meta-api.spacemarvel.ai';
-const META_APP  = import.meta.env.VITE_META_APP_URL  || 'https://meta.spacemarvel.ai';
+const META_APP  = import.meta.env.VITE_META_APP_URL  || 'https://spacemarvel.ai';
 
 let _metaToken: string | null = null;
 let _metaTokenExpiry = 0;
@@ -11,7 +11,7 @@ async function getMetaToken(): Promise<string> {
   // Return cached Metaspace JWT if still valid (30s buffer)
   if (_metaToken && Date.now() < _metaTokenExpiry - 30_000) return _metaToken;
 
-  // Step 1 — generate a SpaceMarvel SSO JWT for meta.spacemarvel.ai
+  // Step 1 — generate a SpaceMarvel SSO JWT for spacemarvel.ai
   const dashboardToken = localStorage.getItem('dashboard_token');
   if (!dashboardToken) throw new Error('COMPOSIO_UNAUTHORIZED');
 
