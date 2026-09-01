@@ -18,7 +18,7 @@ describe('redirectToSSO', () => {
   it('uses the local callback URL on localhost', () => {
     const loc = stubLocation('localhost');
     redirectToSSO();
-    expect(loc.href).toContain('spacemarvel.ai/login');
+    expect(loc.href).toContain('spacemarvel.com/login');
     expect(decodeURIComponent(loc.href)).toContain('localhost/sso/callback');
   });
 
