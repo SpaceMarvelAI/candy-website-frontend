@@ -194,13 +194,17 @@ function TabPill({ label, active, onClick }: { label: string; active: boolean; o
 
 // ── Code block with copy button ───────────────────────────────────────────────
 
-function CodeBlock({ code }: { code: string }) {
+function CodeBlock({ code, agentId, tab }: { code: string; agentId: string; tab: Tab }) {
   const [copied, setCopied] = useState(false);
 
   function copy() {
     navigator.clipboard.writeText(code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      // Client-only: copying is the real "I'm going to use this" signal,
+      // distinct from agent_embed_modal_opened (just viewing). Never hits
+      // the backend — the snippet is generated client-side.
+      posthog.capture('agent_embed_snippet_copied', { agent_id: agentId, tab });
     });
   }
 
@@ -403,7 +407,7 @@ export default function EmbedModal({ agentId, agentName, onClose }: Props) {
           </div>
 
           {/* Code */}
-          <CodeBlock code={code} />
+          <CodeBlock code={code} agentId={agentId} tab={tab} />
 
           {/* Footer note */}
           <div
