@@ -7,6 +7,7 @@ import PromptTicketHandler from './components/PromptTicketHandler';
 import PromptAgentPickerModal from './components/agent/PromptAgentPickerModal';
 import AppLayout   from './layouts/AppLayout';
 import { redirectToOIDC, PENDING_PROMPT_TICKET_KEY } from './utils/sso';
+import { consumeSignedOutFlag } from './api/auth';
 import { useApp } from './context/AppContext';
 import { RouteErrorBoundary } from './components/ErrorBoundary';
 import { logger } from './utils/logger';
@@ -20,7 +21,6 @@ import {
 } from './components/PageSkeletons';
 
 
-const LandingPage      = lazy(() => import('./pages/landing'));
 const SSOCallbackPage  = lazy(() => import('./pages/sso'));
 const OIDCCallbackPage = lazy(() => import('./pages/sso/oidc-callback'));
 
@@ -99,8 +99,41 @@ function DefaultContentSkeleton() {
   );
 }
 
+/**
+ * `/` (i.e. `#/`, this app is on HashRouter) is a redirect, not a page. A
+ * signed-in user goes to the app; everyone else goes straight to the IDP. The
+ * old pages/landing screen only ever existed to hold a "Sign in" button in
+ * front of that redirect, and in practice all it did was flash an empty white
+ * page on every cold load.
+ *
+ * The two guards below are the ones that screen carried, and both still matter:
+ *
+ * - An incoming ?access_token=/?token=/?sso_token= means AppContext's SSO
+ *   interceptor is mid-exchange on this very page load (`user` is still null
+ *   pre-hydration). Redirecting now starts a SECOND, independent OIDC cycle
+ *   carrying the same ?ticket=, and the second /prompts/claim on a single-use
+ *   ticket 404s. Confirmed live.
+ * - Just signed out: fullLogout() could only clear the IDP's httpOnly cookie if
+ *   logout-everywhere succeeded. If it did not, bouncing to the IDP silently
+ *   re-authenticates the user we just signed out — the "sign out did nothing"
+ *   symptom. That one case gets a deliberate click instead of a redirect.
+ */
 function RootRedirect() {
   const { user, claimingPrompt } = useApp();
+  // Decided once per mount, never per render: consumeSignedOutFlag() is one-shot.
+  const holdRef = useRef<boolean | null>(null);
+  if (holdRef.current === null) {
+    const params = new URLSearchParams(window.location.search);
+    const hasIncomingToken =
+      params.has('access_token') || params.has('token') || params.has('sso_token');
+    holdRef.current = hasIncomingToken ? true : consumeSignedOutFlag();
+  }
+  const hold = holdRef.current;
+
+  useEffect(() => {
+    if (!user && !hold) redirectToOIDC();
+  }, [user, hold]);
+
   if (user) {
     // Don't redirect away while a prompt-ticket claim is in flight (AppContext's SSO
     // interceptor is mid-claim) — otherwise this fires the instant `user` becomes truthy,
@@ -111,9 +144,26 @@ function RootRedirect() {
       return <Navigate to="/healthcare" replace />;
     }
   }
+  // Nothing to render while the browser is on its way to the IDP. The only
+  // screen left is the post-sign-out one, which exists so that a failed
+  // logout-everywhere does not strand the user with no way back in.
+  if (!hold) return null;
   return (
-    <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
-      <LandingPage />
+    <div style={{
+      position: 'relative', zIndex: 1, minHeight: '100vh',
+      display: 'grid', placeItems: 'center', padding: 24,
+    }}>
+      <button
+        type="button"
+        onClick={redirectToOIDC}
+        style={{
+          padding: '13px 28px', background: 'var(--grad-brand)', color: '#fff',
+          border: 'none', borderRadius: 'var(--radius)', fontSize: 15,
+          fontWeight: 600, cursor: 'pointer',
+        }}
+      >
+        Sign in
+      </button>
     </div>
   );
 }
@@ -174,7 +224,7 @@ export default function App() {
       <RouteLogger />
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Landing — redirects to /dashboard if already signed in */}
+          {/* `#/` is a pure redirect — into the app if signed in, else to the IDP */}
           <Route path="/" element={<RootRedirect />} />
 
           {/* /auth — SSO entry point from SpaceMarvel (?sso_token=…)
