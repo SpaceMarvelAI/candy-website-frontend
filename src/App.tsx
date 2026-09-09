@@ -4,6 +4,7 @@ import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import PromptTicketHandler from './components/PromptTicketHandler';
+import OnboardingGate from './components/OnboardingGate';
 import PromptAgentPickerModal from './components/agent/PromptAgentPickerModal';
 import AppLayout   from './layouts/AppLayout';
 import { redirectToOIDC, PENDING_PROMPT_TICKET_KEY } from './utils/sso';
@@ -172,6 +173,11 @@ export default function App() {
     <ConfirmProvider>
       <AmbientBg />
       <RouteLogger />
+      {/* Setup pop-up / "Finish setup" widget. Mounted ONCE here rather than per route: it reads
+          a single flag (`auto_open`) and two copies would both try to open. It renders null with
+          no session and null once the flow is complete, so it costs nothing on a public page or a
+          finished account. */}
+      <OnboardingGate />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Landing — redirects to /dashboard if already signed in */}
