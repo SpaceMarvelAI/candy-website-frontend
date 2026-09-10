@@ -25,10 +25,10 @@ import { listMyWorkspaces, switchWorkspace, type MyWorkspace } from '../api/work
 /**
  * Which workspace is active, read from Candy's own token.
  *
- * `_mint_jwt` puts the workspace under `org_id` (and `workspace_id` once the rename lands), so
- * read the new name first and fall back — tokens minted before that change carry only `org_id`
- * and live for hours. Nothing else in this app decodes the token, hence the small local reader
- * rather than a dependency.
+ * `_mint_jwt` puts the workspace under `org_id`, `workspace_id`, AND `subscription_workspace_id`
+ * (same value, all three — mid-rename), so read the final name first and fall back through the
+ * older ones — tokens minted before this change carry only `org_id`, and live for hours. Nothing
+ * else in this app decodes the token, hence the small local reader rather than a dependency.
  */
 function activeWorkspaceFromToken(): string | null {
   const t = getToken();
@@ -37,9 +37,10 @@ function activeWorkspaceFromToken(): string | null {
     const body = t.split('.')[1];
     if (!body) return null;
     const claims = JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/'))) as {
-      workspace_id?: string; org_id?: string;
+      subscription_workspace_id?: string; workspace_id?: string; org_id?: string;
     };
-    return claims.workspace_id || claims.org_id || null;
+    // FINAL name first — see the note above and Candy's own api/v1/auth.py:_mint_jwt.
+    return claims.subscription_workspace_id || claims.workspace_id || claims.org_id || null;
   } catch {
     return null;   // not a JWT we can read — the tick just won't show
   }
