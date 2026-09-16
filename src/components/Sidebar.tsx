@@ -227,8 +227,8 @@ function ProfileMenu({
       {subMenu === 'help' && (
         <div style={flyoutStyle}>
           {menuItem('Report issue',       () => { onReportIssue(); onClose(); })}
-          {menuItem('Terms & conditions', () => window.open('https://spacemarvel.ai/terms', '_blank'))}
-          {menuItem('Privacy policy',     () => window.open('https://spacemarvel.ai/privacy', '_blank'))}
+          {menuItem('Terms & conditions', () => window.open('https://spacemarvel.com/terms', '_blank'))}
+          {menuItem('Privacy policy',     () => window.open('https://spacemarvel.com/privacy', '_blank'))}
           {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
         </div>
       )}
