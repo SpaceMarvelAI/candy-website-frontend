@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../assets/icons';
 import { getToken, setToken } from '../api/client';
 import { errorMessage } from '../utils/apiError';
+import { me, storeUser } from '../api/auth';
 import { listMyWorkspaces, switchWorkspace, type MyWorkspace } from '../api/workspaces';
 
 /**
@@ -82,6 +83,19 @@ export default function WorkspaceSwitcher({
       const res = await switchWorkspace(ws.org_id);
       // Store the re-minted token BEFORE reloading — see the note at the top of this file.
       if (res.access_token) setToken(res.access_token);
+      // Also refresh the CACHED user (company_id/company_name/role) that the app boots from on
+      // reload. switch-workspace's response carries workspace fields, not company ones (the new
+      // active company is resolved server-side and only lives in the token's company_id claim)
+      // — without this, `loadStoredUser()` on the next mount just replays whatever company was
+      // in sessionStorage BEFORE the switch, same bug CompanySwitcher already avoids by doing
+      // this same refetch.
+      try {
+        const freshUser = await me();
+        storeUser(freshUser);
+      } catch (e) {
+        // Non-fatal: worst case the stale name flashes briefly until the next natural refetch.
+        // Never block the switch itself on this.
+      }
       window.location.reload();
     } catch (e) {
       setError(errorMessage(e, 'Could not switch. Please try again.'));
