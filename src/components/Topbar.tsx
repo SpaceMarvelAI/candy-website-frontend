@@ -4,6 +4,7 @@ import { Icon } from '../assets/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useVoiceTarget } from '../voice/registry/store';
 import { GLOBAL_SEARCH } from '../voice/registry/navTargets';
+import CompanySwitcher from './CompanySwitcher';
 
 interface Crumb { t: string; current?: boolean }
 
@@ -163,6 +164,12 @@ export default function Topbar({ onMenuOpen }: TopbarProps) {
           }}
         />
       </div>
+
+      {/* Company switcher — pinned to the true right edge. The search box's flex:1 stops
+          growing at its own maxWidth (520px), so without marginLeft:auto here this just sat
+          flush against the search box on any screen wider than that, with dead space trailing
+          past it instead of at the actual right edge like Finixy's. */}
+      {!isSmallMobile && <CompanySwitcher style={{ marginLeft: 'auto' }} />}
 
     </header>
   );

@@ -6,6 +6,7 @@ import { useTheme } from '../hooks/useTheme';
 import type { AddToast } from '../hooks/useToast';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import Icon from '../assets/icons';
+import WorkspaceSwitcher from './WorkspaceSwitcher';
 
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
@@ -174,6 +175,11 @@ function ProfileMenu({
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         zIndex: 200, animation: 'menuFadeUp 0.15s ease',
       }}>
+        {/* Subscription workspaces, at the very top — the slot Claude uses, and what
+            HANDOFF_TO_TEAMS.md specifies. Renders nothing when the user has only one, so a
+            single-workspace account sees this menu exactly as before. */}
+        <WorkspaceSwitcher />
+
         {/* Upgrade plan */}
         <button
           onClick={() => { addToast('Upgrade plan — coming soon', 'info'); onClose(); }}

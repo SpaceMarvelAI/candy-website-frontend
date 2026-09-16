@@ -12,8 +12,14 @@ export default defineConfig(({ mode }) => {
     strictPort: true,  // fail loudly if 3000 is taken instead of silently picking another
     open: false,
     proxy: {
+      // `env.VITE_SM_API_URL` was being loaded and logged above but never actually used here —
+      // this target was a literal hardcoded string, so `/sm-api` always hit PRODUCTION regardless
+      // of any local override. That's why the sidebar's cross-app nav ("Meta Space"/"Finixy")
+      // fell through to its hardcoded dev.spacemarvel.com fallback in local dev: the real
+      // SSO-generate call went to prod, which doesn't recognize a token minted by a local
+      // Dashboard, and errored.
       '/sm-api': {
-        target: 'https://dashboard-api.spacemarvel.ai',
+        target: env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai',
         changeOrigin: true,
         secure: true,
         rewrite: (path) => path.replace(/^\/sm-api/, ''),
