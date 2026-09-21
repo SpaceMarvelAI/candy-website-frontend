@@ -18,7 +18,7 @@ export function redirectToSSO(): void {
       ? `${window.location.origin}/sso/callback`
       : 'https://app.candy.cx/sso/callback'
   );
-  window.location.href = `https://spacemarvel.ai/login?redirect_uri=${callbackUrl}`;
+  window.location.href = `https://staging.spacemarvel.com/login?redirect_uri=${callbackUrl}`;
 }
 
 /**

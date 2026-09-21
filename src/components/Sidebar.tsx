@@ -7,6 +7,7 @@ import { useTheme } from '../hooks/useTheme';
 import type { AddToast } from '../hooks/useToast';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import Icon from '../assets/icons';
+import WorkspaceSwitcher from './WorkspaceSwitcher';
 
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
@@ -29,7 +30,7 @@ const NAV_SECTIONS = [
     label: 'Products',
     items: [
       { id: 'metaspace', label: 'Meta Space', icon: '', img: '/Metaspace.svg',   path: null,
-        ssoTarget: import.meta.env.VITE_META_APP_URL || 'https://meta.spacemarvel.ai', external: true },
+        ssoTarget: import.meta.env.VITE_META_APP_URL || 'https://spacemarvel.ai', external: true },
       { id: 'finixy',    label: 'Finixy',     icon: '', img: '/FinixyLogo.svg', path: null,
         ssoTarget: import.meta.env.VITE_FINIXY_APP_URL || 'https://app.finixy.ai',        external: true },
     ],
@@ -175,6 +176,11 @@ function ProfileMenu({
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         zIndex: 200, animation: 'menuFadeUp 0.15s ease',
       }}>
+        {/* Subscription workspaces, at the very top — the slot Claude uses, and what
+            HANDOFF_TO_TEAMS.md specifies. Renders nothing when the user has only one, so a
+            single-workspace account sees this menu exactly as before. */}
+        <WorkspaceSwitcher />
+
         {/* Upgrade plan */}
         <button
           onClick={() => { addToast('Upgrade plan — coming soon', 'info'); onClose(); }}
@@ -228,8 +234,8 @@ function ProfileMenu({
       {subMenu === 'help' && (
         <div style={flyoutStyle}>
           {menuItem('Report issue',       () => { onReportIssue(); onClose(); })}
-          {menuItem('Terms & conditions', () => window.open('https://spacemarvel.ai/terms', '_blank'))}
-          {menuItem('Privacy policy',     () => window.open('https://spacemarvel.ai/privacy', '_blank'))}
+          {menuItem('Terms & conditions', () => window.open('https://spacemarvel.com/terms', '_blank'))}
+          {menuItem('Privacy policy',     () => window.open('https://spacemarvel.com/privacy', '_blank'))}
           {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
         </div>
       )}
@@ -340,7 +346,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     // Save intent so SSO callback can redirect there immediately after login
     localStorage.setItem('candy:sso_intent', item.ssoTarget);
     const candyCallback = window.location.origin + '/sso/callback';
-    window.location.href = `https://spacemarvel.ai/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
+    window.location.href = `https://staging.spacemarvel.com/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 
   const panelExpanded = isMobileOrTablet ? true : expanded;
