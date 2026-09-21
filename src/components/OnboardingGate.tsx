@@ -15,6 +15,7 @@
  * once is worse. The widget is the middle ground.
  */
 import { useEffect, useState } from 'react';
+import posthog from 'posthog-js';
 
 import { Icon } from '../assets/icons';
 import { useTheme } from '../hooks/useTheme';
@@ -77,7 +78,7 @@ export default function OnboardingGate({ canInvite = true }: { canInvite?: boole
         boxShadow: '0 10px 25px rgba(0,0,0,0.25)', backdropFilter: 'blur(6px)',
       }}>
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => { posthog.capture('onboarding_widget_reopened', { product: 'candy' }); setOpen(true); }}
           aria-label={`Finish setup, ${state.steps_done} of ${state.steps_total} done`}
           style={{
             display: 'flex', alignItems: 'center', gap: 10, background: 'none',
