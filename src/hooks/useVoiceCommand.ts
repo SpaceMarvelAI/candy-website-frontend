@@ -21,6 +21,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import posthog from 'posthog-js';
 import { transcribe, type TranscribeOut } from '../api/stt';
 import { parseCommand } from '../api/voiceCommand';
 import { addToast } from './useToast';
@@ -169,20 +170,24 @@ export function useVoiceCommand(): UseVoiceCommandResult {
     // validateAction() — which would call both 'not_executable' and lose the
     // distinction between "which did you mean?" and "I cannot do that".
     if (action.kind === 'clarify') {
+      posthog.capture('voice_command_rejected', { reason: 'clarify' });
       report(askWhich(action.candidates), false);
       return;
     }
     if (action.kind === 'reject') {
+      posthog.capture('voice_command_rejected', { reason: action.reason });
       report(REJECT_MESSAGES[action.reason] ?? 'I cannot do that.', false);
       return;
     }
 
     const check = validateAction(action, snapshot);
     if (check.status === 'rejected') {
+      posthog.capture('voice_command_rejected', { reason: 'validation_failed', kind: action.kind });
       report(check.message, false);
       return;
     }
     if (check.status === 'needs_confirmation') {
+      posthog.capture('voice_command_needs_confirmation', { kind: action.kind });
       report(check.prompt, false);
       return;
     }
@@ -196,6 +201,7 @@ export function useVoiceCommand(): UseVoiceCommandResult {
       // scroll the document) and on where the caret is.
       getScroller: findScroller,
     });
+    posthog.capture('voice_command_executed', { kind: check.action.kind, ok: result.ok });
     report(result.say, result.ok);
   }, [navigate, report]);
 
@@ -286,6 +292,7 @@ export function useVoiceCommand(): UseVoiceCommandResult {
     } catch (err) {
       logger.error('[voice] transcribe failed', err);
       const message = errorMessage(err, 'Could not transcribe that.');
+      posthog.capture('voice_command_transcribe_failed', { error: message });
       setState('error');
       setOutcome(message);
       addToast(message, 'error');
