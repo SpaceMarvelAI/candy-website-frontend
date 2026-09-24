@@ -28,7 +28,12 @@ function render() {
 function run(mode) {
   console.clear();
   console.log(`Starting Vite dev server with mode=${mode}\n`);
-  const child = spawn("npx", ["vite", "--mode", mode], {
+  // shell: win32-only is required because npx/vite are .cmd shims on Windows that spawn
+  // can't exec without a shell (same justification already applied to
+  // scripts/predeploy-check.mjs). args are hardcoded ("vite", "--mode") plus `mode`, which
+  // is never user input -- it's one of MODES, filtered to only entries with a matching
+  // .env.<mode> file actually present on disk (line 11).
+  const child = spawn("npx", ["vite", "--mode", mode], { // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
     cwd: ROOT,
     stdio: "inherit",
     shell: process.platform === "win32",

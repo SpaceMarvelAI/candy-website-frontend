@@ -22,8 +22,21 @@ export function streamUrl(language: string = 'multi'): string {
 export interface TranscribeOut {
   transcript: string;
   detected_language: string | null;
+  /**
+   * 0..1, folded server-side from Whisper's avg_logprob and no_speech_prob
+   * (api/v1/stt.py::_confidence_from). `null` means Groq returned no segments —
+   * no data, which is NOT the same as low confidence, so callers must not
+   * treat it as a weak result.
+   */
   confidence: number | null;
   duration_ms: number;
+  /**
+   * Why an empty transcript came back. `null` or "empty" is genuine silence;
+   * anything else ("stt_http_429", "unsupported_lang:xx") is a failure. An
+   * empty transcript alone cannot tell these apart, because _groq_transcribe
+   * returns ("", "en") for all of them.
+   */
+  drop_reason: string | null;
 }
 
 /**
