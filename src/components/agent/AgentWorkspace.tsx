@@ -259,7 +259,7 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
                 </ConfigPopover>
               )}
               {agent && (
-                <ConfigPopover label="WhatsApp" icon="chat" color={color} width={560} align="left">
+                <ConfigPopover label="WhatsApp" icon="chat" color={color} width={560}>
                   <div style={{ padding: 14 }}>
                     <WhatsAppConnectionPanel agentId={agent.id} tint={tint} />
                   </div>
