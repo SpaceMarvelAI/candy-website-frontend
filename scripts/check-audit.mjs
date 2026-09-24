@@ -33,6 +33,11 @@ const level = levelArg ? levelArg.split('=')[1] : 'moderate';
 const result = spawnSync('npm', ['audit', `--audit-level=${level}`, '--json'], {
   encoding: 'utf8',
   maxBuffer: 32 * 1024 * 1024,
+  // Windows resolves `npm` as npm.cmd, which spawnSync can only exec through
+  // a shell — without this it fails with ENOENT before npm ever runs. Not a
+  // shell-injection risk: `level` only ever comes from this script's own
+  // --audit-level= argv parsing above, never arbitrary external input.
+  shell: true, // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
 });
 
 let report;

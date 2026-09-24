@@ -26,6 +26,14 @@ const SEEDED_USER = {
 const { bucket: BUCKET, region: REGION, accessKeyId, secretAccessKey } = loadReportIssuesEnv();
 const s3 = new S3Client({ region: REGION, credentials: { accessKeyId, secretAccessKey } });
 
+// This file's 2 tests share ONE dev-server instance (playwright.config.ts's
+// webServer). Under the global fullyParallel default they were observed
+// racing each other for the dev server's single-threaded transform pipeline
+// on Windows — one test's second navigation missed its (unset) default 5s
+// timeout, and the other worker crashed outright. Serial keeps them from
+// contending for the same server at the same time.
+test.describe.configure({ mode: 'serial' });
+
 async function deleteTicketsForTestUser() {
   const resp = await s3.send(new ListObjectsV2Command({ Bucket: BUCKET, Prefix: 'report-issues/' }));
   const issueKeys = (resp.Contents ?? []).map((o) => o.Key!).filter((k) => k.endsWith('/issue.json'));
@@ -67,7 +75,7 @@ test('sign-in, dashboard, sidebar navigation', async ({ page }) => {
   await expect(page).toHaveURL(/\/connects/);
 
   await page.goto('/dashboard');
-  await expect(page.getByText('Healthcare Domain', { exact: false })).toBeVisible();
+  await expect(page.getByText('Healthcare Domain', { exact: false })).toBeVisible({ timeout: 15_000 });
 });
 
 test('Report Issue: create, list, detail panel, image lightbox', async ({ page }) => {

@@ -17,6 +17,7 @@ import LanguagePicker from './LanguagePicker';
 import TestPanel from './TestPanel';
 import SkillsPicker from './SkillsPicker';
 import EntryPointBanner from './EntryPointBanner';
+import WhatsAppConnectionPanel from './WhatsAppConnectionPanel';
 import { useAgent } from '../../hooks/useAgent';
 import { publishAgent } from '../../api/agents';
 import { ApiError } from '../../api/client';
@@ -254,6 +255,13 @@ export default function AgentWorkspace({ slug, category, icon, tint = 'purple', 
                       onEmbed={() => setEmbedOpen(true)}
                       isPublished={status === 'published' || statusOverride === 'published'}
                     />
+                  </div>
+                </ConfigPopover>
+              )}
+              {agent && (
+                <ConfigPopover label="WhatsApp" icon="chat" color={color} width={560} align="left">
+                  <div style={{ padding: 14 }}>
+                    <WhatsAppConnectionPanel agentId={agent.id} tint={tint} />
                   </div>
                 </ConfigPopover>
               )}

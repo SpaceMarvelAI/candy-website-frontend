@@ -13,6 +13,13 @@ export function installDevAuth(): void {
     const isLocal = host === 'localhost' || host === '127.0.0.1';
     if (!isLocal) return;
 
+    // Playwright's webServer sets this (playwright.config.ts) for smoke/e2e
+    // runs — those seed their OWN session via addInitScript before any app
+    // script runs, and this reseed would otherwise always win that race
+    // (it runs after addInitScript, on every localhost boot, unconditionally
+    // overwriting sessionStorage). Real local dev never sets this.
+    if (import.meta.env.VITE_E2E_TEST) return;
+
     // Respect an explicit sign-out for this one page load, then resume normal reseeding —
     // otherwise fullLogout()'s local wipe gets silently undone the moment the page reloads.
     if (localStorage.getItem('candy.dev_logout')) {
