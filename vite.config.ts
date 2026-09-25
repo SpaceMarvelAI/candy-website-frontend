@@ -7,6 +7,21 @@ export default defineConfig(({ mode }) => {
 
   return {
   plugins: [react()],
+  build: {
+    rolldownOptions: {
+      output: {
+        // Vendor libs out of the entry chunk: it had crossed the 500 KB warning
+        // limit, and these change far less often than app code, so they cache
+        // across deploys.
+        codeSplitting: {
+          groups: [
+            { name: 'react-vendor', test: /node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/ },
+            { name: 'posthog', test: /node_modules[\\/]posthog-js[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
   server: {
     port: 3000,
     strictPort: true,  // fail loudly if 3000 is taken instead of silently picking another

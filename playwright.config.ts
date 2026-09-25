@@ -24,7 +24,13 @@ export default defineConfig({
     // ships specifically for this kind of automated run.
     command: 'npm run dev:vite -- --mode test',
     url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    // Never reuse: a developer's own `npm run dev` on :3000 runs in a
+    // different mode (development → remote dev API, which rejects the fake
+    // e2e token and bounces to sign-up) and lacks VITE_E2E_TEST below, so
+    // reusing it fails every test in a misleading way. Stop it first; the
+    // port can't move because the Report Issue S3 bucket's CORS only allows
+    // http://localhost:3000.
+    reuseExistingServer: false,
     timeout: 30_000,
     // src/utils/devAuth.ts unconditionally re-seeds sessionStorage with
     // .env.local's dev user on every localhost boot, which always wins the
