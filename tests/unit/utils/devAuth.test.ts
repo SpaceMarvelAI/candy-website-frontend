@@ -17,6 +17,13 @@ function setHostname(hostname: string) {
   });
 }
 
+function setSearch(search: string) {
+  Object.defineProperty(window, 'location', {
+    value: { ...window.location, search },
+    writable: true,
+  });
+}
+
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
@@ -28,6 +35,7 @@ beforeEach(() => {
 afterEach(() => {
   Object.assign(import.meta.env, ORIGINAL_ENV);
   setHostname('localhost');
+  setSearch('');
 });
 
 describe('installDevAuth', () => {
@@ -99,6 +107,23 @@ describe('installDevAuth', () => {
     expect(() => installDevAuth()).not.toThrow();
     spy.mockRestore();
   });
+
+  it.each(['token', 'sso_token', 'access_token'])(
+    'skips reseeding when the URL carries an incoming ?%s= from a real SSO callback',
+    (paramName) => {
+      setHostname('localhost');
+      setSearch(`?${paramName}=real-oidc-exchange-value`);
+      (import.meta.env as any).VITE_DEV_TOKEN = 'dev-token-abc';
+      (import.meta.env as any).VITE_DEV_USER = JSON.stringify({ email: 'dev@candy.internal' });
+      // Simulates the real session AppContext's async ssoCallback() is about
+      // to establish — devAuth must leave it alone, not stomp it.
+      sessionStorage.setItem('access_token', 'real-sso-token-in-progress');
+
+      installDevAuth();
+
+      expect(sessionStorage.getItem('access_token')).toBe('real-sso-token-in-progress');
+    },
+  );
 
   it('skips reseeding and clears the one-shot dev_logout flag, even when a dev token/user are configured', () => {
     setHostname('localhost');
