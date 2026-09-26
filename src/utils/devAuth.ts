@@ -20,6 +20,27 @@ export function installDevAuth(): void {
     // overwriting sessionStorage). Real local dev never sets this.
     if (import.meta.env.VITE_E2E_TEST) return;
 
+    // A real SSO callback landing on this page load — same detection
+    // AppContext's RootRedirect already uses for its own "mid-exchange, don't
+    // interfere" guard. Without this, the unconditional reseed below wins the
+    // race against AppContext's async ssoCallback() exchange often enough to
+    // matter: OnboardingGate (mounted unconditionally at the App root) fires
+    // an /v1/onboarding call with the stale dev token the instant it mounts,
+    // that request's eventual 401 fires client.ts's global "clear the CURRENT
+    // session" handler regardless of which token it was for, wiping out the
+    // real session ssoCallback() had just established — and ProtectedRoute
+    // reacts to the now-null user by redirecting to the IDP again, restarting
+    // this whole sequence on the next full-page load. Confirmed live: a
+    // single tab looped through full OIDC round trips indefinitely with
+    // VITE_DEV_TOKEN configured until this guard was added.
+    const params = new URLSearchParams(window.location.search);
+    const hasIncomingSsoToken =
+      params.has('token') || params.has('sso_token') || params.has('access_token');
+    if (hasIncomingSsoToken) {
+      console.info('[devAuth] skipping reseed — a real SSO exchange is in flight on this load');
+      return;
+    }
+
     // Respect an explicit sign-out for this one page load, then resume normal reseeding —
     // otherwise fullLogout()'s local wipe gets silently undone the moment the page reloads.
     if (localStorage.getItem('candy.dev_logout')) {
