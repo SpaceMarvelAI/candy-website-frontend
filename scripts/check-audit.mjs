@@ -30,14 +30,14 @@ const ACCEPTED_ADVISORIES = new Set([
 const levelArg = process.argv.find((a) => a.startsWith('--audit-level='));
 const level = levelArg ? levelArg.split('=')[1] : 'moderate';
 
+// nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true -- shell only on win32, fixed argv
 const result = spawnSync('npm', ['audit', `--audit-level=${level}`, '--json'], {
   encoding: 'utf8',
   maxBuffer: 32 * 1024 * 1024,
   // Windows resolves `npm` as npm.cmd, which spawnSync can only exec through
-  // a shell — without this it fails with ENOENT before npm ever runs. Not a
-  // shell-injection risk: `level` only ever comes from this script's own
-  // --audit-level= argv parsing above, never arbitrary external input.
-  shell: true, // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
+  // a shell — without this it fails with ENOENT before npm ever runs. Other
+  // platforms exec npm directly, no shell.
+  shell: process.platform === 'win32',
 });
 
 let report;
