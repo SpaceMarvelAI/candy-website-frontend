@@ -185,7 +185,8 @@ function CreateModal({
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: 'min(520px, 100%)', background: 'var(--card-bg)',
+          width: 'min(640px, 100%)', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto',
+          background: 'var(--card-bg)',
           border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)',
           padding: 26, boxShadow: '0 20px 60px rgba(0,0,0,0.35)',
         }}
@@ -212,7 +213,12 @@ function CreateModal({
               color: 'var(--text-4)', marginBottom: 8 }}>
               You already have {existing.length} agent{existing.length > 1 ? 's' : ''} for this use case
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {/* Capped at ~3.5 rows so a long list scrolls instead of stretching the modal. */}
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: 6,
+              maxHeight: 232, overflowY: 'auto', padding: 6,
+              borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-2)',
+            }}>
               {existing.map(a => (
                 <button
                   key={a.id}
@@ -223,6 +229,7 @@ function CreateModal({
                     padding: '10px 12px', borderRadius: 'var(--radius)',
                     border: `1px solid ${ACCENT_BORDER}`, background: ACCENT_SOFT,
                     cursor: busy ? 'default' : 'pointer', textAlign: 'left', width: '100%',
+                    flexShrink: 0,
                   }}
                 >
                   <span style={{ display: 'flex', flexDirection: 'column' }}>

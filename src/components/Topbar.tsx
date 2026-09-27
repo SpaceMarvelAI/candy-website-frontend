@@ -2,6 +2,9 @@ import { useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Icon } from '../assets/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useVoiceTarget } from '../voice/registry/store';
+import { GLOBAL_SEARCH } from '../voice/registry/navTargets';
+import CompanySwitcher from './CompanySwitcher';
 
 interface Crumb { t: string; current?: boolean }
 
@@ -29,6 +32,21 @@ export default function Topbar({ onMenuOpen }: TopbarProps) {
   const isSmallMobile    = useMediaQuery('(max-width: 640px)');
 
   const crumbs = crumbMap[currentView] ?? crumbMap.dashboard;
+
+  /**
+   * Put the search box on the voice registry.
+   *
+   * navTargets.ts declares GLOBAL_SEARCH but deliberately leaves it out of
+   * NAV_TARGETS, because this box does not exist everywhere: /agents/* and
+   * /chatbots/:id render outside AppLayout and so have no Topbar at all.
+   * Registering here is what makes it appear in the snapshot only where it is
+   * genuinely on screen.
+   *
+   * Voice can focus it — the same thing ⌘K does below — but cannot search with
+   * it, because nothing in the app reads what it contains. See
+   * SEARCH_NOT_CONNECTED.
+   */
+  const searchRef = useVoiceTarget<HTMLInputElement>(GLOBAL_SEARCH);
 
   // ⌘K shortcut
   useEffect(() => {
@@ -132,6 +150,7 @@ export default function Topbar({ onMenuOpen }: TopbarProps) {
       >
         <Icon name="search" size={14} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
         <input
+          ref={searchRef}
           className="topbar-search-input"
           placeholder={isSmallMobile ? 'Search…' : 'Search or ask AI…'}
           style={{
@@ -145,6 +164,12 @@ export default function Topbar({ onMenuOpen }: TopbarProps) {
           }}
         />
       </div>
+
+      {/* Company switcher — pinned to the true right edge. The search box's flex:1 stops
+          growing at its own maxWidth (520px), so without marginLeft:auto here this just sat
+          flush against the search box on any screen wider than that, with dead space trailing
+          past it instead of at the actual right edge like Finixy's. */}
+      {!isSmallMobile && <CompanySwitcher style={{ marginLeft: 'auto' }} />}
 
     </header>
   );

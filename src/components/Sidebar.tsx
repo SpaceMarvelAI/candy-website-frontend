@@ -6,9 +6,12 @@ import { useTheme } from '../hooks/useTheme';
 import type { AddToast } from '../hooks/useToast';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import Icon from '../assets/icons';
+import WorkspaceSwitcher from './WorkspaceSwitcher';
+import { getProfile } from '../api/profile';
 
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
+const ProfileModal = lazy(() => import('./ProfileModal'));
 
 // ─────────────────────────────────────────────────────────────────────────────
 const COLLAPSED_W = 56;
@@ -68,13 +71,14 @@ const SM_API = isLocal
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
   anchorRect, onClose, onSignOut, signingOut, navigate, addToast,
-  theme, setTheme, onReportIssue,
+  theme, setTheme, onReportIssue, onProfile,
 }: {
   anchorRect: DOMRect;
   onClose: () => void; onSignOut: () => void; signingOut: boolean;
   navigate: (p: string) => void; addToast: AddToast;
   theme: string; setTheme: (t: 'light' | 'dark') => void;
   onReportIssue: () => void;
+  onProfile: () => void;
 }) {
   const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
   const [subMenuY, setSubMenuY] = useState(0);
@@ -174,6 +178,11 @@ function ProfileMenu({
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         zIndex: 200, animation: 'menuFadeUp 0.15s ease',
       }}>
+        {/* Subscription workspaces, at the very top — the slot Claude uses, and what
+            HANDOFF_TO_TEAMS.md specifies. Renders nothing when the user has only one, so a
+            single-workspace account sees this menu exactly as before. */}
+        <WorkspaceSwitcher />
+
         {/* Upgrade plan */}
         <button
           onClick={() => { addToast('Upgrade plan — coming soon', 'info'); onClose(); }}
@@ -194,6 +203,7 @@ function ProfileMenu({
         <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
 
         {menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
+        {menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
         {subBtn('Appearance', 'sun',  'appearance')}
         {menuItem('Settings',  () => { addToast('Settings — coming soon', 'info'); onClose(); }, { icon: 'settings' })}
         {subBtn('Help', 'help', 'help')}
@@ -227,8 +237,8 @@ function ProfileMenu({
       {subMenu === 'help' && (
         <div style={flyoutStyle}>
           {menuItem('Report issue',       () => { onReportIssue(); onClose(); })}
-          {menuItem('Terms & conditions', () => window.open('https://spacemarvel.ai/terms', '_blank'))}
-          {menuItem('Privacy policy',     () => window.open('https://spacemarvel.ai/privacy', '_blank'))}
+          {menuItem('Terms & conditions', () => window.open('https://spacemarvel.com/terms', '_blank'))}
+          {menuItem('Privacy policy',     () => window.open('https://spacemarvel.com/privacy', '_blank'))}
           {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
         </div>
       )}
@@ -254,9 +264,29 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [reportIssuesOpen, setReportIssuesOpen] = useState(false);
+  const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
   const [headerHovered, setHeaderHovered] = useState(false);
+  // Overrides AppContext's cached name/avatar right after a save in ProfileModal, so the
+  // sidebar reflects the edit immediately instead of waiting for the next login.
+  const [profileOverride, setProfileOverride] = useState<{ name: string | null; avatarUrl: string | null } | null>(null);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  // Seed the sidebar avatar once on mount from Candy's own /v1/profile — the login redirect's
+  // params_dict (api/v1/sso_oidc.py) never carries avatar_url, so without this the circle would
+  // stay initials-only until the user happened to open the Profile modal once. Best-effort: a
+  // failed fetch just leaves the initials fallback in place.
+  useEffect(() => {
+    let cancelled = false;
+    getProfile()
+      .then((profile) => {
+        if (cancelled) return;
+        setProfileOverride((prev) => prev ?? { name: null, avatarUrl: profile.avatar_url });
+      })
+      .catch(() => { /* fall back to initials, nothing to surface here */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const isDark    = theme === 'dark';
   const imgFilter = isDark ? 'brightness(2)' : 'invert(1)';
@@ -348,9 +378,10 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     ? 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
     : 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)';
 
-  const userName  = user?.full_name || user?.email?.split('@')[0] || 'User';
-  const userEmail = user?.email || '';
-  const initials  = userName.slice(0, 1).toUpperCase();
+  const userName    = profileOverride?.name || user?.full_name || user?.email?.split('@')[0] || 'User';
+  const userEmail   = user?.email || '';
+  const userAvatarUrl = profileOverride ? profileOverride.avatarUrl : (user?.avatar_url || null);
+  const initials    = userName.slice(0, 1).toUpperCase();
 
   return (
     <>
@@ -628,14 +659,23 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--tint-2)'; }}
           onMouseLeave={e => { if (!profileMenuOpen) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
         >
-          <div style={{
-            width: 30, height: 30, borderRadius: '50%',
-            background: 'var(--grad-brand)',
-            display: 'grid', placeItems: 'center',
-            fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0,
-          }}>
-            {initials}
-          </div>
+          {userAvatarUrl && !avatarLoadFailed ? (
+            <img
+              src={userAvatarUrl}
+              alt=""
+              onError={() => setAvatarLoadFailed(true)}
+              style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, display: 'block' }}
+            />
+          ) : (
+            <div style={{
+              width: 30, height: 30, borderRadius: '50%',
+              background: 'var(--grad-brand)',
+              display: 'grid', placeItems: 'center',
+              fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0,
+            }}>
+              {initials}
+            </div>
+          )}
           {panelExpanded && (
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)',
@@ -666,6 +706,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           theme={theme}
           setTheme={setTheme}
           onReportIssue={() => setReportIssuesOpen(true)}
+          onProfile={() => setProfileEditOpen(true)}
         />
       )}
 
@@ -673,6 +714,19 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       {reportIssuesOpen && (
         <Suspense fallback={null}>
           <ReportIssuesModal onClose={() => setReportIssuesOpen(false)} />
+        </Suspense>
+      )}
+
+      {/* ── Profile (portaled) ───────────────────────────────────────────────── */}
+      {profileEditOpen && (
+        <Suspense fallback={null}>
+          <ProfileModal
+            onClose={() => setProfileEditOpen(false)}
+            onSaved={(profile) => {
+              setProfileOverride({ name: profile.name, avatarUrl: profile.avatar_url });
+              setAvatarLoadFailed(false);
+            }}
+          />
         </Suspense>
       )}
 

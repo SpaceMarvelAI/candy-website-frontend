@@ -212,6 +212,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // silently failed: the ticket that arrived in this exact URL never reached the claim.
     const ticketFromUrl = params.get('ticket');
 
+    // Backend redirects here with ?error=<reason> when the OIDC flow fails (CSRF/state
+    // mismatch, token exchange error, etc.) — see sso_oidc.py's _redirect_error(). Without this
+    // check the effect just fell through the `!token && !accessToken` return below with no
+    // feedback at all: the URL got silently cleaned up on the next normal SSO pass and the user
+    // was simply left on whatever page they landed on, never told the login attempt had failed.
+    const errorParam = params.get('error');
+    if (errorParam) {
+      ssoHandled.current = true;
+      window.history.replaceState({}, '', '/' + window.location.hash);
+      const messages: Record<string, string> = {
+        session_expired: 'Your sign-in link expired. Please try signing in again.',
+        missing_code: 'Sign-in was cancelled or incomplete. Please try again.',
+        token_exchange_failed: 'Sign-in failed. Please try again.',
+      };
+      addToast(messages[errorParam] ?? 'Sign-in failed. Please try again.', 'error');
+      return;
+    }
+
     if (!token && !accessToken) return;
 
     ssoHandled.current = true;

@@ -7,13 +7,34 @@ export default defineConfig(({ mode }) => {
 
   return {
   plugins: [react()],
+  build: {
+    rolldownOptions: {
+      output: {
+        // Vendor libs out of the entry chunk: it had crossed the 500 KB warning
+        // limit, and these change far less often than app code, so they cache
+        // across deploys.
+        codeSplitting: {
+          groups: [
+            { name: 'react-vendor', test: /node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/ },
+            { name: 'posthog', test: /node_modules[\\/]posthog-js[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
   server: {
     port: 3000,
     strictPort: true,  // fail loudly if 3000 is taken instead of silently picking another
     open: false,
     proxy: {
+      // `env.VITE_SM_API_URL` was being loaded and logged above but never actually used here —
+      // this target was a literal hardcoded string, so `/sm-api` always hit PRODUCTION regardless
+      // of any local override. That's why the sidebar's cross-app nav ("Meta Space"/"Finixy")
+      // fell through to its hardcoded dev.spacemarvel.com fallback in local dev: the real
+      // SSO-generate call went to prod, which doesn't recognize a token minted by a local
+      // Dashboard, and errored.
       '/sm-api': {
-        target: 'https://dashboard-api.spacemarvel.ai',
+        target: env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai',
         changeOrigin: true,
         secure: true,
         rewrite: (path) => path.replace(/^\/sm-api/, ''),

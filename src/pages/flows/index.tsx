@@ -24,6 +24,10 @@ import {
   type FlowNode, type FlowEdge, type WorkflowGraph, type Workflow,
 } from '../../api/workflows';
 import logger from '../../utils/logger';
+import { useVoiceTarget } from '../../voice/registry/store';
+import {
+  FLOWS_NAME, FLOWS_NEW_WORKFLOW, FLOWS_SAVE, FLOWS_WORKFLOW_PICKER,
+} from '../../voice/registry/flowsTargets';
 import NodeEditDrawer, { LoadError, useDialogA11y } from './NodeEditDrawer';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -116,6 +120,26 @@ export default function FlowsPage() {
   const { addToast } = useApp();
   const isMobile = useMediaQuery('(max-width: 640px)');
   const isTablet = useMediaQuery('(max-width: 1024px)');
+
+  // ── Voice targets ───────────────────────────────────────────────────────────
+  // Voice is additive: these are ref callbacks, so each button keeps its own
+  // onClick and the executor drives it through a real DOM click. Nothing about
+  // the mouse or keyboard path changes.
+  //
+  // Only the safe controls are here. Delete and Clear are recognised by voice
+  // too, but as `unavailable` entries in flowsTargets.ts with no element behind
+  // them — voice names the limit instead of destroying anything. See that file.
+  //
+  // Called unconditionally at the top of the component, as hooks must be; the
+  // refs below are attached to conditionally rendered JSX, which is fine —
+  // registration follows the element, not the hook call.
+  const saveRef       = useVoiceTarget<HTMLButtonElement>(FLOWS_SAVE);
+  const pickerRef     = useVoiceTarget<HTMLButtonElement>(FLOWS_WORKFLOW_PICKER);
+  const newWorkflowRef = useVoiceTarget<HTMLButtonElement>(FLOWS_NEW_WORKFLOW);
+  // Slice 5's one real `type` target: a controlled input whose value IS the
+  // workflow name, so dictating into it renames the workflow for real and Save
+  // persists it. Unlike the topbar search box, something reads this.
+  const nameRef       = useVoiceTarget<HTMLInputElement>(FLOWS_NAME);
   // Panel closed by default on mobile; open on tablet+desktop
   const [panelOpen, setPanelOpen] = useState(() =>
     typeof window !== 'undefined' ? !window.matchMedia('(max-width: 640px)').matches : true
@@ -879,7 +903,7 @@ export default function FlowsPage() {
           )}
           {/* Workflow switcher */}
           <div style={{ position:'relative', flexShrink:0 }}>
-            <button onClick={() => setShowWfPicker(p => !p)}
+            <button ref={pickerRef} onClick={() => setShowWfPicker(p => !p)}
               aria-haspopup="true" aria-expanded={showWfPicker}
               aria-label={`Switch workflow — currently ${savedFlow ? savedFlow.name : 'New workflow'}`}
               style={{
@@ -948,7 +972,7 @@ export default function FlowsPage() {
                   </div>
                 ))}
                 <div style={{ borderTop:'1px solid var(--border)', marginTop:4, paddingTop:4 }}>
-                  <button onClick={newWorkflow} style={{
+                  <button ref={newWorkflowRef} onClick={newWorkflow} style={{
                     width:'100%', padding:'7px 8px', borderRadius:7, border:'none',
                     background:'transparent', color:'var(--purple-hi)',
                     fontSize:12, fontWeight:600, cursor:'pointer', textAlign:'left',
@@ -961,7 +985,7 @@ export default function FlowsPage() {
             )}
           </div>
 
-          <input value={flowName} onChange={e => setFlowName(e.target.value)}
+          <input ref={nameRef} value={flowName} onChange={e => setFlowName(e.target.value)}
             aria-label="Workflow name"
             style={{ fontSize: isMobile ? 13 : 14, fontWeight:600, color:'var(--text-1)', background:'transparent',
               border:'none', outline:'none', padding:'4px 0', minWidth:0, flex:1 }}
@@ -976,7 +1000,7 @@ export default function FlowsPage() {
             <button onClick={() => { setNodes([]); setEdges([]); setEditNode(null); posthog.capture('workflow_canvas_cleared', {}); }}
               style={ghostBtn}>Clear</button>
           )}
-          <button onClick={saveWorkflow} disabled={saving} style={{
+          <button ref={saveRef} onClick={saveWorkflow} disabled={saving} style={{
             ...saveBtn,
             padding: isMobile ? '6px 12px' : '7px 14px',
             fontSize: isMobile ? 12 : 13,
