@@ -8,8 +8,8 @@
  */
 import { useState, useEffect, useId, useRef, useCallback } from 'react';
 import posthog from 'posthog-js';
-import type { FlowNode, FlowNodeData } from '../../api/workflows';
-import { webhookIdentity, isExecutableApp } from '../../api/workflows';
+import type { FlowNode, FlowNodeData, ConditionOperator, AIOperation } from '../../api/workflows';
+import { webhookIdentity, isExecutableApp, CONDITION_OPERATORS, AI_OPERATIONS } from '../../api/workflows';
 import type { AppConnection } from '../../api/connections';
 import { saveConnection, connectionSaveErrorMessage, testConnection, startOAuth, APP_CATALOGUE } from '../../api/connections';
 import { createEmbedInstall, listEmbedInstalls, type EmbedInstall } from '../../api/agents';
@@ -828,6 +828,335 @@ function AppEditor({
 }
 
 // ── WEBHOOK NODE EDITOR ───────────────────────────────────────────────────────
+// ── Condition node editor ───────────────────────────────────────────────────
+const OPERATOR_LABELS: Record<ConditionOperator, string> = {
+  equals: 'equals', not_equals: 'does not equal', contains: 'contains',
+  exists: 'exists', not_exists: 'does not exist',
+  greater_than: 'is greater than', less_than: 'is less than',
+};
+
+function ConditionEditor({
+  node, onUpdate,
+}: {
+  node: FlowNode;
+  onUpdate: (data: Partial<FlowNodeData>) => void;
+}) {
+  const [left, setLeft] = useState(node.data.conditionLeft ?? '');
+  const [operator, setOperator] = useState<ConditionOperator>(node.data.conditionOperator ?? 'equals');
+  const [right, setRight] = useState(String(node.data.conditionRight ?? ''));
+  const needsRight = operator !== 'exists' && operator !== 'not_exists';
+
+  function commit(overrides: Partial<{ left: string; operator: ConditionOperator; right: string }> = {}) {
+    const l = overrides.left ?? left;
+    const o = overrides.operator ?? operator;
+    const r = overrides.right ?? right;
+    onUpdate({
+      conditionLeft: l || undefined,
+      conditionOperator: o,
+      conditionRight: needsRight ? r : undefined,
+    });
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <InfoBox color="var(--amber)">
+        <strong style={{ color: 'var(--amber)' }}>Condition</strong> — branches the flow. Connect the
+        two edges leaving this node to different downstream nodes, then click each edge to mark it
+        TRUE or FALSE.
+      </InfoBox>
+
+      <Field label="Field (from the workflow context)">
+        {id => (
+          <input
+            id={id}
+            style={inputSt}
+            value={left}
+            onChange={e => setLeft(e.target.value)}
+            onBlur={() => commit()}
+            placeholder="e.g. contact.type or tool_results.n1.status"
+          />
+        )}
+      </Field>
+
+      <Field label="Operator">
+        {id => (
+          <select
+            id={id}
+            style={inputSt}
+            value={operator}
+            onChange={e => { const o = e.target.value as ConditionOperator; setOperator(o); commit({ operator: o }); }}
+          >
+            {CONDITION_OPERATORS.map(op => (
+              <option key={op} value={op}>{OPERATOR_LABELS[op]}</option>
+            ))}
+          </select>
+        )}
+      </Field>
+
+      {needsRight && (
+        <Field label="Value">
+          {id => (
+            <input
+              id={id}
+              style={inputSt}
+              value={right}
+              onChange={e => setRight(e.target.value)}
+              onBlur={() => commit()}
+              placeholder="e.g. patient, true, 5"
+            />
+          )}
+        </Field>
+      )}
+
+      {!left && (
+        <div role="note" style={{
+          fontSize: 12, lineHeight: 1.6, color: 'var(--text-2)',
+          background: 'rgba(255,181,71,0.09)', border: '1px solid rgba(255,181,71,0.35)',
+          borderRadius: 8, padding: '10px 12px',
+        }}>
+          <strong style={{ color: 'var(--amber)' }}>Not configured yet.</strong>{' '}
+          Set a field above so this condition can evaluate.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── AI node editor ──────────────────────────────────────────────────────────
+const AI_OPERATION_LABELS: Record<AIOperation, string> = {
+  generate: 'Generate Response', classify: 'Classify Intent', extract: 'Extract Information',
+};
+
+function AIEditor({
+  node, onUpdate,
+}: {
+  node: FlowNode;
+  onUpdate: (data: Partial<FlowNodeData>) => void;
+}) {
+  const [operation, setOperation] = useState<AIOperation>(node.data.aiOperation ?? 'generate');
+  const [instruction, setInstruction] = useState(node.data.aiInstruction ?? '');
+  const [input, setInput] = useState(node.data.aiInput ?? '');
+  const [outputVariable, setOutputVariable] = useState(node.data.aiOutputVariable ?? '');
+  const [categories, setCategories] = useState((node.data.aiCategories ?? []).join(', '));
+  const [fields, setFields] = useState((node.data.aiExtractFields ?? []).join(', '));
+  const [useKb, setUseKb] = useState(node.data.aiUseKnowledgeBase ?? false);
+
+  function commit(overrides: Partial<FlowNodeData> = {}) {
+    onUpdate({
+      aiOperation: operation,
+      aiInstruction: instruction || undefined,
+      aiInput: input || undefined,
+      aiOutputVariable: outputVariable || undefined,
+      aiCategories: operation === 'classify'
+        ? categories.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+      aiExtractFields: operation === 'extract'
+        ? fields.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+      aiUseKnowledgeBase: operation === 'generate' ? useKb : undefined,
+      ...overrides,
+    });
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <InfoBox color="var(--purple-hi)">
+        <strong style={{ color: 'var(--purple-hi)' }}>AI</strong> — calls Candy's own agent AI.
+        Instruction and Input may reference the workflow context, e.g. <code>{'{{user_input}}'}</code>.
+      </InfoBox>
+
+      <Field label="Operation">
+        {id => (
+          <select
+            id={id} style={inputSt} value={operation}
+            onChange={e => { const op = e.target.value as AIOperation; setOperation(op); commit({ aiOperation: op }); }}
+          >
+            {AI_OPERATIONS.map(op => <option key={op} value={op}>{AI_OPERATION_LABELS[op]}</option>)}
+          </select>
+        )}
+      </Field>
+
+      <Field label="Instruction">
+        {id => (
+          <textarea
+            id={id} style={{ ...inputSt, minHeight: 70, resize: 'vertical', fontFamily: 'inherit' }}
+            value={instruction}
+            onChange={e => setInstruction(e.target.value)}
+            onBlur={() => commit()}
+            placeholder="e.g. You are a helpful assistant classifying customer intent"
+          />
+        )}
+      </Field>
+
+      <Field label="Input">
+        {id => (
+          <textarea
+            id={id} style={{ ...inputSt, minHeight: 50, resize: 'vertical', fontFamily: 'inherit' }}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onBlur={() => commit()}
+            placeholder="e.g. {{user_input}}"
+          />
+        )}
+      </Field>
+
+      {operation === 'classify' && (
+        <Field label="Categories (comma-separated)">
+          {id => (
+            <input
+              id={id} style={inputSt} value={categories}
+              onChange={e => setCategories(e.target.value)}
+              onBlur={() => commit()}
+              placeholder="appointment_booking, general_query"
+            />
+          )}
+        </Field>
+      )}
+
+      {operation === 'extract' && (
+        <Field label="Fields to extract (comma-separated)">
+          {id => (
+            <input
+              id={id} style={inputSt} value={fields}
+              onChange={e => setFields(e.target.value)}
+              onBlur={() => commit()}
+              placeholder="name, date, time"
+            />
+          )}
+        </Field>
+      )}
+
+      {operation === 'generate' && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-2)', cursor: 'pointer' }}>
+          <input
+            type="checkbox" checked={useKb}
+            onChange={e => { setUseKb(e.target.checked); commit({ aiUseKnowledgeBase: e.target.checked }); }}
+          />
+          Use knowledge base (RAG)
+        </label>
+      )}
+
+      <Field label="Output variable (optional)">
+        {id => (
+          <input
+            id={id} style={inputSt} value={outputVariable}
+            onChange={e => setOutputVariable(e.target.value)}
+            onBlur={() => commit()}
+            placeholder="e.g. detected_intent"
+          />
+        )}
+      </Field>
+
+      {!instruction && (
+        <div role="note" style={{
+          fontSize: 12, lineHeight: 1.6, color: 'var(--text-2)',
+          background: 'rgba(255,181,71,0.09)', border: '1px solid rgba(255,181,71,0.35)',
+          borderRadius: 8, padding: '10px 12px',
+        }}>
+          <strong style={{ color: 'var(--amber)' }}>Not configured yet.</strong>{' '}
+          Set an instruction above so this node has something to do.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tool/Skill node editor ──────────────────────────────────────────────────
+function ToolEditor({
+  node, onUpdate,
+}: {
+  node: FlowNode;
+  onUpdate: (data: Partial<FlowNodeData>) => void;
+}) {
+  const [toolName, setToolName] = useState(node.data.toolName ?? '');
+  const [args, setArgs] = useState<Array<[string, string]>>(Object.entries(node.data.toolArgs ?? {}));
+
+  function commit(nextArgs: Array<[string, string]> = args, nextName = toolName) {
+    const argsObj: Record<string, string> = {};
+    for (const [k, v] of nextArgs) if (k) argsObj[k] = v;
+    onUpdate({ toolName: nextName || undefined, toolArgs: argsObj });
+  }
+
+  function updateArg(i: number, key: string, value: string) {
+    const next = args.map((pair, idx) => (idx === i ? [key, value] as [string, string] : pair));
+    setArgs(next);
+    commit(next);
+  }
+  function addArg() {
+    setArgs(prev => [...prev, ['', '']]);
+  }
+  function removeArg(i: number) {
+    const next = args.filter((_, idx) => idx !== i);
+    setArgs(next);
+    commit(next);
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <InfoBox color="var(--green)">
+        <strong style={{ color: 'var(--green)' }}>Tool / Skill</strong> — invokes one of this agent's
+        existing tools or skills through Candy's real executor. Argument values may reference the
+        workflow context, e.g. <code>{'{{contact.id}}'}</code>.
+      </InfoBox>
+
+      <Field label="Tool / skill name">
+        {id => (
+          <input
+            id={id} style={inputSt} value={toolName}
+            onChange={e => setToolName(e.target.value)}
+            onBlur={() => commit()}
+            placeholder="e.g. book_appointment"
+          />
+        )}
+      </Field>
+
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', marginBottom: 6 }}>Arguments</div>
+        {args.length === 0 && (
+          <p style={{ fontSize: 11.5, color: 'var(--text-4)', margin: '0 0 8px' }}>No arguments configured.</p>
+        )}
+        {args.map(([key, value], i) => (
+          <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+            <input
+              style={{ ...inputSt, flex: '0 0 40%' }} value={key}
+              onChange={e => updateArg(i, e.target.value, value)}
+              placeholder="key" aria-label={`Argument ${i + 1} name`}
+            />
+            <input
+              style={{ ...inputSt, flex: 1 }} value={value}
+              onChange={e => updateArg(i, key, e.target.value)}
+              placeholder="{{contact.id}}" aria-label={`Argument ${i + 1} value`}
+            />
+            <button
+              onClick={() => removeArg(i)} aria-label={`Remove argument ${i + 1}`}
+              style={{ background: 'none', border: 'none', color: 'var(--text-4)', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}
+            >
+              <Icon name="x" size={13} />
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={addArg} type="button"
+          style={{
+            padding: '5px 10px', borderRadius: 6, border: '1px dashed var(--border)', background: 'transparent',
+            color: 'var(--text-3)', fontSize: 12, cursor: 'pointer',
+          }}
+        >
+          + Add argument
+        </button>
+      </div>
+
+      {!toolName && (
+        <div role="note" style={{
+          fontSize: 12, lineHeight: 1.6, color: 'var(--text-2)',
+          background: 'rgba(255,181,71,0.09)', border: '1px solid rgba(255,181,71,0.35)',
+          borderRadius: 8, padding: '10px 12px',
+        }}>
+          <strong style={{ color: 'var(--amber)' }}>No tool selected yet.</strong>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WebhookEditor({
   node, onUpdate,
 }: {
@@ -960,17 +1289,26 @@ export default function NodeEditDrawer({ node, connection, onClose, onUpdate, on
 
   const appMeta = APP_CATALOGUE.find(a => a.type === node.data.appType);
 
-  const title = node.type === 'agent'   ? (node.data.agentName ?? 'Agent')
-              : node.type === 'webhook' ? (node.data.appLabel ?? 'Inbound Webhook')
+  const title = node.type === 'agent'     ? (node.data.agentName ?? 'Agent')
+              : node.type === 'webhook'   ? (node.data.appLabel ?? 'Inbound Webhook')
+              : node.type === 'condition' ? 'Condition'
+              : node.type === 'ai'        ? 'AI'
+              : node.type === 'tool'      ? 'Tool / Skill'
               : (appMeta?.label ?? node.data.appLabel ?? 'App');
 
-  const icon  = node.type === 'agent'   ? (node.data.agentType === 'chat' ? 'bot' : 'phone')
-              : node.type === 'webhook' ? 'webhook'
+  const icon  = node.type === 'agent'     ? (node.data.agentType === 'chat' ? 'bot' : 'phone')
+              : node.type === 'webhook'   ? 'webhook'
+              : node.type === 'condition' ? 'shuffle'
+              : node.type === 'ai'        ? 'spark'
+              : node.type === 'tool'      ? 'plug'
               : (appMeta?.icon ?? 'plug');
 
   const subtitle = node.type === 'agent'
     ? `${node.data.agentType} · ${node.data.agentId?.slice(0, 8)}…`
     : node.type === 'webhook' ? 'Inbound trigger'
+    : node.type === 'condition' ? 'Branches TRUE / FALSE'
+    : node.type === 'ai' ? 'Invokes Candy’s existing AI'
+    : node.type === 'tool' ? 'Invokes an existing tool/skill'
     : appMeta?.description ?? '';
 
   // Responsive drawer styles — full-screen on mobile, narrower on tablet
@@ -1022,6 +1360,15 @@ export default function NodeEditDrawer({ node, connection, onClose, onUpdate, on
       )}
       {node.type === 'webhook' && (
         <WebhookEditor node={node} onUpdate={data => onUpdate(node.id, data)} />
+      )}
+      {node.type === 'condition' && (
+        <ConditionEditor node={node} onUpdate={data => onUpdate(node.id, data)} />
+      )}
+      {node.type === 'ai' && (
+        <AIEditor node={node} onUpdate={data => onUpdate(node.id, data)} />
+      )}
+      {node.type === 'tool' && (
+        <ToolEditor node={node} onUpdate={data => onUpdate(node.id, data)} />
       )}
     </div>
   );

@@ -19,11 +19,12 @@ import {
   type ComposioApp, type AuthInfoField,
 } from '../../api/composio';
 import {
-  listWorkflows, createWorkflow, updateWorkflow, deleteWorkflow,
+  listWorkflows, createWorkflow, updateWorkflow, deleteWorkflow, testWorkflow,
   withWebhookIdentity, isExecutableApp, isExecutableTrigger,
-  type FlowNode, type FlowEdge, type WorkflowGraph, type Workflow,
+  type FlowNode, type FlowEdge, type WorkflowGraph, type Workflow, type WorkflowTestStep,
 } from '../../api/workflows';
 import logger from '../../utils/logger';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { useVoiceTarget } from '../../voice/registry/store';
 import {
   FLOWS_NAME, FLOWS_NEW_WORKFLOW, FLOWS_SAVE, FLOWS_WORKFLOW_PICKER,
@@ -36,6 +37,7 @@ const TINT: Record<string, string> = {
   voice:            'var(--blue)',
   escalation:       '#ff8194',
   demo_booking:     '#4ade80',
+  incoming_call:    'var(--blue)',
   both:             '#ffb547',
   webhook_to_agent: 'var(--teal)',
 };
@@ -87,7 +89,7 @@ function TriggerPicker({ edge, x, y, onSelect, onDelete, onClose }: {
       <div style={{ fontSize:10, fontWeight:700, color:'var(--text-4)', letterSpacing:'0.1em', marginBottom:2 }}>
         TRIGGER WHEN
       </div>
-      {(['escalation','demo_booking','both'] as const).map(t => (
+      {(['escalation','demo_booking','incoming_call','both'] as const).map(t => (
         <button key={t} onClick={() => { onSelect(t); onClose(); }} style={{
           padding:'5px 10px', borderRadius:6, border:'none', cursor:'pointer',
           background: edge.triggerType===t ? `${TINT[t]}22` : 'transparent',
@@ -95,8 +97,45 @@ function TriggerPicker({ edge, x, y, onSelect, onDelete, onClose }: {
           fontSize:12, fontWeight:600, textAlign:'left',
           display:'flex', alignItems:'center', gap:6,
         }}>
-          <Icon name={t==='escalation' ? 'zap' : t==='demo_booking' ? 'calendar' : 'shuffle'} size={13} />
-          {t==='escalation' ? 'Escalation' : t==='demo_booking' ? 'Demo booked' : 'Both'}
+          <Icon name={t==='escalation' ? 'zap' : t==='demo_booking' ? 'calendar' : t==='incoming_call' ? 'phone' : 'shuffle'} size={13} />
+          {t==='escalation' ? 'Escalation' : t==='demo_booking' ? 'Demo booked' : t==='incoming_call' ? 'Incoming call' : 'Both'}
+        </button>
+      ))}
+      <hr style={{ border:'none', borderTop:'1px solid var(--border)', margin:'4px 0' }}/>
+      <button onClick={onDelete} style={{ padding:'5px 10px', borderRadius:6, border:'none',
+        cursor:'pointer', background:'transparent', color:'#ff8194', fontSize:12, fontWeight:600, textAlign:'left',
+        display:'flex', alignItems:'center', gap:6 }}>
+        <Icon name="trash" size={13} /> Delete edge
+      </button>
+    </div>
+  );
+}
+
+// ── Branch picker (popover on a condition edge click) ──────────────────────────
+function BranchPicker({ edge, x, y, onSelect, onDelete, onClose }: {
+  edge: FlowEdge; x: number; y: number;
+  onSelect: (branch: boolean) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div style={{ position:'absolute', left:x-90, top:y-80, background:'var(--card-bg)',
+      border:'1px solid var(--border)', borderRadius:10, padding:'10px 12px', zIndex:60,
+      boxShadow:'0 8px 32px rgba(0,0,0,0.55)', display:'flex', flexDirection:'column', gap:5,
+    }} onClick={e => e.stopPropagation()}>
+      <div style={{ fontSize:10, fontWeight:700, color:'var(--text-4)', letterSpacing:'0.1em', marginBottom:2 }}>
+        THIS BRANCH FIRES WHEN
+      </div>
+      {([true, false] as const).map(b => (
+        <button key={String(b)} onClick={() => { onSelect(b); onClose(); }} style={{
+          padding:'5px 10px', borderRadius:6, border:'none', cursor:'pointer',
+          background: edge.branch===b ? `${b ? 'var(--green)' : '#ff8194'}22` : 'transparent',
+          color: edge.branch===b ? (b ? 'var(--green)' : '#ff8194') : 'var(--text-2)',
+          fontSize:12, fontWeight:600, textAlign:'left',
+          display:'flex', alignItems:'center', gap:6,
+        }}>
+          <Icon name={b ? 'check' : 'x'} size={13} />
+          {b ? 'TRUE' : 'FALSE'}
         </button>
       ))}
       <hr style={{ border:'none', borderTop:'1px solid var(--border)', margin:'4px 0' }}/>
@@ -115,9 +154,51 @@ const WEBHOOK_TEMPLATE = {
   data: { appType: 'inbound_webhook', appLabel: 'Inbound Webhook', appIcon: 'webhook' },
 };
 
+// ── Condition node type definition (static) ────────────────────────────────────
+const CONDITION_TEMPLATE = {
+  type: 'condition' as const,
+  data: {},
+};
+
+// ── AI node type definitions (static, one per operation) ───────────────────────
+const AI_GENERATE_TEMPLATE = { type: 'ai' as const, data: { aiOperation: 'generate' as const } };
+const AI_CLASSIFY_TEMPLATE = { type: 'ai' as const, data: { aiOperation: 'classify' as const } };
+const AI_EXTRACT_TEMPLATE  = { type: 'ai' as const, data: { aiOperation: 'extract'  as const } };
+
+// ── Tool/Skill node type definition (static) ────────────────────────────────────
+const TOOL_TEMPLATE = { type: 'tool' as const, data: {} };
+
+// ── Reusable draggable palette card (Logic/AI/Tools tabs) ───────────────────────
+function PaletteCard({ template, color, icon, label, sublabel, ariaLabel, isMobile, onPanelDragStart, addNodeFromPanel }: {
+  template: Omit<FlowNode, 'id'|'x'|'y'>;
+  color: string; icon: string; label: string; sublabel: string; ariaLabel: string;
+  isMobile: boolean;
+  onPanelDragStart: (e: React.DragEvent, payload: Omit<FlowNode,'id'|'x'|'y'>) => void;
+  addNodeFromPanel: (payload: Omit<FlowNode,'id'|'x'|'y'>) => void;
+}) {
+  return (
+    <div
+      role="button" tabIndex={0} aria-label={ariaLabel}
+      draggable={!isMobile}
+      onDragStart={!isMobile ? (e => onPanelDragStart(e, template)) : undefined}
+      onClick={isMobile ? () => addNodeFromPanel(template) : undefined}
+      onKeyDown={onActivate(() => addNodeFromPanel(template))}
+      style={panelCard(color)}
+    >
+      <span style={{ display:'inline-flex', color, flexShrink:0 }}><Icon name={icon} size={16} /></span>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)' }}>{label}</div>
+        <div style={{ fontSize:10.5, color:'var(--text-4)' }}>{sublabel}</div>
+      </div>
+      <span style={{ fontSize:10, color:'var(--text-4)' }}>{isMobile ? '＋' : '⠿'}</span>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function FlowsPage() {
   const { addToast } = useApp();
+  const confirm = useConfirm();
   const isMobile = useMediaQuery('(max-width: 640px)');
   const isTablet = useMediaQuery('(max-width: 1024px)');
 
@@ -150,6 +231,10 @@ export default function FlowsPage() {
   const [composioApps,  setComposioApps]  = useState<ComposioApp[]>([]);
   const [composioConns, setComposioConns] = useState<Set<string>>(new Set());
   const [appsLoading,    setAppsLoading]    = useState(false);
+  // Distinct from loadFailed.apps: COMPOSIO_UNAUTHORIZED means "no dashboard
+  // SSO token yet", not a backend/API failure — Retry can't fix it, so it gets
+  // its own message instead of the generic LoadError. Mirrors src/pages/connects.
+  const [appsUnauthorized, setAppsUnauthorized] = useState(false);
   const [appSearch,      setAppSearch]      = useState('');
   const [connectingAppId, setConnectingAppId] = useState<string | null>(null);
   const appPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -179,9 +264,11 @@ export default function FlowsPage() {
   // Selected node → edit drawer
   const [editNode, setEditNode] = useState<FlowNode | null>(null);
 
-  const [leftTab, setLeftTab] = useState<'agents'|'apps'|'webhooks'>('agents');
+  const [leftTab, setLeftTab] = useState<'agents'|'apps'|'webhooks'|'logic'|'ai'|'tools'>('agents');
   const [flowName, setFlowName] = useState('My workflow');
   const [saving,   setSaving]   = useState(false);
+  const [testing,     setTesting]     = useState(false);
+  const [testResults, setTestResults] = useState<{ triggered: boolean; steps: WorkflowTestStep[]; message?: string } | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const scrollWrapperRef = useRef<HTMLDivElement>(null);
@@ -231,13 +318,22 @@ export default function FlowsPage() {
         listConnections().then(setConnections).catch(fail);
         break;
       case 'apps':
+        setAppsUnauthorized(false);
         setAppsLoading(true);
         Promise.all([getComposioApps(), getComposioConnections()])
           .then(([apps, conns]) => {
             setComposioApps(apps);
             setComposioConns(new Set(conns.filter(isActiveConnection).map(connectedAppId)));
           })
-          .catch(fail)
+          .catch(err => {
+            // No dashboard_token yet — a separate SSO sign-in, not a backend
+            // failure. Retrying would just throw the same error again.
+            if ((err as Error).message === 'COMPOSIO_UNAUTHORIZED') {
+              setAppsUnauthorized(true);
+            } else {
+              fail(err);
+            }
+          })
           .finally(() => setAppsLoading(false));
         break;
       case 'workflows':
@@ -363,6 +459,20 @@ export default function FlowsPage() {
     if (src.type === 'app') return; // apps can never be a source
     if (src.type === 'webhook' && tgt.type === 'webhook') return;
     if (edges.find(ed => ed.source === srcId && ed.target === targetId)) return;
+
+    if (src.type === 'condition') {
+      // A condition node has exactly two outgoing edges — TRUE and FALSE.
+      // The first connection made becomes TRUE, the second FALSE; a third
+      // is rejected outright (branch semantics require exactly two,
+      // matching backend _run_graph_from's condition-node handling).
+      const existing = edges.filter(ed => ed.source === srcId);
+      if (existing.length >= 2) return;
+      const branch = !existing.some(ed => ed.branch === true);
+      setEdges(prev => [...prev, { id: uid(), source: srcId, target: targetId, triggerType: 'escalation', branch }]);
+      posthog.capture('workflow_canvas_edge_connected', { trigger_type: 'condition_branch', branch });
+      return;
+    }
+
     const triggerType: FlowEdge['triggerType'] =
       (src.type === 'webhook' && tgt.type === 'agent') ? 'webhook_to_agent' : 'escalation';
     setEdges(prev => [...prev, { id: uid(), source: srcId, target: targetId, triggerType }]);
@@ -402,7 +512,14 @@ export default function FlowsPage() {
   }
 
   // ── Delete ───────────────────────────────────────────────────────────────────
-  function deleteNode(id: string) {
+  async function deleteNode(id: string) {
+    const node = nodes.find(n => n.id === id);
+    const label = node ? nodeLabel(node) : 'this node';
+    if (!await confirm({
+      title: `Delete ${label}?`,
+      consequence: 'This also removes any connections to or from it. This cannot be undone.',
+      confirmLabel: 'Delete node',
+    })) return;
     setNodes(prev => prev.filter(n => n.id !== id));
     setEdges(prev => prev.filter(e => e.source !== id && e.target !== id));
     if (editNode?.id === id) setEditNode(null);
@@ -434,8 +551,26 @@ export default function FlowsPage() {
     setEditNode(null); setSelectedEdge(null); setShowWfPicker(false);
   }
 
+  // ── Clear canvas (keeps the workflow record itself; only Save persists this) ──
+  async function clearWorkflow() {
+    if (nodes.length === 0 && edges.length === 0) return;
+    if (!await confirm({
+      title: 'Clear this workflow?',
+      consequence: `This removes all ${nodes.length} node${nodes.length === 1 ? '' : 's'} from the canvas. `
+        + 'Nothing is saved until you click Save, so a previously saved workflow is unaffected until then.',
+      confirmLabel: 'Clear canvas',
+    })) return;
+    setNodes([]); setEdges([]); setEditNode(null);
+    posthog.capture('workflow_canvas_cleared', {});
+  }
+
   // ── Delete workflow ───────────────────────────────────────────────────────────
   async function removeWorkflow(w: Workflow) {
+    if (!await confirm({
+      title: `Delete "${w.name}"?`,
+      consequence: 'This deletes the workflow and all its nodes and connections. This cannot be undone.',
+      confirmLabel: 'Delete workflow',
+    })) return;
     try {
       await deleteWorkflow(w.id);
       const updated = workflows.filter(x => x.id !== w.id);
@@ -474,6 +609,23 @@ export default function FlowsPage() {
       addToast('Workflow saved', 'success');
     } catch { addToast('Save failed', 'error'); }
     finally { setSaving(false); }
+  }
+
+  // ── Test / preview — dry-run through the real multi-hop engine, no real
+  // side effects (see api/v1/workflows.py's test_workflow endpoint) ───────────
+  async function runTest() {
+    if (!savedFlow) { addToast('Save the workflow before testing it', 'info'); return; }
+    posthog.capture('workflow_canvas_test_clicked', { node_count: nodes.length });
+    setTesting(true);
+    setTestResults(null);
+    try {
+      const result = await testWorkflow(savedFlow.id);
+      setTestResults(result);
+    } catch {
+      addToast('Test run failed', 'error');
+    } finally {
+      setTesting(false);
+    }
   }
 
   // ── Connect a Composio app from within the panel ────────────────────────────
@@ -573,27 +725,52 @@ export default function FlowsPage() {
 
   // ── Node appearance ──────────────────────────────────────────────────────────
   function nodeColor(node: FlowNode) {
-    if (node.type === 'agent')   return node.data.agentType === 'chat' ? 'var(--purple-hi)' : 'var(--blue)';
-    if (node.type === 'webhook') return 'var(--teal)';
+    if (node.type === 'agent')     return node.data.agentType === 'chat' ? 'var(--purple-hi)' : 'var(--blue)';
+    if (node.type === 'webhook')   return 'var(--teal)';
+    if (node.type === 'condition') return 'var(--amber)';
+    if (node.type === 'ai')        return 'var(--purple-hi)';
+    if (node.type === 'tool')      return 'var(--green)';
     return '#7b5be3';
   }
 
   function nodeIcon(node: FlowNode) {
-    if (node.type === 'agent')   return node.data.agentType === 'chat' ? 'bot' : 'phone';
-    if (node.type === 'webhook') return 'webhook';
+    if (node.type === 'agent')     return node.data.agentType === 'chat' ? 'bot' : 'phone';
+    if (node.type === 'webhook')   return 'webhook';
+    if (node.type === 'condition') return 'shuffle';
+    if (node.type === 'ai')        return 'spark';
+    if (node.type === 'tool')      return 'plug';
     return node.data.appIcon ?? 'plug';
   }
 
   function nodeLabel(node: FlowNode) {
-    if (node.type === 'agent') return node.data.agentName ?? 'Agent';
+    if (node.type === 'agent')     return node.data.agentName ?? 'Agent';
+    if (node.type === 'condition') return node.data.conditionLeft ? `If ${node.data.conditionLeft}` : 'Condition';
+    if (node.type === 'ai')        return node.data.aiOperation ? `AI / ${node.data.aiOperation}` : 'AI';
+    if (node.type === 'tool')      return node.data.toolName ?? 'Tool / Skill';
     return node.data.appLabel ?? node.data.appType ?? 'Node';
   }
 
+  // ── Test-step appearance (mirrors backend WorkflowTestStep.status) ───────────
+  function testStepStyle(status: WorkflowTestStep['status']): { color: string; icon: string; label: string } {
+    switch (status) {
+      case 'executed':      return { color: 'var(--text-2)', icon: 'check',  label: 'Executed' };
+      case 'would_execute': return { color: 'var(--green)',  icon: 'zap',    label: 'Would execute' };
+      case 'skipped':       return { color: 'var(--text-4)', icon: 'layers', label: 'Skipped' };
+      case 'blocked':       return { color: 'var(--amber)',  icon: 'alert',  label: 'Blocked' };
+      case 'error':         return { color: '#ff8194',       icon: 'x',      label: 'Error' };
+      default:              return { color: 'var(--text-4)', icon: 'help',   label: status };
+    }
+  }
+
   // Is this node a source — has a right handle to drag from?
-  const isSource = (n: FlowNode) => n.type === 'agent' || n.type === 'webhook';
+  const isSource = (n: FlowNode) =>
+    n.type === 'agent' || n.type === 'webhook' || n.type === 'condition' || n.type === 'ai' || n.type === 'tool';
   // Is this node a target — has a left handle to drop onto?
-  // Agents can receive from webhooks; apps can receive from agents or webhooks.
-  const isTarget = (n: FlowNode) => n.type === 'app' || n.type === 'webhook' || n.type === 'agent';
+  // Agents can receive from webhooks; apps/conditions/ai/tool can receive
+  // from agents, conditions, or each other (AI -> Tool -> Condition chains).
+  const isTarget = (n: FlowNode) =>
+    n.type === 'app' || n.type === 'webhook' || n.type === 'agent' || n.type === 'condition'
+    || n.type === 'ai' || n.type === 'tool';
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -650,10 +827,10 @@ export default function FlowsPage() {
         {/* Tabs */}
         <div role="tablist" aria-label="Canvas building blocks"
           style={{ display:'flex', borderBottom:'1px solid var(--border)', padding:'0 6px', flexShrink:0, height:44, alignItems:'stretch' }}>
-          {(['agents','apps','webhooks'] as const).map(tab => (
+          {(['agents','apps','webhooks','logic','ai','tools'] as const).map(tab => (
             <button key={tab} role="tab" aria-selected={leftTab===tab}
               onClick={() => setLeftTab(tab)} style={leftTabBtn(leftTab===tab)}>
-              {tab.charAt(0).toUpperCase()+tab.slice(1)}
+              {tab === 'ai' ? 'AI' : tab.charAt(0).toUpperCase()+tab.slice(1)}
             </button>
           ))}
         </div>
@@ -717,7 +894,15 @@ export default function FlowsPage() {
                 }}
               />
 
-              {loadFailed.apps ? (
+              {appsUnauthorized ? (
+                <div role="note" style={{
+                  fontSize: 11.5, lineHeight: 1.6, color: 'var(--amber)',
+                  background: 'rgba(255,181,71,0.09)', border: '1px solid rgba(255,181,71,0.35)',
+                  borderRadius: 8, padding: '8px 10px',
+                }}>
+                  Sign in via SSO first to load the app catalogue.
+                </div>
+              ) : loadFailed.apps ? (
                 <LoadError what="the app catalogue" onRetry={() => runLoad('apps')} />
               ) : appsLoading ? (
                 <p style={{ fontSize:12, color:'var(--text-4)', padding:'10px 6px' }}>Loading apps…</p>
@@ -862,6 +1047,73 @@ export default function FlowsPage() {
               </div>
             </>
           )}
+
+          {/* ── Logic tab ── */}
+          {leftTab === 'logic' && (
+            <>
+              <p style={{ fontSize:11.5, color:'var(--text-4)', padding:'4px 6px 10px', lineHeight:1.6 }}>
+                {isMobile
+                  ? <>Tap to add a <strong style={{ color:'var(--amber)' }}>Condition</strong> node. It branches the flow TRUE or FALSE.</>
+                  : <>Drag a <strong style={{ color:'var(--amber)' }}>Condition</strong> node onto the canvas. It branches the flow TRUE or FALSE — connect each branch to a different downstream node.</>
+                }
+              </p>
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="Add a Condition node to the canvas"
+                draggable={!isMobile}
+                onDragStart={!isMobile ? (e => onPanelDragStart(e, CONDITION_TEMPLATE)) : undefined}
+                onClick={isMobile ? () => addNodeFromPanel(CONDITION_TEMPLATE) : undefined}
+                onKeyDown={onActivate(() => addNodeFromPanel(CONDITION_TEMPLATE))}
+                style={panelCard('var(--amber)')}
+              >
+                <span style={{ display:'inline-flex', color:'var(--amber)', flexShrink:0 }}><Icon name="shuffle" size={16} /></span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)' }}>Condition</div>
+                  <div style={{ fontSize:10.5, color:'var(--text-4)' }}>Branch TRUE / FALSE</div>
+                </div>
+                <span style={{ fontSize:10, color:'var(--text-4)' }}>{isMobile ? '＋' : '⠿'}</span>
+              </div>
+            </>
+          )}
+
+          {/* ── AI tab ── */}
+          {leftTab === 'ai' && (
+            <>
+              <p style={{ fontSize:11.5, color:'var(--text-4)', padding:'4px 6px 10px', lineHeight:1.6 }}>
+                {isMobile ? 'Tap to add an AI node.' : 'Drag an AI node onto the canvas.'} Each one calls
+                Candy's own agent AI — configure the operation in the editor after adding it.
+              </p>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                <PaletteCard template={AI_GENERATE_TEMPLATE} color="var(--purple-hi)" icon="spark"
+                  label="AI / Generate" sublabel="Generate a response"
+                  ariaLabel="Add an AI Generate Response node to the canvas"
+                  isMobile={isMobile} onPanelDragStart={onPanelDragStart} addNodeFromPanel={addNodeFromPanel} />
+                <PaletteCard template={AI_CLASSIFY_TEMPLATE} color="var(--purple-hi)" icon="filter"
+                  label="AI / Classify" sublabel="Classify into one of your categories"
+                  ariaLabel="Add an AI Classify Intent node to the canvas"
+                  isMobile={isMobile} onPanelDragStart={onPanelDragStart} addNodeFromPanel={addNodeFromPanel} />
+                <PaletteCard template={AI_EXTRACT_TEMPLATE} color="var(--purple-hi)" icon="list"
+                  label="AI / Extract" sublabel="Extract structured fields"
+                  ariaLabel="Add an AI Extract Information node to the canvas"
+                  isMobile={isMobile} onPanelDragStart={onPanelDragStart} addNodeFromPanel={addNodeFromPanel} />
+              </div>
+            </>
+          )}
+
+          {/* ── Tools tab ── */}
+          {leftTab === 'tools' && (
+            <>
+              <p style={{ fontSize:11.5, color:'var(--text-4)', padding:'4px 6px 10px', lineHeight:1.6 }}>
+                {isMobile ? 'Tap to add a Tool/Skill node.' : 'Drag a Tool/Skill node onto the canvas.'} It
+                invokes one of this agent's existing tools or skills — select which one in the editor.
+              </p>
+              <PaletteCard template={TOOL_TEMPLATE} color="var(--green)" icon="plug"
+                label="Tool / Skill" sublabel="Invoke an existing tool or skill"
+                ariaLabel="Add a Tool/Skill node to the canvas"
+                isMobile={isMobile} onPanelDragStart={onPanelDragStart} addNodeFromPanel={addNodeFromPanel} />
+            </>
+          )}
         </div>
       </div>
 
@@ -997,8 +1249,7 @@ export default function FlowsPage() {
             </span>
           )}
           {!isMobile && (
-            <button onClick={() => { setNodes([]); setEdges([]); setEditNode(null); posthog.capture('workflow_canvas_cleared', {}); }}
-              style={ghostBtn}>Clear</button>
+            <button onClick={clearWorkflow} style={ghostBtn}>Clear</button>
           )}
           <button ref={saveRef} onClick={saveWorkflow} disabled={saving} style={{
             ...saveBtn,
@@ -1008,6 +1259,17 @@ export default function FlowsPage() {
           }}>
             {saving ? 'Saving…' : <><Icon name="save" size={14} /> Save</>}
           </button>
+          {!isMobile && (
+            <button
+              onClick={runTest}
+              disabled={testing || !savedFlow}
+              title={savedFlow ? 'Preview how this workflow would run — no real actions are sent' : 'Save the workflow first'}
+              style={{ ...ghostBtn, display:'inline-flex', alignItems:'center', gap:6,
+                opacity: savedFlow ? 1 : 0.5 }}
+            >
+              <Icon name="zap" size={13} /> {testing ? 'Testing…' : 'Test'}
+            </button>
+          )}
         </div>
 
         {/* Connecting mode banner — shown for touch and keyboard connect flows */}
@@ -1070,11 +1332,19 @@ export default function FlowsPage() {
           <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%',
             pointerEvents:'none', zIndex:1 }}>
             <defs>
-              {(['escalation','demo_booking','both','webhook_to_agent'] as const).map(t => (
+              {(['escalation','demo_booking','incoming_call','both','webhook_to_agent'] as const).map(t => (
                 <marker key={t} id={`arr-${t}`} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
                   <polygon points="0 0,8 4,0 8" fill={TINT[t]} opacity="0.85"/>
                 </marker>
               ))}
+              {/* Branch markers — a condition node's TRUE/FALSE outgoing
+                  edges are a distinct axis from triggerType (see FlowEdge.branch). */}
+              <marker id="arr-branch_true" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <polygon points="0 0,8 4,0 8" fill="var(--green)" opacity="0.85"/>
+              </marker>
+              <marker id="arr-branch_false" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <polygon points="0 0,8 4,0 8" fill="#ff8194" opacity="0.85"/>
+              </marker>
             </defs>
             {edges.map(edge => {
               const src = nodes.find(n => n.id === edge.source);
@@ -1082,21 +1352,30 @@ export default function FlowsPage() {
               if (!src || !tgt) return null;
               const rh = rightHandle(src), lh = leftHandle(tgt);
               const mx = (rh.x + lh.x)/2, my = (rh.y + lh.y)/2;
-              const color  = TINT[edge.triggerType] ?? '#888';
+              // A condition node's two outgoing edges are TRUE/FALSE branches —
+              // a distinct axis from triggerType, rendered and picked separately.
+              const isBranch = edge.branch === true || edge.branch === false;
               const isW2A  = edge.triggerType === 'webhook_to_agent';
+              const color  = isBranch ? (edge.branch ? 'var(--green)' : '#ff8194') : (TINT[edge.triggerType] ?? '#888');
               // Bug 4: 'webhook_to_agent' is storable but the engine never matches
               // it, so the edge is inert. Say so instead of dressing it up with an
               // agent id, and keep it selectable so it can be retyped or deleted.
-              const inert = !isExecutableTrigger(edge.triggerType);
-              // label text — for webhook→agent show agent id, else show trigger type
-              const labelText = isW2A
+              // A branch edge is never inert — the engine has matched it since
+              // the day the condition node shipped.
+              const inert = !isBranch && !isExecutableTrigger(edge.triggerType);
+              // label text — branch edges show TRUE/FALSE; webhook→agent shows
+              // agent id; everything else shows its trigger type
+              const labelText = isBranch
+                ? (edge.branch ? 'TRUE' : 'FALSE')
+                : isW2A
                 ? `${tgt.data.agentName ?? 'agent'}`
                 : edge.triggerType === 'escalation' ? 'escalation'
                 : edge.triggerType === 'demo_booking' ? 'demo booked'
                 : 'both';
               const labelW = isW2A ? Math.min(120, (tgt.data.agentName?.length ?? 5) * 7 + 18) : 76;
-              const edgeLabel =
-                `${labelText} connection${inert ? ' — never fires yet' : ''}. `
+              const edgeLabel = isBranch
+                ? `${labelText} branch. Enter to change or delete it.`
+                : `${labelText} connection${inert ? ' — never fires yet' : ''}. `
                 + 'Enter to change its trigger, Delete to remove it.';
               const openPicker = (x: number, y: number) => {
                 setEditNode(null);
@@ -1128,7 +1407,7 @@ export default function FlowsPage() {
                     stroke={color} strokeWidth={isW2A ? 2 : 1.8}
                     strokeOpacity={0.85}
                     strokeDasharray={isW2A ? 'none' : 'none'}
-                    markerEnd={`url(#arr-${edge.triggerType})`}/>
+                    markerEnd={`url(#arr-${isBranch ? (edge.branch ? 'branch_true' : 'branch_false') : edge.triggerType})`}/>
                   {/* Badge */}
                   <rect x={mx - labelW/2} y={my-9} width={labelW} height={18} rx={5}
                     fill="var(--card-bg)" stroke={color} strokeWidth={0.8} strokeOpacity={0.6}/>
@@ -1221,6 +1500,23 @@ export default function FlowsPage() {
                     {node.type==='webhook' && (
                       <span style={{ fontSize:9.5, color:'var(--teal)' }}>inbound trigger</span>
                     )}
+                    {node.type==='condition' && (
+                      <span style={{ fontSize:9.5, color: node.data.conditionOperator ? 'var(--amber)' : '#ff8194' }}>
+                        {node.data.conditionOperator
+                          ? `${node.data.conditionOperator} ${node.data.conditionRight ?? ''}`.trim()
+                          : '⚠ not configured'}
+                      </span>
+                    )}
+                    {node.type==='ai' && (
+                      <span style={{ fontSize:9.5, color: node.data.aiInstruction ? 'var(--purple-hi)' : '#ff8194' }}>
+                        {node.data.aiInstruction ? (node.data.aiOutputVariable ? `→ {{variables.${node.data.aiOutputVariable}}}` : 'configured') : '⚠ not configured'}
+                      </span>
+                    )}
+                    {node.type==='tool' && (
+                      <span style={{ fontSize:9.5, color: node.data.toolName ? 'var(--green)' : '#ff8194' }}>
+                        {node.data.toolName ? `${Object.keys(node.data.toolArgs ?? {}).length} arg(s)` : '⚠ no tool selected'}
+                      </span>
+                    )}
                   </div>
                   {/* Delete button */}
                   <button onClick={e => { e.stopPropagation(); deleteNode(node.id); }}
@@ -1291,8 +1587,18 @@ export default function FlowsPage() {
             );
           })}
 
-          {/* Edge trigger picker */}
-          {selectedEdge && (
+          {/* Edge trigger / branch picker */}
+          {selectedEdge && (selectedEdge.edge.branch === true || selectedEdge.edge.branch === false) ? (
+            <BranchPicker
+              edge={selectedEdge.edge} x={selectedEdge.x} y={selectedEdge.y}
+              onSelect={b => setEdges(prev => prev.map(e =>
+                e.id===selectedEdge.edge.id ? {...e, branch:b} : e))}
+              onDelete={() => { setEdges(prev => prev.filter(e => e.id!==selectedEdge.edge.id));
+                posthog.capture('workflow_canvas_edge_deleted', {});
+                setSelectedEdge(null); }}
+              onClose={() => setSelectedEdge(null)}
+            />
+          ) : selectedEdge && (
             <TriggerPicker
               edge={selectedEdge.edge} x={selectedEdge.x} y={selectedEdge.y}
               onSelect={t => setEdges(prev => prev.map(e =>
@@ -1306,11 +1612,64 @@ export default function FlowsPage() {
         </div>
         </div>{/* scroll wrapper */}
 
+        {/* Test/preview results — dry-run only, no real actions were sent */}
+        {testResults && (
+          <div style={testPanel} role="region" aria-label="Workflow test results">
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+              padding:'8px 12px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+              <span style={{ fontSize:11.5, fontWeight:700, color:'var(--text-2)' }}>
+                Test results
+                {testResults.triggered && (
+                  <span style={{ fontWeight:400, color:'var(--text-4)' }}> — preview only, no real actions were sent</span>
+                )}
+              </span>
+              <button onClick={() => setTestResults(null)} aria-label="Close test results"
+                style={{ background:'none', border:'none', color:'var(--text-3)', cursor:'pointer', fontSize:14, lineHeight:1 }}>
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+            <div style={{ overflowY:'auto', flex:1, padding:'6px 12px' }}>
+              {!testResults.triggered ? (
+                <p style={{ fontSize:12, color:'var(--text-4)', padding:'6px 0' }}>
+                  {testResults.message ?? 'Nothing to preview.'}
+                </p>
+              ) : testResults.steps.length === 0 ? (
+                <p style={{ fontSize:12, color:'var(--text-4)', padding:'6px 0' }}>No nodes were reachable from a trigger.</p>
+              ) : (
+                testResults.steps.map((step, i) => {
+                  const sc = testStepStyle(step.status);
+                  return (
+                    <div key={`${step.node_id}-${i}`} style={{
+                      display:'flex', alignItems:'flex-start', gap:8,
+                      padding:'5px 0', borderBottom: i < testResults.steps.length-1 ? '1px solid var(--border)' : 'none',
+                    }}>
+                      <span aria-hidden="true" style={{ display:'inline-flex', color: sc.color, marginTop:1, flexShrink:0 }}>
+                        <Icon name={sc.icon} size={13} />
+                      </span>
+                      <div style={{ minWidth:0, flex:1 }}>
+                        <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)' }}>
+                          {step.target ?? step.node_id}
+                          {step.node_type && <span style={{ fontWeight:400, color:'var(--text-4)' }}> · {step.node_type}</span>}
+                        </div>
+                        <div style={{ fontSize:11, color: sc.color }}>
+                          {sc.label}
+                          {step.branch && ` → ${step.branch.toUpperCase()}`}
+                          {step.message && ` — ${step.message}`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Legend — hidden on mobile */}
         {!isMobile && (
           <div style={legend}>
             <span style={{ fontSize:11, color:'var(--text-4)', marginRight:8 }}>Trigger type:</span>
-            {(['escalation','demo_booking','both','webhook_to_agent'] as const).map(t => (
+            {(['escalation','demo_booking','incoming_call','both','webhook_to_agent'] as const).map(t => (
               <span key={t} style={{ fontSize:11, color:TINT[t], marginRight:10 }}>
                 ● {t.replace(/_/g,' ')}
                 {!isExecutableTrigger(t) && (
@@ -1473,6 +1832,12 @@ const canvas: React.CSSProperties = {
 const legend: React.CSSProperties = {
   display: 'flex', alignItems: 'center', padding: '6px 14px',
   background: 'var(--card-bg)', borderTop: '1px solid var(--border)', flexShrink: 0,
+};
+
+const testPanel: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column',
+  maxHeight: 240, background: 'var(--card-bg)',
+  borderTop: '1px solid var(--border)', flexShrink: 0,
 };
 
 function leftTabBtn(active: boolean): React.CSSProperties {
