@@ -159,20 +159,6 @@ export async function getComposioApps(): Promise<ComposioApp[]> {
   return Array.isArray(res) ? res : (res as { apps: ComposioApp[] }).apps ?? [];
 }
 
-/**
- * GET /api/composio/apps?page=&limit= — one batch of the catalog.
- * `total` is the backend's count when it sends one. Note the backend currently ignores
- * page/limit and returns the whole catalog on every call; callers must cope with that
- * (dedupe, and stop once nothing new arrives).
- */
-export async function getComposioAppsPage(page: number, limit: number): Promise<{ apps: ComposioApp[]; total: number | null }> {
-  const res = await metaFetch<ComposioApp[] | { apps?: ComposioApp[]; total?: number }>(
-    `/api/composio/apps?page=${page}&limit=${limit}`,
-  );
-  if (Array.isArray(res)) return { apps: res, total: null };
-  return { apps: res.apps ?? [], total: typeof res.total === 'number' ? res.total : null };
-}
-
 /** GET /api/composio/connections — list user's active connections */
 export async function getComposioConnections(): Promise<ComposioConnection[]> {
   const res = await metaFetch<ComposioConnection[] | { connections: ComposioConnection[] }>('/api/composio/connections');

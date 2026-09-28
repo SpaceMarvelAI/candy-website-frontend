@@ -138,23 +138,6 @@ describe('composio API calls (with mocked SSO exchange)', () => {
     expect(apps[0].name).toBe('jira');
   });
 
-  it('getComposioAppsPage sends page/limit and returns apps + total', async () => {
-    let url = '';
-    server.use(http.get(`${META_API}/api/composio/apps`, ({ request }) => {
-      url = request.url;
-      return HttpResponse.json({ apps: [{ name: 'jira' }], total: 42 });
-    }));
-    const res = await Composio.getComposioAppsPage(2, 30);
-    expect(new URL(url).searchParams.get('page')).toBe('2');
-    expect(new URL(url).searchParams.get('limit')).toBe('30');
-    expect(res).toEqual({ apps: [{ name: 'jira' }], total: 42 });
-  });
-
-  it('getComposioAppsPage reports total as null for a bare array', async () => {
-    server.use(http.get(`${META_API}/api/composio/apps`, () => HttpResponse.json([{ name: 'slack' }])));
-    await expect(Composio.getComposioAppsPage(1, 30)).resolves.toEqual({ apps: [{ name: 'slack' }], total: null });
-  });
-
   it('getComposioConnections unwraps a { connections } envelope', async () => {
     server.use(http.get(`${META_API}/api/composio/connections`, () => HttpResponse.json({ connections: [{ app: 'slack' }] })));
     const conns = await Composio.getComposioConnections();

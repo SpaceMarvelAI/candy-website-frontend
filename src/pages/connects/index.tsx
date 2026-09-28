@@ -5,7 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import Icon from '../../assets/icons';
 import {
-  getComposioAppsPage,
+  getComposioApps,
   getComposioConnections,
   getAppAuthInfo,
   connectComposioApp,
@@ -21,8 +21,6 @@ import {
 } from '../../api/composio';
 
 const PAGE_SIZE = 48;
-// Apps are fetched from the backend in batches of this size, first batch shown immediately.
-const FETCH_BATCH = 30;
 
 function colorFromName(name: string): string {
   let h = 0;
@@ -190,7 +188,6 @@ export default function ConnectsPage() {
   const [credValues,    setCredValues]   = useState<Record<string, string>>({});
 
   const initRef     = useRef(false);
-  const loadGenRef  = useRef(0);   // bumps on every load so a stale background batch loop stops
   const sentinelRef = useRef<HTMLDivElement>(null);
   const pollRef     = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -198,39 +195,16 @@ export default function ConnectsPage() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }
 
-  // Fetch the rest of the catalog batch by batch, appending as each arrives.
-  const loadRemainingBatches = useCallback(async (gen: number, seen: Set<string>, total: number | null) => {
-    for (let page = 2; loadGenRef.current === gen; page++) {
-      if (total !== null && seen.size >= total) return;
-      let batch: ComposioApp[];
-      try {
-        batch = (await getComposioAppsPage(page, FETCH_BATCH)).apps;
-      } catch {
-        return; // keep what's already on screen; Refresh retries from the start
-      }
-      if (loadGenRef.current !== gen) return;
-      const fresh = batch.filter(a => !seen.has(appId(a)));
-      fresh.forEach(a => seen.add(appId(a)));
-      if (fresh.length) setApps(prev => [...prev, ...fresh]);
-      // A short batch, or one with nothing new (a backend that ignores paging), means we're done.
-      if (batch.length < FETCH_BATCH || fresh.length === 0) return;
-    }
-  }, []);
-
   const loadData = useCallback(async (quiet = false) => {
-    const gen = ++loadGenRef.current;
     if (!quiet) setLoading(true);
     setApiError(null);
     try {
-      const [first, connsData] = await Promise.all([
-        getComposioAppsPage(1, FETCH_BATCH),
+      const [appsData, connsData] = await Promise.all([
+        getComposioApps(),
         getComposioConnections(),
       ]);
-      if (loadGenRef.current !== gen) return;
-      const seen = new Set(first.apps.map(appId));
-      setApps(first.apps);
+      setApps(appsData);
       setConnIds(new Set(connsData.filter(isActiveConnection).map(connectedAppId)));
-      if (first.apps.length >= FETCH_BATCH) void loadRemainingBatches(gen, seen, first.total);
     } catch (e) {
       const msg = (e as Error).message;
       if (msg === 'COMPOSIO_UNAUTHORIZED') {
@@ -242,7 +216,7 @@ export default function ConnectsPage() {
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [addToast, loadRemainingBatches]);
+  }, [addToast]);
 
   useEffect(() => {
     if (initRef.current || !hasToken) return;
@@ -251,7 +225,7 @@ export default function ConnectsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => () => { stopPoll(); loadGenRef.current++; }, []);
+  useEffect(() => () => stopPoll(), []);
 
   useEffect(() => {
     const el = sentinelRef.current;
