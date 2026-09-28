@@ -41,7 +41,9 @@ test('dashboard renders for a signed-in user with no console errors', async ({ p
 
   await page.goto('/dashboard');
   await expect(page.getByText('Healthcare Domain', { exact: false })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(SEEDED_USER.email)).toBeVisible();
+  // The profile lives in the AppRail as an avatar button; the email is only in its tooltip.
+  await expect(page.getByRole('button', { name: 'Open profile menu' })).toBeVisible();
+  await expect(page.getByTitle(`${SEEDED_USER.full_name} · ${SEEDED_USER.email}`)).toBeAttached();
 
   expect(consoleErrors, `Unexpected console errors:\n${consoleErrors.join('\n')}`).toEqual([]);
 });
