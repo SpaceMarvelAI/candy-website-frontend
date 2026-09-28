@@ -15,12 +15,15 @@
  *   6. E2E test      — npm run test:e2e     (Playwright, core user flows)
  *   7. NPM audit     — scripts/check-audit.mjs (one documented exception, see that file)
  *   8. Bucket audit  — npm run audit:bucket-security  (S3 credential blast-radius check)
+ *   9. PostHog       — scripts/lib/posthog-coverage-checks.mjs (soft gate, never blocks —
+ *      see that module's own docstring)
  *
  * Exit code: 0 when safe to deploy, 1 when any hard gate fails.
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { checkBundleSize } from './lib/bundle-size.mjs';
+import { getPosthogCoverageResults } from './lib/posthog-coverage-checks.mjs';
 
 // ── ANSI helpers ──────────────────────────────────────────────────────────────
 const c = {
@@ -189,6 +192,24 @@ const report = { warnings: [] };
   };
 }
 
+// ── 9. PostHog coverage (soft gate — never contributes to hardFail) ────────────
+{
+  process.stdout.write(`${c.cyan}▶${c.reset} [9/9] PostHog coverage (init flags / identify+group pairing)…\n`);
+  try {
+    const { initCheck, identifyCount, unpaired, captureCount } = getPosthogCoverageResults(process.cwd());
+    if (!initCheck.ok) {
+      report.warnings.push(`PostHog init() missing: ${initCheck.missing.join(', ')}`);
+    }
+    if (unpaired.length > 0) {
+      report.warnings.push(`${unpaired.length} posthog.identify() call site(s) with no paired group('company', ...): ${unpaired.join(', ')}`);
+    }
+    report.posthog = { pass: initCheck.ok && unpaired.length === 0, identifyCount, unpaired, captureCount };
+  } catch (e) {
+    report.warnings.push(`PostHog coverage check failed to run: ${e.message}`);
+    report.posthog = { pass: true, identifyCount: 0, unpaired: [], captureCount: 0 };
+  }
+}
+
 // ── Grade ───────────────────────────────────────────────────────────────────
 // Composite score (0-100): gates are pass/fail signals, coverage is the
 // graded dimension. Each failed hard gate is a heavy penalty.
@@ -230,6 +251,7 @@ console.log(`  5. Smoke Test   (e2e)      ${mark(report.smoke.pass)}   ${dim(`${
 console.log(`  6. E2E Test     (e2e)      ${mark(report.e2e.pass)}   ${dim(`${report.e2e.passed} passed, ${report.e2e.failed} failed`)}`);
 console.log(`  7. NPM Audit    (deps)     ${mark(report.npmAudit.pass)}   ${dim(report.npmAudit.pass ? '0 vulnerabilities' : `${report.npmAudit.unaccepted} unaccepted high/critical vuln(s)`)}`);
 console.log(`  8. Bucket Audit (S3 creds) ${mark(report.bucketAudit.pass)}   ${dim(report.bucketAudit.pass ? 'credential correctly scoped' : `${report.bucketAudit.overBroad} over-broad permission(s)`)}`);
+console.log(`  9. PostHog      (coverage) ${mark(report.posthog.pass)}   ${dim(`${report.posthog.identifyCount} identify() call(s), ${report.posthog.captureCount} capture() call site(s) — informational, never blocks deploy`)}`);
 
 console.log(sub);
 console.log(`  ${c.bold}Coverage${c.reset} ${dim(`(target ${COVERAGE_TARGET}% lines)`)}`);
