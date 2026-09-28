@@ -121,11 +121,18 @@ describe('flowsTargets — what the page actually wires up', () => {
     }
   });
 
-  it('does not add a confirmation dialog to this page', () => {
-    // Flows' delete paths are genuinely unconfirmed — removeWorkflow and
-    // deleteNode both act immediately — but wiring useConfirm in is a product
-    // change to this page, not part of putting voice on it. Backlog, not here.
-    expect(pageSource()).not.toContain('useConfirm');
+  it('confirms before deleting a workflow, a node, or clearing the canvas', () => {
+    // Flows' delete paths are now confirmed via the same useConfirm/ConfirmDialog
+    // every other destructive action in the app uses (P0 stabilization). This is
+    // still independent of voice: confirm/cancel are in neither parseLocal's
+    // grammar nor the executor, so FLOWS_STATIC stays `unavailable` — see the
+    // "marks every destructive control unavailable" test above. Slice 6 is what
+    // would let voice answer this new confirm dialog, not this change.
+    const src = pageSource();
+    expect(src).toContain('useConfirm');
+    expect(src).toContain('async function deleteNode');
+    expect(src).toContain('async function removeWorkflow');
+    expect(src).toContain('async function clearWorkflow');
   });
 });
 

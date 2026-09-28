@@ -9,7 +9,22 @@ import { api } from './client';
 
 // ── Graph primitives ──────────────────────────────────────────────────────────
 
-export type NodeType = 'agent' | 'app' | 'webhook';
+export type NodeType = 'agent' | 'app' | 'webhook' | 'condition' | 'ai' | 'tool';
+
+/** Operations the AI node supports (Phase 3) — deliberately small, mirrors
+ *  backend api/v1/workflows.py's _AI_OPERATIONS exactly. */
+export const AI_OPERATIONS = ['generate', 'classify', 'extract'] as const;
+export type AIOperation = typeof AI_OPERATIONS[number];
+
+/** Operators the backend's evaluate_condition() accepts
+ *  (services/workflow_context.py CONDITION_OPERATORS) — deliberately small,
+ *  no general expression language. Single source of truth for the
+ *  ConditionEditor's operator dropdown. */
+export const CONDITION_OPERATORS = [
+  'equals', 'not_equals', 'contains', 'exists', 'not_exists',
+  'greater_than', 'less_than',
+] as const;
+export type ConditionOperator = typeof CONDITION_OPERATORS[number];
 
 export interface FlowNodeData {
   // Agent node
@@ -38,6 +53,31 @@ export interface FlowNodeData {
   // any top-level webhook field is destroyed on every save. Use the
   // webhookIdentity()/withWebhookIdentity() helpers below, which stash the
   // identifiers inside `actionConfig` where they actually persist.
+
+  // Condition node (Phase 2, additive). conditionLeft is a dotted path into
+  // the workflow Context ("tool_results.n1.status", "contact.type", ...);
+  // conditionRight is unused for exists/not_exists. Mirrors backend
+  // api/v1/workflows.py's FlowNodeData exactly.
+  conditionLeft?:     string;
+  conditionOperator?: ConditionOperator;
+  conditionRight?:    string | number | boolean;
+
+  // AI node (Phase 3, additive). Orchestrates Candy's existing LLM
+  // pipeline (agent_pipeline.llm.fast_answer) server-side — nothing here
+  // selects a provider/model, matching backend api/v1/workflows.py's
+  // FlowNodeData exactly.
+  aiOperation?:        AIOperation;
+  aiInstruction?:      string;
+  aiInput?:             string;
+  aiOutputVariable?:   string;
+  aiCategories?:       string[];
+  aiExtractFields?:    string[];
+  aiUseKnowledgeBase?: boolean;
+
+  // Tool/Skill node (Phase 3, additive). Orchestrates Candy's existing
+  // tool executor (services.tool_executor.invoke_tool) server-side.
+  toolName?: string;
+  toolArgs?: Record<string, string>;
 }
 
 // ── Webhook node identity (persisted inside actionConfig — see note above) ────
@@ -82,13 +122,17 @@ export const EXECUTABLE_APP_TYPES: readonly string[] =
 export const isExecutableApp = (appType?: string): boolean =>
   !!appType && EXECUTABLE_APP_TYPES.includes(appType);
 
-/** Edge trigger types the engine matches. Mirrors the filter at
- *  backend api/v1/workflows.py:232 — `edge.triggerType not in (trigger_type,
- *  "both")`, where `trigger_type` is only ever 'escalation' | 'demo_booking'.
- *  'webhook_to_agent' is storable but can never match, so such an edge is
- *  inert: no inbound webhook ever drives an agent today. */
+/** Edge trigger types the engine matches. Mirrors the filter at backend
+ *  api/v1/workflows.py:232 — `edge.triggerType not in (trigger_type,
+ *  "both")`, where `trigger_type` is 'escalation' | 'demo_booking' |
+ *  'incoming_call' (Phase 4 — fired once at call start by the existing
+ *  voice runtime, api.v1.workflows.fire_incoming_call_workflow). No new
+ *  node type: an ordinary Agent node's outgoing edge just selects this
+ *  triggerType, same as escalation/demo_booking. 'webhook_to_agent' is
+ *  storable but can never match, so such an edge is inert: no inbound
+ *  webhook ever drives an agent today. */
 export const EXECUTABLE_TRIGGER_TYPES: readonly string[] =
-  ['escalation', 'demo_booking', 'both'];
+  ['escalation', 'demo_booking', 'incoming_call', 'both'];
 
 export const isExecutableTrigger = (triggerType?: string): boolean =>
   !!triggerType && EXECUTABLE_TRIGGER_TYPES.includes(triggerType);
@@ -105,8 +149,12 @@ export interface FlowEdge {
   id:          string;
   source:      string;   // node id
   target:      string;   // node id
-  triggerType: 'escalation' | 'demo_booking' | 'both' | 'webhook_to_agent';
+  triggerType: 'escalation' | 'demo_booking' | 'incoming_call' | 'both' | 'webhook_to_agent';
   label?:      string;
+  /** Phase 2, additive: true/false for one of a condition node's two
+   *  outgoing edges, undefined for every other (unconditional) edge.
+   *  Mirrors backend FlowEdge.branch exactly. */
+  branch?:     boolean;
 }
 
 export interface WorkflowGraph {
@@ -176,8 +224,29 @@ export const updateWorkflow = (id: string, body: UpdateWorkflowBody) =>
 export const deleteWorkflow = (id: string) =>
   api<void>(`/v1/workflows/${id}`, { method: 'DELETE' });
 
+/** One node's outcome in a /test preview walk. Mirrors backend
+ *  api/v1/workflows.py's _run_graph_from(dry_run=True) entries exactly —
+ *  the preview reuses the real multi-hop/condition engine, just with every
+ *  action node's real outbound call replaced by a safe simulation. */
+export interface WorkflowTestStep {
+  node_id:    string;
+  node_type:  NodeType | null;
+  /** executed: a condition (or the trigger itself) genuinely ran, no side
+   *  effects possible either way. would_execute: a real app/webhook call
+   *  would have been made. skipped: not taken — wrong branch, or a no-op
+   *  config (no connection / unimplemented app). blocked: unreached because
+   *  an earlier node in this same chain errored. error: a real, detectable
+   *  configuration problem (bad/missing credential). */
+  status:     'executed' | 'would_execute' | 'skipped' | 'blocked' | 'error';
+  target?:    string;
+  message?:   string | null;
+  /** Condition nodes only. */
+  result?:    boolean;
+  branch?:    'true' | 'false';
+}
+
 export const testWorkflow = (id: string) =>
-  api<{ triggered: boolean; steps: Array<{ node_id: string; status: string; message?: string }> }>(
+  api<{ triggered: boolean; steps: WorkflowTestStep[]; message?: string }>(
     `/v1/workflows/${id}/test`,
     { method: 'POST' }
   );

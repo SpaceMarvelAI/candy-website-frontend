@@ -26,6 +26,7 @@ import {
   updateWorkflow, withWebhookIdentity, webhookIdentity,
   EXECUTABLE_APP_TYPES, isExecutableApp,
   EXECUTABLE_TRIGGER_TYPES, isExecutableTrigger,
+  CONDITION_OPERATORS,
   type FlowNodeData, type WorkflowGraph,
 } from '../../../src/api/workflows';
 import {
@@ -175,9 +176,113 @@ describe('executable app / trigger allowlists mirror the backend engine', () => 
 
   it('treats webhook_to_agent edges as never firing', () => {
     // api/v1/workflows.py:232 only matches the firing trigger or "both".
-    expect([...EXECUTABLE_TRIGGER_TYPES].sort()).toEqual(['both', 'demo_booking', 'escalation']);
+    expect([...EXECUTABLE_TRIGGER_TYPES].sort()).toEqual(['both', 'demo_booking', 'escalation', 'incoming_call']);
     expect(isExecutableTrigger('escalation')).toBe(true);
     expect(isExecutableTrigger('webhook_to_agent')).toBe(false);
+  });
+});
+
+// ── Phase 2: condition node / branch edge fields survive save ────────────────
+// Additive backend fields (api/v1/workflows.py FlowNodeData.conditionLeft/
+// conditionOperator/conditionRight, FlowEdge.branch) — unlike the webhook id/
+// secret bug above, these ARE declared on the backend model (not stuffed into
+// actionConfig), so a plain model_dump() keeps them. These tests pin that the
+// frontend layer sends them and that they'd survive the backend round-trip.
+
+const BACKEND_NODE_DATA_FIELDS_PHASE_2 = [
+  ...BACKEND_NODE_DATA_FIELDS,
+  'conditionLeft', 'conditionOperator', 'conditionRight',
+] as const;
+
+function roundTripThroughBackendPhase2(data: FlowNodeData): FlowNodeData {
+  const out: Record<string, any> = {};
+  for (const key of BACKEND_NODE_DATA_FIELDS_PHASE_2) {
+    if (key in data) out[key] = (data as any)[key];
+  }
+  return out as FlowNodeData;
+}
+
+describe('condition node data survives a save round-trip', () => {
+  it('a fully configured condition node keeps all three fields', () => {
+    const data: FlowNodeData = {
+      conditionLeft: 'contact.type', conditionOperator: 'equals', conditionRight: 'patient',
+    };
+    const reloaded = roundTripThroughBackendPhase2(data);
+    expect(reloaded).toEqual(data);
+  });
+
+  it('an exists/not_exists condition has no meaningful right-hand value but still round-trips', () => {
+    const data: FlowNodeData = { conditionLeft: 'tool_results.n1', conditionOperator: 'exists' };
+    const reloaded = roundTripThroughBackendPhase2(data);
+    expect(reloaded).toEqual(data);
+    expect(reloaded).not.toHaveProperty('conditionRight');
+  });
+
+  it('an unconfigured condition node (no fields set) round-trips to nothing extra', () => {
+    const reloaded = roundTripThroughBackendPhase2({});
+    expect(reloaded).toEqual({});
+  });
+
+  it('condition fields sent in an updateWorkflow payload are transmitted, not stripped', async () => {
+    const conditionGraph: WorkflowGraph = {
+      nodes: [
+        { id: 'a', type: 'agent', x: 0, y: 0, data: { agentId: 'ag1', agentName: 'Agent' } },
+        {
+          id: 'cond', type: 'condition', x: 100, y: 0,
+          data: { conditionLeft: 'contact.type', conditionOperator: 'equals', conditionRight: 'patient' },
+        },
+        { id: 't', type: 'app', x: 200, y: 0, data: { appType: 'jira', appLabel: 'Jira' } },
+        { id: 'f', type: 'app', x: 200, y: 100, data: { appType: 'slack', appLabel: 'Slack' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'a', target: 'cond', triggerType: 'escalation' },
+        { id: 'e2', source: 'cond', target: 't', triggerType: 'escalation', branch: true },
+        { id: 'e3', source: 'cond', target: 'f', triggerType: 'escalation', branch: false },
+      ],
+    };
+    const seen = capture('put', '/v1/workflows/wf1', { id: 'wf1' });
+    await updateWorkflow('wf1', {
+      name: 'Branching flow', graph: conditionGraph, description: null, is_active: true,
+    });
+
+    expect(seen.body.graph.nodes[1].data).toMatchObject({
+      conditionLeft: 'contact.type', conditionOperator: 'equals', conditionRight: 'patient',
+    });
+    expect(seen.body.graph.edges[1]).toMatchObject({ branch: true });
+    expect(seen.body.graph.edges[2]).toMatchObject({ branch: false });
+    // The trigger edge into the condition node carries no branch at all.
+    expect(seen.body.graph.edges[0]).not.toHaveProperty('branch');
+  });
+
+  it('adding a condition node to an existing graph does not alter the other nodes', async () => {
+    const existingAgent = { id: 'a', type: 'agent' as const, x: 0, y: 0, data: { agentId: 'ag1', agentName: 'Agent' } };
+    const existingApp = { id: 'j', type: 'app' as const, x: 200, y: 0, data: { appType: 'jira', appLabel: 'Jira', connectionId: 'conn-1' } };
+    const graphWithNewCondition: WorkflowGraph = {
+      nodes: [
+        existingAgent,
+        existingApp,
+        { id: 'cond', type: 'condition', x: 100, y: 0, data: { conditionLeft: 'x', conditionOperator: 'exists' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'a', target: 'j', triggerType: 'escalation' },
+      ],
+    };
+    const seen = capture('put', '/v1/workflows/wf2', { id: 'wf2' });
+    await updateWorkflow('wf2', {
+      name: 'Existing plus condition', graph: graphWithNewCondition, description: null, is_active: true,
+    });
+
+    expect(seen.body.graph.nodes[0]).toEqual(existingAgent);
+    expect(seen.body.graph.nodes[1]).toEqual(existingApp);
+    expect(seen.body.graph.edges[0]).toEqual({ id: 'e1', source: 'a', target: 'j', triggerType: 'escalation' });
+  });
+
+  it('CONDITION_OPERATORS matches the backend allowlist exactly', () => {
+    // services/workflow_context.py CONDITION_OPERATORS — kept in sync by hand;
+    // this test is the tripwire if one side changes without the other.
+    expect([...CONDITION_OPERATORS].sort()).toEqual(
+      ['contains', 'equals', 'exists', 'greater_than', 'less_than', 'not_equals', 'not_exists'].sort(),
+    );
   });
 });
 
