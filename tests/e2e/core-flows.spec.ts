@@ -71,7 +71,9 @@ test('sign-in, dashboard, sidebar navigation', async ({ page }) => {
 
   // Sidebar nav to a page with no live-backend dependency, and back.
   // (Nav items are <button>s, not <a> — no client-side link semantics here.)
-  await page.getByRole('button', { name: 'Connectors' }).click();
+  // Connectors lives under the AppRail's "More" popover.
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: 'Connectors' }).click();
   await expect(page).toHaveURL(/\/connects/);
 
   await page.goto('/dashboard');
@@ -83,7 +85,7 @@ test('Report Issue: create, list, detail panel, image lightbox', async ({ page }
   await expect(page.getByText('Healthcare Domain', { exact: false })).toBeVisible({ timeout: 15_000 });
 
   // Open profile menu → Help → Report issue
-  await page.getByText(SEEDED_USER.email).click();
+  await page.getByRole('button', { name: 'Open profile menu' }).click();
   const helpBtn = page.getByRole('button', { name: 'Help' });
   await expect(helpBtn).toBeVisible();
   await helpBtn.click();
@@ -121,7 +123,7 @@ test('Report Issue: create, list, detail panel, image lightbox', async ({ page }
 
   // Open the attachment → in-page lightbox, same tab. Scoped to the Issue Details
   // panel itself — an unscoped `button:has(img)` also matches sidebar product nav
-  // buttons (Meta Space/Finixy icons), which sit earlier in the DOM and win .first().
+  // buttons (the AppRail's product icons), which sit earlier in the DOM and win .first().
   const issueDetailPanel = page.locator('#issue-detail-backdrop');
   const [popup] = await Promise.all([
     page.waitForEvent('popup', { timeout: 1000 }).catch(() => null),

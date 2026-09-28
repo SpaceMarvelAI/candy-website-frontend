@@ -79,6 +79,96 @@ function CardSkeleton() {
   );
 }
 
+// ─── Category dropdown ─────────────────────────────────────────────────────────
+// Custom listbox rather than a native <select>: the native popup is drawn by the
+// OS and ignores CSS, which clashed with the dark shell menus.
+function CategoryDropdown({ options, value, onChange }: {
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen]   = useState(false);
+  const [query, setQuery] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+  const active  = options.includes(value);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  useEffect(() => { if (!open) setQuery(''); }, [open]);
+
+  const shown = options.filter(o => o.toLowerCase().includes(query.toLowerCase()));
+
+  function pick(v: string) { onChange(v); setOpen(false); }
+
+  const row = (label: string, v: string, selected: boolean) => (
+    <button
+      key={v || '__all'}
+      role="option"
+      aria-selected={selected}
+      className="cat-dd-option"
+      onClick={() => pick(v)}
+    >
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+      {selected && <Icon name="check" size={13} />}
+    </button>
+  );
+
+  return (
+    <div ref={rootRef} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        className="cat-dd-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        data-active={active || undefined}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {active ? value : 'All categories'}
+        </span>
+        <Icon name="chevronDown" size={12} style={{
+          flexShrink: 0, opacity: 0.7,
+          transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s',
+        }} />
+      </button>
+
+      {open && (
+        <div className="cat-dd-panel">
+          <div style={{ position: 'relative', padding: 6 }}>
+            <Icon name="search" size={13} style={{
+              position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
+              color: 'var(--shell-section)', pointerEvents: 'none',
+            }} />
+            <input
+              autoFocus
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search categories…"
+              className="cat-dd-search"
+            />
+          </div>
+          <div role="listbox" aria-label="Categories" className="cat-dd-list">
+            {!query && row('All categories', '', !active)}
+            {shown.map(o => row(o, o, o === value))}
+            {shown.length === 0 && <div className="cat-dd-empty">No categories match</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ConnectsPage() {
   const { addToast } = useApp();
   const isMobile = useMediaQuery('(max-width: 640px)');
@@ -243,9 +333,9 @@ export default function ConnectsPage() {
     }
   }
 
-  const categories = ['All', 'Connected', ...Array.from(
+  const categoryOptions = Array.from(
     new Set(apps.map(appCategory).filter(Boolean))
-  ).sort()];
+  ).sort();
 
   const filtered = apps.filter(app => {
     if (search && !app.name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -337,34 +427,34 @@ export default function ConnectsPage() {
 
       {hasToken && (
         <>
-          {/* ── Search ── */}
-          <div style={{ position: 'relative', marginBottom: 16, maxWidth: 340 }}>
-            <div style={{
-              position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-              pointerEvents: 'none', color: 'var(--text-4)',
-            }}>
-              <Icon name="search" size={14} />
+          {/* ── Search + filters ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
+            <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: 340 }}>
+              <div style={{
+                position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+                pointerEvents: 'none', color: 'var(--text-4)',
+              }}>
+                <Icon name="search" size={14} />
+              </div>
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search apps…"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  paddingLeft: 36, paddingRight: 14,
+                  paddingTop: 9, paddingBottom: 9,
+                  borderRadius: 10, fontSize: 14,
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-1)', outline: 'none',
+                  transition: 'border-color 0.15s',
+                }}
+              />
             </div>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search apps…"
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                paddingLeft: 36, paddingRight: 14,
-                paddingTop: 9, paddingBottom: 9,
-                borderRadius: 10, fontSize: 14,
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                color: 'var(--text-1)', outline: 'none',
-                transition: 'border-color 0.15s',
-              }}
-            />
-          </div>
 
-          {/* ── Category chips ── */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 24 }}>
-            {categories.map(cat => (
+            {/* Quick filters stay as chips; the long category list lives in one dropdown. */}
+            {['All', 'Connected'].map(cat => (
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
@@ -388,6 +478,8 @@ export default function ConnectsPage() {
                 )}
               </button>
             ))}
+
+            <CategoryDropdown options={categoryOptions} value={category} onChange={setCategory} />
           </div>
 
           {/* ── App grid ── */}

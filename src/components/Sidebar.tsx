@@ -1,18 +1,9 @@
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
-import { createPortal } from 'react-dom';
-import posthog from 'posthog-js';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { useTheme } from '../hooks/useTheme';
-import type { AddToast } from '../hooks/useToast';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import Icon from '../assets/icons';
-import WorkspaceSwitcher from './WorkspaceSwitcher';
-import { getProfile } from '../api/profile';
-
-// Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
-const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
-const ProfileModal = lazy(() => import('./ProfileModal'));
+import { HEADER_H, RAIL_W, SHELL_GAP } from './AppRail';
 
 // ─────────────────────────────────────────────────────────────────────────────
 const COLLAPSED_W = 56;
@@ -22,23 +13,6 @@ const MOBILE_W    = 288;
 const NAV_SECTIONS = [
   {
     label: '',
-    items: [
-      { id: 'prompt-library',   label: 'Prompt Library',   icon: 'book', path: null },
-      { id: 'workspace-agents', label: 'Workspace Agents', icon: 'team', path: null },
-      { id: 'connectors',       label: 'Connectors',       icon: 'flow', path: '/connects' },
-    ],
-  },
-  {
-    label: 'Products',
-    items: [
-      { id: 'metaspace', label: 'Meta Space', icon: '', img: '/Metaspace.svg',   path: null,
-        ssoTarget: import.meta.env.VITE_META_APP_URL || 'https://spacemarvel.ai', external: true },
-      { id: 'finixy',    label: 'Finixy',     icon: '', img: '/FinixyLogo.svg', path: null,
-        ssoTarget: import.meta.env.VITE_FINIXY_APP_URL || 'https://app.finixy.ai',        external: true },
-    ],
-  },
-  {
-    label: 'Main',
     items: [
       { id: 'usecase', label: 'Use Case', icon: 'health', path: null,
         subItems: [
@@ -60,193 +34,7 @@ const PATH_TO_NAV: [string, string][] = [
   ['/live',       'voice'],
   ['/analytics',  'analytics'],
   ['/flows',      'flows'],
-  ['/connects',   'connectors'],
 ];
-
-const isLocal = typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-const SM_API = isLocal
-  ? '/sm-api'
-  : (import.meta.env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
-
-// ─── Profile popover ──────────────────────────────────────────────────────────
-function ProfileMenu({
-  anchorRect, onClose, onSignOut, signingOut, navigate, addToast,
-  theme, setTheme, onReportIssue, onProfile,
-}: {
-  anchorRect: DOMRect;
-  onClose: () => void; onSignOut: () => void; signingOut: boolean;
-  navigate: (p: string) => void; addToast: AddToast;
-  theme: string; setTheme: (t: 'light' | 'dark') => void;
-  onReportIssue: () => void;
-  onProfile: () => void;
-}) {
-  const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
-  const [subMenuY, setSubMenuY] = useState(0);
-
-  const menuWidth   = 220;
-  const flyoutWidth = 190;
-  const left   = 8;
-  const bottom = window.innerHeight - anchorRect.top + 6;
-  const flyoutLeft = left + menuWidth + 4;
-
-  function toggleSub(name: 'appearance' | 'help', e: React.MouseEvent) {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setSubMenuY(rect.top);
-    setSubMenu(s => s === name ? null : name);
-  }
-
-  const subBtn = (label: string, icon: string, name: 'appearance' | 'help') => (
-    <button
-      onClick={e => toggleSub(name, e)}
-      style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-        padding: '8px 12px',
-        background: subMenu === name ? 'var(--tint-2)' : 'transparent',
-        border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-        fontSize: 13, fontWeight: 500, color: 'var(--text-1)', transition: 'background 0.12s',
-      }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--tint-2)'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = subMenu === name ? 'var(--tint-2)' : 'transparent'; }}
-    >
-      <Icon name={icon} size={14} />
-      <span style={{ flex: 1 }}>{label}</span>
-      <span style={{ fontSize: 10, opacity: 0.4 }}>›</span>
-    </button>
-  );
-
-  const menuItem = (
-    label: string,
-    onClick: () => void,
-    opts: { icon?: string; danger?: boolean; active?: boolean } = {}
-  ) => (
-    <button
-      onClick={onClick}
-      style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-        padding: '8px 12px',
-        background: opts.active ? 'rgba(0,113,227,0.1)' : 'transparent',
-        border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-        fontSize: 13, fontWeight: 500,
-        color: opts.danger ? '#f87171' : opts.active ? 'var(--blue)' : 'var(--text-1)',
-        transition: 'background 0.12s',
-      }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = opts.danger ? 'rgba(248,113,113,0.1)' : 'var(--tint-2)'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = opts.active ? 'rgba(0,113,227,0.1)' : 'transparent'; }}
-    >
-      {opts.icon && <Icon name={opts.icon} size={14} />}
-      <span style={{ flex: 1 }}>{label}</span>
-      {opts.active && <span style={{ display: 'inline-flex', color: 'var(--blue)' }}><Icon name="check" size={12} /></span>}
-    </button>
-  );
-
-  // Clamp so the flyout never bleeds below the viewport (4 items ≈ 160px + padding)
-  const safeFlyoutTop = Math.min(subMenuY, window.innerHeight - 172 - 12);
-
-  const flyoutStyle: React.CSSProperties = {
-    position: 'fixed',
-    left: flyoutLeft,
-    top: safeFlyoutTop,
-    width: flyoutWidth,
-    background: 'var(--surface-solid)',
-    border: '1px solid var(--border)',
-    borderRadius: 12,
-    padding: '6px',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-    zIndex: 201,
-    animation: 'menuFadeIn 0.12s ease',
-  };
-
-  return createPortal(
-    <>
-      <style>{`
-        @keyframes menuFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes menuFadeIn{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:translateX(0)}}
-      `}</style>
-
-      {/* Backdrop — captures outside clicks without DOM event hacks */}
-      <div
-        style={{ position: 'fixed', inset: 0, zIndex: 198 }}
-        onClick={onClose}
-      />
-
-      {/* ── Main menu ── */}
-      <div style={{
-        position: 'fixed', left, bottom, width: menuWidth,
-        background: 'var(--surface-solid)',
-        border: '1px solid var(--border)',
-        borderRadius: 12, padding: '6px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-        zIndex: 200, animation: 'menuFadeUp 0.15s ease',
-      }}>
-        {/* Subscription workspaces, at the very top — the slot Claude uses, and what
-            HANDOFF_TO_TEAMS.md specifies. Renders nothing when the user has only one, so a
-            single-workspace account sees this menu exactly as before. */}
-        <WorkspaceSwitcher />
-
-        {/* Upgrade plan */}
-        <button
-          onClick={() => { addToast('Upgrade plan — coming soon', 'info'); onClose(); }}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-            padding: '8px 12px', background: 'rgba(139,92,246,0.08)',
-            border: '1px solid rgba(139,92,246,0.2)', borderRadius: 8,
-            cursor: 'pointer', fontSize: 13, fontWeight: 600,
-            color: 'var(--purple-hi)', marginBottom: 4, transition: 'background 0.12s',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.15)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.08)'; }}
-        >
-          <Icon name="zap" size={14} />
-          <span style={{ flex: 1 }}>Upgrade plan</span>
-        </button>
-
-        <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
-
-        {menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
-        {menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
-        {subBtn('Appearance', 'sun',  'appearance')}
-        {menuItem('Settings',  () => { addToast('Settings — coming soon', 'info'); onClose(); }, { icon: 'settings' })}
-        {subBtn('Help', 'help', 'help')}
-
-        <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
-
-        {/* Keep the menu OPEN while signing out so the "Signing out…" label is
-            actually visible — closing it first made a slow sign-out look like a
-            dead click, which is what prompted people to click again. */}
-        {menuItem(
-          signingOut ? 'Signing out…' : 'Sign out',
-          () => { if (!signingOut) onSignOut(); },
-          { icon: 'logout', danger: true },
-        )}
-      </div>
-
-      {/* ── Appearance flyout ── */}
-      {subMenu === 'appearance' && (
-        <div style={flyoutStyle}>
-          {menuItem('Light theme',  () => setTheme('light'), { active: theme === 'light' })}
-          {menuItem('Dark theme',   () => setTheme('dark'),  { active: theme === 'dark'  })}
-          {menuItem('System theme', () => {
-            const sys = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            setTheme(sys);
-          })}
-          {menuItem('Customize theme', () => addToast('Custom theme — coming soon', 'info'))}
-        </div>
-      )}
-
-      {/* ── Help flyout ── */}
-      {subMenu === 'help' && (
-        <div style={flyoutStyle}>
-          {menuItem('Report issue',       () => { onReportIssue(); onClose(); })}
-          {menuItem('Terms & conditions', () => window.open('https://spacemarvel.com/terms', '_blank'))}
-          {menuItem('Privacy policy',     () => window.open('https://spacemarvel.com/privacy', '_blank'))}
-          {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
-        </div>
-      )}
-    </>,
-    document.body,
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 interface SidebarProps {
@@ -255,42 +43,13 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
-  const { user, addToast, signOut, signingOut } = useApp();
-  const { theme, setTheme } = useTheme();
+  const { addToast } = useApp();
   const navigate     = useNavigate();
   const location     = useLocation();
   const [expanded, setExpanded] = useState(true);
   const [useCaseOpen, setUseCaseOpen] = useState(true);
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
-
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [reportIssuesOpen, setReportIssuesOpen] = useState(false);
-  const [profileEditOpen, setProfileEditOpen] = useState(false);
-  const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
   const [headerHovered, setHeaderHovered] = useState(false);
-  // Overrides AppContext's cached name/avatar right after a save in ProfileModal, so the
-  // sidebar reflects the edit immediately instead of waiting for the next login.
-  const [profileOverride, setProfileOverride] = useState<{ name: string | null; avatarUrl: string | null } | null>(null);
-  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
-
-  // Seed the sidebar avatar once on mount from Candy's own /v1/profile — the login redirect's
-  // params_dict (api/v1/sso_oidc.py) never carries avatar_url, so without this the circle would
-  // stay initials-only until the user happened to open the Profile modal once. Best-effort: a
-  // failed fetch just leaves the initials fallback in place.
-  useEffect(() => {
-    let cancelled = false;
-    getProfile()
-      .then((profile) => {
-        if (cancelled) return;
-        setProfileOverride((prev) => prev ?? { name: null, avatarUrl: profile.avatar_url });
-      })
-      .catch(() => { /* fall back to initials, nothing to surface here */ });
-    return () => { cancelled = true; };
-  }, []);
-
-  const isDark    = theme === 'dark';
-  const imgFilter = isDark ? 'brightness(2)' : 'invert(1)';
 
   const activeId = PATH_TO_NAV.find(([prefix]) =>
     location.pathname === prefix || location.pathname.startsWith(prefix + '/')
@@ -301,92 +60,27 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     return () => { document.body.style.overflow = ''; };
   }, [isMobileOrTablet, mobileOpen]);
 
-  // Close profile menu on route change
-  useEffect(() => { setProfileMenuOpen(false); }, [location.pathname]);
-
   // Reset hover state when sidebar collapses so Candy icon shows immediately
   useEffect(() => { setHeaderHovered(false); }, [expanded]);
 
-  function openProfileMenu() {
-    if (profileRef.current) {
-      setProfileAnchor(profileRef.current.getBoundingClientRect());
-      setProfileMenuOpen(true);
+  function handleNav(item: { path: string | null; label: string }) {
+    if (item.path) {
+      navigate(item.path);
+      if (isMobileOrTablet) onClose?.();
+    } else {
+      addToast(`"${item.label}" — coming soon`, 'info');
     }
-  }
-
-  async function handleNav(item: { id?: string; path: string | null; label: string; ssoTarget?: string }) {
-    if (!item.ssoTarget) {
-      if (item.path) {
-        navigate(item.path);
-        if (isMobileOrTablet) onClose?.();
-      } else {
-        addToast(`"${item.label}" — coming soon`, 'info');
-      }
-      return;
-    }
-
-    // Client-only signal: this leaves Candy entirely via SSO redirect, so no
-    // Candy pageview/backend event ever records that the click happened.
-    posthog.capture('sidebar_product_link_clicked', { product: item.id ?? item.label });
-
-    const dashboardToken = localStorage.getItem('dashboard_token');
-
-    if (dashboardToken) {
-      try {
-        const res = await fetch(`${SM_API}/api/rbac/auth/sso/generate/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${dashboardToken}`,
-          },
-          body: JSON.stringify({ app_url: item.ssoTarget }),
-        });
-
-        if (res.status === 401 || res.status === 403) {
-          localStorage.removeItem('dashboard_token');
-          throw new Error(`token_expired:${res.status}`);
-        }
-
-        if (!res.ok) throw new Error(`sso_generate_error:${res.status}`);
-
-        const data = await res.json().catch(() => ({}));
-        const ssoToken = data.sso_token || data.token;
-
-        if (ssoToken) {
-          const target = new URL(item.ssoTarget);
-          target.searchParams.set('sso_token', ssoToken);
-          target.searchParams.set('access_token', dashboardToken);
-          window.location.href = target.toString();
-          return;
-        }
-
-        throw new Error('no_sso_token_in_response');
-      } catch {
-        // Fall through silently — the redirect below will take the user to
-        // SpaceMarvel login and back, which handles every failure case.
-      }
-    }
-
-    // Save intent so SSO callback can redirect there immediately after login
-    localStorage.setItem('candy:sso_intent', item.ssoTarget);
-    const candyCallback = window.location.origin + '/sso/callback';
-    window.location.href = `https://staging.spacemarvel.com/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 
   const panelExpanded = isMobileOrTablet ? true : expanded;
   const panelWidth    = isMobileOrTablet ? MOBILE_W : (panelExpanded ? EXPANDED_W : COLLAPSED_W);
 
   const panelTransform = isMobileOrTablet
-    ? (mobileOpen ? 'translateX(0)' : `translateX(-${MOBILE_W}px)`)
+    ? (mobileOpen ? 'translateX(0)' : `translateX(-${MOBILE_W + RAIL_W + SHELL_GAP * 2}px)`)
     : 'translateX(0)';
   const panelTransition = isMobileOrTablet
     ? 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
     : 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)';
-
-  const userName    = profileOverride?.name || user?.full_name || user?.email?.split('@')[0] || 'User';
-  const userEmail   = user?.email || '';
-  const userAvatarUrl = profileOverride ? profileOverride.avatarUrl : (user?.avatar_url || null);
-  const initials    = userName.slice(0, 1).toUpperCase();
 
   return (
     <>
@@ -410,15 +104,15 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       <div
         style={{
           position: 'fixed',
-          top: 0, left: 0,
-          height: '100vh',
+          top: HEADER_H + SHELL_GAP, left: RAIL_W + SHELL_GAP * 2,
+          height: `calc(100vh - ${HEADER_H + SHELL_GAP * 2}px)`,
+          borderRadius: 4,
           width: panelWidth,
           transform: panelTransform,
           transition: panelTransition,
           display: 'flex',
           flexDirection: 'column',
-          background: 'var(--sidebar-bg)',
-          borderRight: 'none',
+          background: 'var(--shell-bg)',
           overflowX: 'hidden',
           boxShadow: 'none',
           zIndex: 50,
@@ -428,8 +122,8 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         <div style={{
           display: 'flex', alignItems: 'center',
           justifyContent: panelExpanded ? 'space-between' : 'center',
-          height: 48,
-          padding: panelExpanded ? '0 14px' : '0',
+          height: 56,
+          padding: panelExpanded ? '0 14px 0 20px' : '0',
           flexShrink: 0,
           boxSizing: 'border-box',
           borderBottom: 'none',
@@ -443,39 +137,28 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
               onMouseLeave={() => setHeaderHovered(false)}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--text-1)', padding: 4, borderRadius: 6,
+                color: 'var(--shell-text-1)', padding: 4, borderRadius: 6,
                 display: 'grid', placeItems: 'center',
               }}
             >
               {headerHovered
                 ? <Icon name="sidebar-collapse" size={20} />
-                : <img src="/Candy.svg" alt="Candy" style={{ width: 22, height: 22, borderRadius: 6, display: 'block', filter: imgFilter }} />
+                : <img src="/Candy.svg" alt="Candy" style={{ width: 22, height: 22, borderRadius: 6, display: 'block', filter: 'var(--shell-logo-filter)' }} />
               }
             </button>
           ) : (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-                <img
-                  src="/Candy.svg"
-                  alt="Candy"
-                  style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: 'block', filter: imgFilter }}
-                />
-                {panelExpanded && (
-                  <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', letterSpacing: '-0.01em' }}>
-                    Candy
-                  </span>
-                )}
-              </div>
+              <span style={{ fontSize: 17, fontWeight: 600, color: 'var(--shell-text-1)', letterSpacing: '-0.01em' }}>
+                Candy
+              </span>
               {panelExpanded && !isMobileOrTablet && (
                 <button
                   onClick={() => setExpanded(false)}
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--text-4)', padding: 4, borderRadius: 6,
+                    color: 'var(--shell-text-2)', padding: 4, borderRadius: 6,
                     display: 'grid', placeItems: 'center', transition: 'color 0.15s',
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-2)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-4)'; }}
                   title="Collapse sidebar"
                 >
                   <Icon name="sidebar-expand" size={20} />
@@ -485,7 +168,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                 <button
                   onClick={onClose}
                   style={{ background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--text-3)', padding: 4, display: 'grid', placeItems: 'center' }}
+                    color: 'var(--shell-text-2)', padding: 4, display: 'grid', placeItems: 'center' }}
                 >
                   <Icon name="x" size={16} />
                 </button>
@@ -516,8 +199,9 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                       <div key={item.id}>
                         <button
                           onClick={() => panelExpanded ? setUseCaseOpen(o => !o) : handleNav(item.subItems[0])}
-                          className={!panelExpanded ? 'tooltip-wrap' : ''}
+                          className={`shell-row${!panelExpanded ? ' tooltip-wrap' : ''}`}
                           data-tip={!panelExpanded ? item.label : undefined}
+                          aria-current={groupActive ? 'page' : undefined}
                           style={{
                             ...styles.navBtn,
                             justifyContent: panelExpanded ? 'flex-start' : 'center',
@@ -526,21 +210,9 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                             height:         panelExpanded ? 'auto' : 36,
                             margin:         '0 0 2px 0',
                             borderRadius:   12,
-                            background:     groupActive ? 'var(--tint-2)' : 'transparent',
                             border:         '1px solid transparent',
-                            color:          groupActive ? 'var(--text-1)' : 'var(--text-2)',
                             fontWeight:     groupActive ? 600 : 500,
                             transition:     'background 0.12s, color 0.12s',
-                          }}
-                          onMouseEnter={e => {
-                            if (groupActive) return;
-                            e.currentTarget.style.background = 'var(--tint-2)';
-                            e.currentTarget.style.color = 'var(--text-1)';
-                          }}
-                          onMouseLeave={e => {
-                            if (groupActive) return;
-                            e.currentTarget.style.background = 'transparent';
-                            e.currentTarget.style.color = 'var(--text-2)';
                           }}
                         >
                           <Icon name={item.icon} size={16} />
@@ -563,23 +235,22 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                                 <button
                                   key={sub.id}
                                   onClick={() => handleNav(sub)}
+                                  className="shell-row"
+                                  aria-current={subActive ? 'page' : undefined}
                                   style={{
                                     display: 'flex', alignItems: 'center', gap: 8, width: '100%',
                                     padding: '7px 12px 7px 40px', borderRadius: 10, border: 'none',
-                                    background: subActive ? 'var(--tint-2)' : 'transparent',
-                                    color: sub.soon ? 'var(--text-4)' : (subActive ? 'var(--text-1)' : 'var(--text-3)'),
+                                    color: sub.soon ? 'var(--shell-section)' : undefined,
                                     fontSize: 13, fontWeight: subActive ? 600 : 500,
                                     cursor: 'pointer', textAlign: 'left', margin: '0 0 1px 0',
                                     transition: 'background 0.12s, color 0.12s',
                                   }}
-                                  onMouseEnter={e => { if (!subActive) e.currentTarget.style.background = 'var(--tint-2)'; }}
-                                  onMouseLeave={e => { if (!subActive) e.currentTarget.style.background = 'transparent'; }}
                                 >
                                   <span style={{ flex: 1, whiteSpace: 'nowrap' }}>{sub.label}</span>
                                   {sub.soon && (
                                     <span style={{
                                       fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
-                                      background: 'var(--tint-2)', color: 'var(--text-4)', padding: '2px 7px',
+                                      background: 'var(--shell-row-hover)', color: 'var(--shell-section)', padding: '2px 7px',
                                       borderRadius: 20, flexShrink: 0,
                                     }}>Soon</span>
                                   )}
@@ -597,8 +268,9 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                     <button
                       key={item.id}
                       onClick={() => handleNav(item)}
-                      className={!panelExpanded ? 'tooltip-wrap' : ''}
+                      className={`shell-row${!panelExpanded ? ' tooltip-wrap' : ''}`}
                       data-tip={!panelExpanded ? item.label : undefined}
+                      aria-current={isActive ? 'page' : undefined}
                       style={{
                         ...styles.navBtn,
                         justifyContent: panelExpanded ? 'flex-start' : 'center',
@@ -607,26 +279,14 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                         height:         panelExpanded ? 'auto' : 36,
                         margin:         '0 0 2px 0',
                         borderRadius:   12,
-                        background:     isActive ? 'var(--tint-2)' : 'transparent',
                         border:         '1px solid transparent',
-                        color:          isActive ? 'var(--text-1)' : 'var(--text-2)',
                         fontWeight:     isActive ? 600 : 500,
                         transition:     'background 0.12s, color 0.12s',
-                      }}
-                      onMouseEnter={e => {
-                        if (isActive) return;
-                        e.currentTarget.style.background = 'var(--tint-2)';
-                        e.currentTarget.style.color = 'var(--text-1)';
-                      }}
-                      onMouseLeave={e => {
-                        if (isActive) return;
-                        e.currentTarget.style.background = 'transparent';
-                        e.currentTarget.style.color = 'var(--text-2)';
                       }}
                     >
                       {item.img ? (
                         <img src={item.img} alt={item.label}
-                          style={{ width: 20, height: 20, objectFit: 'contain', filter: imgFilter, flexShrink: 0 }} />
+                          style={{ width: 20, height: 20, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)', flexShrink: 0 }} />
                       ) : (
                         <Icon name={item.icon} size={16} />
                       )}
@@ -643,103 +303,13 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
             </div>
           ))}
         </div>
-
-        {/* ── User profile ────────────────────────────────────────────────────── */}
-        <div
-          ref={profileRef}
-          onClick={openProfileMenu}
-          title={!panelExpanded ? `${userName} · ${userEmail}` : undefined}
-          style={{
-            borderTop: 'none',
-            padding: panelExpanded ? '12px 12px' : '12px 0',
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: panelExpanded ? 'flex-start' : 'center',
-            gap: 10,
-            cursor: 'pointer',
-            transition: 'background 0.15s',
-            background: profileMenuOpen ? 'var(--tint-2)' : 'transparent',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--tint-2)'; }}
-          onMouseLeave={e => { if (!profileMenuOpen) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-        >
-          {userAvatarUrl && !avatarLoadFailed ? (
-            <img
-              src={userAvatarUrl}
-              alt=""
-              onError={() => setAvatarLoadFailed(true)}
-              style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, display: 'block' }}
-            />
-          ) : (
-            <div style={{
-              width: 30, height: 30, borderRadius: '50%',
-              background: 'var(--grad-brand)',
-              display: 'grid', placeItems: 'center',
-              fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0,
-            }}>
-              {initials}
-            </div>
-          )}
-          {panelExpanded && (
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {userName}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-4)',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {userEmail}
-              </div>
-            </div>
-          )}
-          {panelExpanded && (
-            <Icon name="chevronDown" size={14} style={{ color: 'var(--text-4)', flexShrink: 0, transform: profileMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
-          )}
-        </div>
       </div>
-
-      {/* ── Profile menu (portaled) ─────────────────────────────────────────── */}
-      {profileMenuOpen && profileAnchor && (
-        <ProfileMenu
-          anchorRect={profileAnchor}
-          onClose={() => setProfileMenuOpen(false)}
-          onSignOut={signOut}
-          signingOut={signingOut}
-          navigate={(p) => { navigate(p); setProfileMenuOpen(false); }}
-          addToast={addToast}
-          theme={theme}
-          setTheme={setTheme}
-          onReportIssue={() => setReportIssuesOpen(true)}
-          onProfile={() => setProfileEditOpen(true)}
-        />
-      )}
-
-      {/* ── Report an Issue (portaled) ───────────────────────────────────────── */}
-      {reportIssuesOpen && (
-        <Suspense fallback={null}>
-          <ReportIssuesModal onClose={() => setReportIssuesOpen(false)} />
-        </Suspense>
-      )}
-
-      {/* ── Profile (portaled) ───────────────────────────────────────────────── */}
-      {profileEditOpen && (
-        <Suspense fallback={null}>
-          <ProfileModal
-            onClose={() => setProfileEditOpen(false)}
-            onSaved={(profile) => {
-              setProfileOverride({ name: profile.name, avatarUrl: profile.avatar_url });
-              setAvatarLoadFailed(false);
-            }}
-          />
-        </Suspense>
-      )}
 
       {/* ── Flex placeholder — mirrors the panel width so the content area shifts ── */}
       <aside
         className="sidebar-placeholder"
         style={{
-          width: isMobileOrTablet ? 0 : panelWidth,
+          width: isMobileOrTablet ? 0 : panelWidth + SHELL_GAP * 2,
           transition: isMobileOrTablet ? 'none' : panelTransition,
         }}
       />
@@ -751,10 +321,10 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 const styles: Record<string, React.CSSProperties> = {
   sectionLabel: {
     fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.16em',
-    color: 'var(--text-4)', padding: '10px 18px 4px', margin: 0,
+    color: 'var(--shell-section)', padding: '10px 18px 4px', margin: 0,
   },
   sectionDivider: {
-    height: 1, background: 'var(--border)', margin: '8px 14px', opacity: 0.6,
+    height: 1, background: 'var(--shell-border)', margin: '8px 14px', opacity: 0.6,
   },
   navBtn: {
     display: 'flex', alignItems: 'center', gap: 12,
