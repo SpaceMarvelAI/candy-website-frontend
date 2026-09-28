@@ -8,6 +8,7 @@ import KnowledgeBase from './KnowledgeBase';
 import PromptEditor from './PromptEditor';
 import ChatTestPanel from './ChatTestPanel';
 import EntryPointBanner from './EntryPointBanner';
+import WhatsAppConnectionPanel from './WhatsAppConnectionPanel';
 import { listAgents, createAgent, deleteAgent, type Agent } from '../../api/agents';
 import { getRequirements } from '../../api/requirements';
 import { listKnowledge, type KnowledgeDoc } from '../../api/knowledge';
@@ -336,6 +337,7 @@ export default function ChatbotWorkspace({
           isPublished={status === 'published' || statusOverride === 'published'}
         />
       )}
+      {agent && <WhatsAppConnectionPanel agentId={agent.id} tint={tint} />}
 
       {/* Full-width banners */}
       {error && (

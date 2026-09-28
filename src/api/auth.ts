@@ -5,6 +5,9 @@ export interface AuthUser {
   user_id: string;
   email: string;
   full_name?: string | null;
+  /** URL of avatar / profile picture. Not populated at login yet — read via
+   *  GET /v1/profile (src/api/profile.ts) instead. */
+  avatar_url?: string | null;
   role: string;
   company_id: string;
   company_name: string;

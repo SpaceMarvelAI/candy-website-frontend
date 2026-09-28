@@ -6,6 +6,8 @@
  */
 import { test, expect } from '@playwright/test';
 
+const TEST_API_BASE = 'http://localhost:8002'; // VITE_API_BASE_URL in .env.test
+
 const SEEDED_USER = {
   user_id: '00000000-0000-0000-0000-e2e000000000',
   email: 'e2e-smoke@candy.internal',
@@ -26,7 +28,15 @@ test.beforeEach(async ({ context }) => {
 
 test('dashboard renders for a signed-in user with no console errors', async ({ page }) => {
   const consoleErrors: string[] = [];
-  page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+  page.on('console', (msg) => {
+    if (msg.type() !== 'error') return;
+    // No backend runs for this test (and a real one would reject the fake token
+    // anyway), so failed calls to .env.test's API base are expected noise —
+    // both the browser's own resource error and client.ts's status-0 log.
+    const text = msg.text();
+    if (msg.location().url.startsWith(TEST_API_BASE) || (text.includes(TEST_API_BASE) && text.includes('status: 0'))) return;
+    consoleErrors.push(text);
+  });
   page.on('pageerror', (err) => consoleErrors.push(`PAGEERROR: ${err.message}`));
 
   await page.goto('/dashboard');
