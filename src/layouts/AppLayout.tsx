@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import AppRail from '../components/AppRail';
 import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
 import VoiceIndicator from '../components/voice/VoiceIndicator';
@@ -17,10 +18,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
   return (
-    <div className="app-layout">
+    <div className="app-layout" style={{ flexDirection: 'column' }}>
+      <Topbar onMenuOpen={() => setSidebarOpen(true)} />
+      <div style={{ display: 'flex', flex: 1, minWidth: 0, background: 'var(--shell-page)' }}>
+      <AppRail />
       <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, overflow: 'hidden' }}>
-        <Topbar onMenuOpen={() => setSidebarOpen(true)} />
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, overflow: 'hidden', background: 'var(--shell-page)' }}>
         {fullBleed ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {children}
@@ -30,6 +33,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         )}
+      </div>
       </div>
       {/* Fixed-position, so it sits outside the scrolling column and stays put
           across route changes.

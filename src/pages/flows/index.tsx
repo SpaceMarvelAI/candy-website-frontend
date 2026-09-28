@@ -30,6 +30,7 @@ import {
   FLOWS_NAME, FLOWS_NEW_WORKFLOW, FLOWS_SAVE, FLOWS_WORKFLOW_PICKER,
 } from '../../voice/registry/flowsTargets';
 import NodeEditDrawer, { LoadError, useDialogA11y } from './NodeEditDrawer';
+import { HEADER_H } from '../../components/AppRail';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TINT: Record<string, string> = {
@@ -774,7 +775,7 @@ export default function FlowsPage() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div ref={containerRef} style={{ display:'flex', height:'calc(100vh - 48px)',
+    <div ref={containerRef} style={{ display:'flex', height:`calc(100vh - ${HEADER_H}px)`,
       background:'var(--bg-0)', position:'relative', overflow:'hidden' }}>
 
       {/* ── Mobile backdrop — closes panel on tap outside ── */}

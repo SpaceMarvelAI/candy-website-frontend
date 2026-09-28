@@ -1,176 +1,64 @@
-import { useEffect } from 'react';
-import { useApp } from '../context/AppContext';
 import { Icon } from '../assets/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { useVoiceTarget } from '../voice/registry/store';
-import { GLOBAL_SEARCH } from '../voice/registry/navTargets';
 import CompanySwitcher from './CompanySwitcher';
-
-interface Crumb { t: string; current?: boolean }
-
-const crumbMap: Record<string, Crumb[]> = {
-  dashboard:  [{ t: 'Home' }, { t: 'Dashboard',     current: true }],
-  chatbots:   [{ t: 'Home' }, { t: 'AI Platform' }, { t: 'Chatbot Use Cases', current: true }],
-  hr:         [{ t: 'Home' }, { t: 'HR & Hiring' }, { t: 'Candidate Screening', current: true }],
-  live:       [{ t: 'Home' }, { t: 'Voice Bots' },  { t: 'Live Campaign', current: true }],
-  ecommerce:  [{ t: 'Home' }, { t: 'Voice Agents' }, { t: 'E-commerce',  current: true }],
-  financial:  [{ t: 'Home' }, { t: 'Voice Agents' }, { t: 'Financial',   current: true }],
-  logistics:  [{ t: 'Home' }, { t: 'Voice Agents' }, { t: 'Logistics',   current: true }],
-  healthcare: [{ t: 'Home' }, { t: 'Voice Agents' }, { t: 'Healthcare',  current: true }],
-  marketing:  [{ t: 'Home' }, { t: 'Voice Agents' }, { t: 'Marketing',   current: true }],
-};
+import { HEADER_H } from './AppRail';
 
 interface TopbarProps {
   onMenuOpen?: () => void;
 }
 
 export default function Topbar({ onMenuOpen }: TopbarProps) {
-  const { currentView } = useApp();
-
-  // Responsive breakpoints — drive visibility directly, no CSS class gymnastics
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
   const isSmallMobile    = useMediaQuery('(max-width: 640px)');
-
-  const crumbs = crumbMap[currentView] ?? crumbMap.dashboard;
-
-  /**
-   * Put the search box on the voice registry.
-   *
-   * navTargets.ts declares GLOBAL_SEARCH but deliberately leaves it out of
-   * NAV_TARGETS, because this box does not exist everywhere: /agents/* and
-   * /chatbots/:id render outside AppLayout and so have no Topbar at all.
-   * Registering here is what makes it appear in the snapshot only where it is
-   * genuinely on screen.
-   *
-   * Voice can focus it — the same thing ⌘K does below — but cannot search with
-   * it, because nothing in the app reads what it contains. See
-   * SEARCH_NOT_CONNECTED.
-   */
-  const searchRef = useVoiceTarget<HTMLInputElement>(GLOBAL_SEARCH);
-
-  // ⌘K shortcut
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        (document.querySelector('.topbar-search-input') as HTMLElement)?.focus();
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, []);
 
   return (
     <header
       style={{
-        height: 48,
-        width: '100%',
+        height: HEADER_H,
         boxSizing: 'border-box',
-        padding: isSmallMobile ? '0 12px' : '0 20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: isSmallMobile ? 10 : 16,
-        borderBottom: 'none',
-        background: 'var(--bg-0)',
+        padding: '14px 16px',
+        background: 'var(--shell-header-bg)',
+        borderBottom: '1px solid var(--shell-border)',
         position: 'sticky',
         top: 0,
-        zIndex: 10,
+        zIndex: 60,
       }}
     >
-      {/* Hamburger — only rendered on tablet/mobile */}
-      {isMobileOrTablet && (
-        <button
-          onClick={onMenuOpen}
-          aria-label="Open navigation menu"
-          style={{
-            width: 36, height: 36,
-            display: 'grid', placeItems: 'center',
-            borderRadius: 10,
-            border: '1px solid var(--border)',
-            background: 'transparent',
-            color: 'var(--text-2)',
-            cursor: 'pointer',
-            flexShrink: 0,
-            transition: 'background 0.15s, border-color 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--tint-2)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-        >
-          <Icon name="menu" size={18} />
-        </button>
-      )}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 28 }}>
+        {/* Hamburger — only rendered on tablet/mobile */}
+        {isMobileOrTablet && (
+          <button
+            onClick={onMenuOpen}
+            aria-label="Open navigation menu"
+            style={{
+              width: 28, height: 28, marginRight: 8,
+              display: 'grid', placeItems: 'center',
+              borderRadius: 8, border: '1px solid var(--shell-border)',
+              background: 'transparent', color: 'var(--shell-text-2)', cursor: 'pointer',
+            }}
+          >
+            <Icon name="menu" size={16} />
+          </button>
+        )}
 
-      {/* Breadcrumb — hidden on small mobile to save space */}
-      {!isSmallMobile && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            fontSize: 13,
-            color: 'var(--text-3)',
-            flexShrink: 0,
-          }}
-        >
-          {crumbs.map((c, i) => (
-            <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {i > 0 && <span style={{ color: 'var(--text-4)' }}>/</span>}
-              <span style={c.current ? { color: 'var(--text-1)', fontWeight: 500 } : {}}>
-                {c.t}
-              </span>
-            </span>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <img src="/MetaSpaceLogo.svg" alt="" width={20} height={20} style={{ filter: 'var(--shell-logo-filter)' }} />
+          <span style={{ fontSize: 14, lineHeight: '20px', fontWeight: 500, color: 'var(--shell-text-1)' }}>
+            Space Marvel
+          </span>
         </div>
-      )}
 
-      {/* Search */}
-      <div
-        className="topbar-search"
-        style={{
-          flex: 1,
-          maxWidth: 520,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          background: 'var(--input-bg)',
-          border: '1px solid var(--border-strong)',
-          borderRadius: 8,
-          padding: '5px 12px',
-          transition: 'border-color 0.15s',
-          minWidth: 0,
-        }}
-        onFocus={e => {
-          e.currentTarget.style.borderColor = 'var(--border-accent)';
-          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(117,91,227,0.1)';
-        }}
-        onBlur={e => {
-          e.currentTarget.style.borderColor = 'var(--border-strong)';
-          e.currentTarget.style.boxShadow = 'none';
-        }}
-      >
-        <Icon name="search" size={14} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
-        <input
-          ref={searchRef}
-          className="topbar-search-input"
-          placeholder={isSmallMobile ? 'Search…' : 'Search or ask AI…'}
-          style={{
-            flex: 1,
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            color: 'var(--text-1)',
-            fontSize: 14,
-            minWidth: 0,
-          }}
-        />
+        <div style={{ position: 'absolute', right: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!isSmallMobile && <CompanySwitcher />}
+          <button
+            className="shell-upgrade-btn"
+            onClick={() => { window.location.href = 'https://spacemarvel.ai/dashboard/billing'; }}
+          >
+            <Icon name="crown" size={14} />
+            Upgrade
+          </button>
+        </div>
       </div>
-
-      {/* Company switcher — pinned to the true right edge. The search box's flex:1 stops
-          growing at its own maxWidth (520px), so without marginLeft:auto here this just sat
-          flush against the search box on any screen wider than that, with dead space trailing
-          past it instead of at the actual right edge like Finixy's. */}
-      {!isSmallMobile && <CompanySwitcher style={{ marginLeft: 'auto' }} />}
-
     </header>
   );
 }

@@ -571,3 +571,139 @@ html.theme-transitioning *::after {
     gap: 10px;
   }
 }
+
+/* ── App shell (header + AppRail + Sidebar) ── */
+:root {
+  --shell-bg:               #131313;
+  --shell-page:             #000000;
+  --shell-header-bg:        #000000;
+  --shell-border:           #27272a;
+  --shell-text-1:           #ffffff;
+  --shell-text-2:           #d4d4d8;
+  --shell-rail-label:       #a1a1aa;
+  --shell-section:          #71717a;
+  --shell-rail-hover:       #18181b;
+  --shell-row-hover:        #27272a;
+  --shell-active-bg:        #27272a;
+  --shell-active-text:      #f4f4f5;
+  --shell-menu-bg:          #18181b;
+  --shell-menu-border:      #27272a;
+  --shell-profile-border:   #3f3f46;
+  --shell-menu-hover:       #27272a;
+  --shell-menu-text:        #e4e4e7;
+  --shell-menu-active-bg:   rgba(79, 70, 229, 0.15);
+  --shell-menu-active-text: #818cf8;
+  --shell-avatar:           #4f46e5;
+  --shell-profile-hover:    rgba(39, 39, 42, 0.6);
+  --shell-logo-filter:      brightness(0) invert(1);
+  --shell-app-logo-filter:  brightness(2);
+  --shell-upgrade:          #755BE3;
+}
+
+[data-theme="light"] {
+  --shell-bg:               #f4f4f5;
+  --shell-page:             #ffffff;
+  --shell-header-bg:        #ffffff;
+  --shell-border:           #e4e4e7;
+  --shell-text-1:           #18181b;
+  --shell-text-2:           #52525b;
+  --shell-rail-label:       #71717a;
+  --shell-section:          #a1a1aa;
+  --shell-rail-hover:       rgba(228, 228, 231, 0.6);
+  --shell-row-hover:        #f4f4f5;
+  --shell-active-bg:        #f4f4f5;
+  --shell-active-text:      #18181b;
+  --shell-menu-bg:          #ffffff;
+  --shell-menu-border:      #e4e4e7;
+  --shell-profile-border:   #e4e4e7;
+  --shell-menu-hover:       #f4f4f5;
+  --shell-menu-text:        #3f3f46;
+  --shell-menu-active-bg:   #eef2ff;
+  --shell-menu-active-text: #4f46e5;
+  --shell-profile-hover:    #fafafa;
+  --shell-logo-filter:      brightness(0);
+  --shell-app-logo-filter:  invert(1);
+}
+
+.shell-rail-btn { color: var(--shell-rail-label); background: transparent; }
+.shell-rail-btn:hover,
+.shell-rail-btn[aria-expanded="true"] { background: var(--shell-rail-hover); }
+.shell-rail-btn[aria-current="page"] { color: var(--shell-text-1); }
+
+.shell-row { color: var(--shell-text-2); background: transparent; }
+.shell-row:hover { background: var(--shell-row-hover); }
+.shell-row[aria-current="page"] { background: var(--shell-active-bg); color: var(--shell-active-text); }
+
+.shell-menu-item { color: var(--shell-menu-text); background: transparent; }
+.shell-menu-item:hover { background: var(--shell-menu-hover); }
+.shell-menu-item[aria-checked="true"] { background: var(--shell-menu-active-bg); color: var(--shell-menu-active-text); }
+
+.shell-profile-btn:hover { background: var(--shell-profile-hover); }
+
+/* Three-colour Metaspace orb behind the active app's rail icon */
+.ms-orb {
+  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
+  filter: blur(3px); background: #48A1BA;
+}
+.ms-orb-blob {
+  position: absolute; inset: 0; border-radius: 50%; filter: blur(4px);
+  background: radial-gradient(circle, var(--c) 0%, var(--c) 45%, transparent 72%);
+  animation: ms-orb-blob 12s ease-in-out infinite;
+}
+@keyframes ms-orb-blob {
+  0%, 100%            { transform: translate(0,0) scale(1.5); opacity: 1; }
+  16.67%, 50%, 83.33% { transform: translate(calc(var(--x)*0.3), calc(var(--y)*0.3)) scale(1); opacity: .7; }
+  33.33%, 66.67%      { transform: translate(var(--x), var(--y)) scale(.55); opacity: .9; }
+}
+@media (prefers-reduced-motion: reduce) { .ms-orb-blob { animation: none; } }
+
+.shell-upgrade-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border: none; border-radius: 8px;
+  background: var(--shell-upgrade); color: #fff;
+  font-family: inherit; font-size: 14px; line-height: 20px; font-weight: 500;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  cursor: pointer; transition: all 200ms;
+}
+.shell-upgrade-btn:hover { opacity: 0.9; }
+
+/* ── Connects: category dropdown ── */
+.cat-dd-trigger {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 240px;
+  padding: 6px 14px; border-radius: 99px; font: inherit; font-size: 12.5px;
+  text-transform: capitalize; cursor: pointer; transition: all 0.15s;
+  background: var(--tint-2); border: 1px solid var(--border); color: var(--text-2);
+}
+.cat-dd-trigger:hover { color: var(--text-1); }
+.cat-dd-trigger[data-active],
+.cat-dd-trigger[aria-expanded="true"] {
+  background: var(--tint-4); border-color: var(--border-strong); color: var(--text-1);
+}
+.cat-dd-panel {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  width: 280px; display: flex; flex-direction: column;
+  background: var(--shell-menu-bg); border: 1px solid var(--shell-menu-border);
+  border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  animation: cat-dd-in 0.12s ease;
+}
+@keyframes cat-dd-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.cat-dd-search {
+  width: 100%; box-sizing: border-box; padding: 7px 10px 7px 30px;
+  border-radius: 8px; font: inherit; font-size: 13px; outline: none;
+  background: var(--shell-menu-hover); border: 1px solid transparent; color: var(--shell-menu-text);
+}
+.cat-dd-search:focus { border-color: var(--shell-profile-border); }
+.cat-dd-list {
+  max-height: 320px; overflow-y: auto; padding: 0 6px 6px;
+  border-top: 1px solid var(--shell-menu-border); padding-top: 6px;
+  scrollbar-width: thin; scrollbar-color: var(--shell-profile-border) transparent;
+}
+.cat-dd-option {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border: none; border-radius: 7px; cursor: pointer;
+  font: inherit; font-size: 13px; text-align: left; text-transform: capitalize;
+  background: transparent; color: var(--shell-menu-text);
+}
+.cat-dd-option:hover { background: var(--shell-menu-hover); }
+.cat-dd-option[aria-selected="true"] { background: var(--shell-menu-active-bg); color: var(--shell-menu-active-text); }
+.cat-dd-empty { padding: 10px; font-size: 12.5px; color: var(--shell-section); text-align: center; }
