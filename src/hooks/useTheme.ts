@@ -17,6 +17,7 @@
  */
 
 import { useSyncExternalStore, useCallback } from 'react';
+import posthog from 'posthog-js';
 
 export type Theme = 'dark' | 'light';
 
@@ -62,6 +63,11 @@ function applyTheme(next: Theme) {
 
     root.setAttribute('data-theme', next);
   }
+
+  // Client-only preference change — no server-side equivalent. The `next ===
+  // currentTheme` guard above already dedupes no-op re-selections (e.g.
+  // picking "System theme" when it resolves to the theme already active).
+  posthog.capture('theme_changed', { theme: next });
 
   currentTheme = next;
   try {

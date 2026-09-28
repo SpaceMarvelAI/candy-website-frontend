@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { createPortal } from 'react-dom';
+import posthog from 'posthog-js';
 import Icon from '../assets/icons';
 import { useApp } from '../context/AppContext';
 import { errorMessage } from '../utils/apiError';
@@ -321,6 +322,10 @@ export default function ReportIssuesModal({ onClose }: Props) {
 
   useEffect(() => {
     refreshList();
+    // Client-only intent signal — this modal never hits the Candy backend
+    // (it talks straight to S3), so there's no server-side "issue reported"
+    // event to precede.
+    posthog.capture('report_issue_modal_opened');
   }, []);
 
   async function refreshList() {

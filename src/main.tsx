@@ -53,7 +53,15 @@ if (posthogKey) {
       maskAllInputs: true,
       maskTextSelector: '.ph-mask',
     },
-    capture_exceptions: true, // error tracking — feeds PostHog's Error Tracking product
+    // capture_unhandled_errors/capture_unhandled_rejections default to true; only
+    // capture_console_errors needed setting explicitly (defaults to false) — without it,
+    // explicit console.error(...) calls in app code were invisible to Error Tracking.
+    // Same fix as ChatPlatform-frontend-new — see docs/posthog/CHAT_FRONTEND_MISSED_FEATURES.md.
+    capture_exceptions: { capture_console_errors: true }, // error tracking — feeds PostHog's Error Tracking product
+    // Off by default — a dead click ("clicked something, nothing visibly happened") is a
+    // distinct frustration signal from a rage click (repeated frantic clicking), worth having
+    // for a product that handles real business calls.
+    capture_dead_clicks: true,
     capture_heatmaps: true, // feeds PostHog's Heatmaps toolbar (enable_heatmaps is the deprecated alias)
     before_send: (cr) => {
       if (!cr) return cr;
@@ -66,6 +74,12 @@ if (posthogKey) {
       return cr;
     },
   });
+  // Tags every event from this app with which SpaceMarvel product it came
+  // from — all three products (Chat, Candy, Finixy) share one PostHog
+  // project, so this is how a query/dashboard scopes to just one product
+  // (e.g. `WHERE properties.product = 'candy'`) without needing separate
+  // PostHog projects and losing cross-product user journeys.
+  posthog.register({ product: 'candy' });
 }
 
 // ── Global error listeners ────────────────────────────────────────────────────

@@ -150,6 +150,19 @@ export default function ConnectsPage() {
 
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, category]);
 
+  // Client-only: filtering happens against the already-fetched app list, no
+  // request is made — so there's no backend event marking that search was
+  // used. Debounced so a capture fires once per pause-in-typing rather than
+  // per keystroke. Query text itself isn't sent, only its match count.
+  useEffect(() => {
+    if (!search) return;
+    const id = setTimeout(() => {
+      const resultCount = apps.filter(app => app.name.toLowerCase().includes(search.toLowerCase())).length;
+      posthog.capture('connector_search_used', { result_count: resultCount });
+    }, 600);
+    return () => clearTimeout(id);
+  }, [search, apps]);
+
   async function handleConnect(app: ComposioApp) {
     const id = appId(app);
     if (connectingId === id) return;
