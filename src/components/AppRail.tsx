@@ -271,6 +271,7 @@ export default function AppRail() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [hasDashboardToken, setHasDashboardToken] = useState(() => !!localStorage.getItem('dashboard_token'));
   const [moreAnchor, setMoreAnchor] = useState<DOMRect | null>(null);
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
   const [reportIssuesOpen, setReportIssuesOpen] = useState(false);
@@ -326,6 +327,7 @@ export default function AppRail() {
 
         if (res.status === 401 || res.status === 403) {
           localStorage.removeItem('dashboard_token');
+          setHasDashboardToken(false);
           throw new Error(`token_expired:${res.status}`);
         }
 
@@ -401,9 +403,19 @@ export default function AppRail() {
       >
         {PRODUCTS.map(p => railBtn(
           p.id, p.label,
-          p.img
-            ? <img src={p.img} alt="" style={{ width: 24, height: 24, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)' }} />
-            : <Icon name={p.icon!} size={22} style={{ color: 'var(--shell-text-2)' }} />,
+          <span style={{ position: 'relative', display: 'inline-flex' }}>
+            {p.img
+              ? <img src={p.img} alt="" style={{ width: 24, height: 24, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)' }} />
+              : <Icon name={p.icon!} size={22} style={{ color: 'var(--shell-text-2)' }} />}
+            {p.id === 'metaspace' && hasDashboardToken && (
+              <span style={{
+                position: 'absolute', bottom: -3, right: -3,
+                width: 10, height: 10, borderRadius: '50%',
+                background: '#4CAF50', border: '1.5px solid var(--shell-bg)',
+                display: 'grid', placeItems: 'center',
+              }} />
+            )}
+          </span>,
           () => { void openProduct(p); },
           { current: p.current },
         ))}
