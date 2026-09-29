@@ -4,12 +4,13 @@ import {
 } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import posthog from 'posthog-js';
-import { loadStoredUser, logout as apiLogout, fullLogout, ssoCallback, type AuthUser } from '../api/auth';
+import { loadStoredUser, fullLogout, ssoCallback, me, storeUser, type AuthUser } from '../api/auth';
+import { getToken, setToken } from '../api/client';
 import { themeStore } from '../hooks/useTheme';
 import { addToast, type AddToast } from '../hooks/useToast';
 import { logger } from '../utils/logger';
 import { errorMessage } from '../utils/apiError';
-import { PENDING_PROMPT_TICKET_KEY } from '../utils/sso';
+import { PENDING_PROMPT_TICKET_KEY, takeReturnRoute } from '../utils/sso';
 import { claimPromptTicket, type ClaimedPrompt } from '../api/prompts';
 
 // Bidirectional mapping between legacy view names and URL paths.
@@ -251,8 +252,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // though the app is still on that page.
     window.history.replaceState({}, '', '/' + window.location.hash);
 
-    // Wipe previous session before writing new credentials
-    apiLogout();
+    // The previous session is NOT wiped up front: a successful exchange overwrites it, and a
+    // failed one (e.g. a stale link from another app) must not sign out a user who was fine.
+    const priorToken = getToken();
     localStorage.removeItem('dashboard_token');
 
     // Always persist the SpaceMarvel bearer — needed for Composio / cross-app SSO generate calls
@@ -275,7 +277,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try { sessionStorage.removeItem(PENDING_PROMPT_TICKET_KEY); } catch {}
     }
 
-    ssoCallback(token)
+    /**
+     * The OIDC redirect (`via=oidc`) already carries a finished CANDY token, but the exchange
+     * endpoint verifies with SPACEMARVEL_SECRET_KEY — so it only accepts that token where the
+     * backend's two secrets happen to match. If the exchange refuses it, use the token as-is,
+     * verified by /v1/auth/me. On failure, put the previous session back untouched.
+     */
+    const exchange = () => ssoCallback(token).catch(async (err) => {
+      if (params.get('via') !== 'oidc' || !accessToken) throw err;
+      logger.warn('[AppContext] SSO exchange refused the OIDC token — using it directly', { err });
+      setToken(accessToken);
+      try {
+        const u = await me();
+        storeUser(u);
+        return { user: u };
+      } catch {
+        setToken(priorToken);
+        throw err;
+      }
+    });
+
+    exchange()
       .then(({ user: u }) => {
         logger.info('[AppContext] SSO exchange succeeded', { userId: u.user_id, email: u.email });
         themeStore.set('light');
@@ -302,7 +324,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             })
             .finally(() => setClaimingPrompt(false));
         } else {
-          navigate('/healthcare', { replace: true });
+          navigate(takeReturnRoute() ?? '/healthcare', { replace: true });
         }
       })
       .catch((err: unknown) => {

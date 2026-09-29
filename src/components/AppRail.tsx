@@ -22,6 +22,9 @@ export const SHELL_GAP = 4;
 
 const isLocal = typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+// Help → Onboarding is a testing shortcut: localhost + dev only, hidden on staging and prod.
+const SHOW_ONBOARDING_ITEM = typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1', 'dev.candy.cx'].includes(window.location.hostname);
 const SM_API = isLocal
   ? '/sm-api'
   : (import.meta.env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
@@ -197,7 +200,7 @@ function ProfileMenu({
           {menuItem('Terms & conditions', () => window.open('https://spacemarvel.com/terms', '_blank'))}
           {menuItem('Privacy policy',     () => window.open('https://spacemarvel.com/privacy', '_blank'))}
           {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
-          {menuItem('Onboarding',         () => { onOnboarding(); onClose(); })}
+          {SHOW_ONBOARDING_ITEM && menuItem('Onboarding', () => { onOnboarding(); onClose(); })}
         </div>
       )}
     </>,

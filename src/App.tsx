@@ -170,7 +170,7 @@ function RootRedirect() {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, signingOut } = useApp();
+  const { user, signingOut, ssoLoading } = useApp();
 
   // Navigating away is a side effect, so it belongs in an effect. Calling
   // redirectToOIDC() in the render body fired on discarded/StrictMode render
@@ -180,9 +180,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // becomes null, and redirecting to the IDP at that moment — while its cookie
   // may still be alive — silently re-authenticates the user we just logged out.
   // That is why sign-out appeared to need two clicks.
+  //
+  // `ssoLoading`: an incoming ?token= is being exchanged right now and `user` is about to be
+  // set. Redirecting to the IDP here abandons that exchange and restarts login — RootRedirect
+  // already held for this; deep links (#/live?…) went through here and did not.
   useEffect(() => {
-    if (!user && !signingOut) redirectToOIDC();
-  }, [user, signingOut]);
+    if (!user && !signingOut && !ssoLoading) redirectToOIDC();
+  }, [user, signingOut, ssoLoading]);
 
   if (!user) return null;
   return <>{children}</>;

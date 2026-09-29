@@ -9,6 +9,23 @@ import { logger } from './logger';
 // same pattern as Finixy_workflow's PENDING_TICKET_KEY.
 export const PENDING_PROMPT_TICKET_KEY = 'candy_pending_prompt_ticket';
 
+/**
+ * The in-app route (hash path) the user was on when the session had to be renewed. Without it
+ * an expired session dumped everyone on /healthcare after re-login, losing their place — which
+ * reads as "logged out and everything reset". Same tab, same origin, so sessionStorage survives
+ * the IDP round-trip.
+ */
+export const RETURN_ROUTE_KEY = 'candy.return_route';
+
+/** One-shot read of the saved route; only real app pages, never auth/callback screens. */
+export function takeReturnRoute(): string | null {
+  try {
+    const r = sessionStorage.getItem(RETURN_ROUTE_KEY);
+    sessionStorage.removeItem(RETURN_ROUTE_KEY);
+    return r && r.startsWith('/') && r !== '/' && !/^\/(sso|auth)\b/.test(r) ? r : null;
+  } catch { return null; }
+}
+
 export function redirectToSSO(): void {
   const isLocalhost =
     window.location.hostname === 'localhost' ||
@@ -43,6 +60,8 @@ export function redirectToOIDC(): void {
 
     // Also stash in sessionStorage as a fallback (in case cookies fail).
     if (ticket) sessionStorage.setItem(PENDING_PROMPT_TICKET_KEY, ticket);
+    const route = window.location.hash.replace(/^#/, '');
+    if (route && route !== '/') sessionStorage.setItem(RETURN_ROUTE_KEY, route);
 
     const loginUrl = new URL(`${API_BASE}/v1/auth/sso/oidc/login`);
     loginUrl.searchParams.set('return_to', window.location.origin);
