@@ -20,7 +20,12 @@ describe('401 auth-expiry: full side-effect chain', () => {
     sessionStorage.setItem('access_token', 'valid-looking-token');
     sessionStorage.setItem('candy.user', JSON.stringify({ user_id: 'u1', email: 'a@b.com' }));
 
+    // A really expired token fails Candy's own session check too — that is what makes the
+    // client sign out (a 401 alone may be an upstream/dashboard failure, see client.ts).
     server.use(
+      http.get(`${API_BASE}/v1/auth/me`, () =>
+        HttpResponse.json({ detail: 'Token expired' }, { status: 401 })
+      ),
       http.get(`${API_BASE}/v1/agents`, () =>
         HttpResponse.json({ detail: 'Token expired' }, { status: 401 })
       )
@@ -42,6 +47,9 @@ describe('401 auth-expiry: full side-effect chain', () => {
     sessionStorage.setItem('access_token', 'stale-token');
 
     server.use(
+      http.get(`${API_BASE}/v1/auth/me`, () =>
+        HttpResponse.json({ detail: 'Token expired' }, { status: 401 })
+      ),
       http.get(`${API_BASE}/v1/agents`, () =>
         HttpResponse.json({ detail: 'Unauthorized' }, { status: 401 })
       ),
