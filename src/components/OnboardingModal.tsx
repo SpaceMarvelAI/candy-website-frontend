@@ -1,5 +1,5 @@
 /**
- * OnboardingModal — the 4-step setup pop-up. Designs: docs/workspace-onboarding/screens/04..07.
+ * OnboardingModal — the 3-step setup pop-up. Designs: docs/workspace-onboarding/screens/04..07.
  *
  * Talks to CANDY's backend (`/v1/onboarding`), which forwards to the dashboard using the token it
  * already stores per user. State lives on the dashboard, one row per user — not here and not in
@@ -10,15 +10,13 @@
  *
  * 1. The ✕ DISMISSES, it does not complete. It stops the pop-up auto-opening but leaves the
  *    remaining steps reachable from the "Finish setup" widget. Wiring ✕ to complete would mean
- *    anyone who closes it on step 1 never sees steps 2-4 again.
+ *    anyone who closes it on step 1 never sees the rest again.
  * 2. An empty step is submitted as a SKIP, not as an answer. The backend refuses a null value on
  *    purpose (400 value_required), and leaving a step blank genuinely is skipping it.
- * 3. Step 2's connectors are CANDY's own (Cal.com and friends) — each product owns different ones,
- *    so unlike the rest of the flow that is deliberately NOT shared state. The dashboard only
- *    records that the step was passed. Wiring the tiles to Candy's real connector flow is left as
- *    a follow-up; see the note on CONNECTORS below.
+ * 3. Candy does NOT show the shared flow's `connectors` step — its tiles only recorded intent and
+ *    never opened a real connection. The dashboard may still list it, so it is filtered out here.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Icon } from '../assets/icons';
@@ -42,34 +40,22 @@ const MANAGE_OPTIONS = [
   'Finance & Accounting', 'Reporting & CFO Insights',
 ];
 
-/**
- * Screen 05. Candy's own integrations, NOT MetaSpace's Composio list — connectors are the one
- * genuinely per-product thing in this flow.
- *
- * These currently record intent only: selecting one marks the step answered, it does not open an
- * OAuth flow. Candy's real connector screens live elsewhere in the app; pointing these tiles at
- * them is a follow-up, and until then this must not imply a live connection.
- */
-const CONNECTORS: { id: string; name: string; blurb: string; icon: string }[] = [
-  { id: 'calcom',   name: 'Cal.com',        blurb: 'Let agents book and move meetings.', icon: 'calendar' },
-  { id: 'whatsapp', name: 'WhatsApp',       blurb: 'Answer and follow up on chat.',      icon: 'chat' },
-  { id: 'gmail',    name: 'Gmail',          blurb: 'Read and send on your behalf.',      icon: 'mail' },
-  { id: 'telephony',name: 'Phone numbers',  blurb: 'Take and place real calls.',         icon: 'phone' },
-];
+/** The shared flow's steps minus `connectors`, which Candy does not show (note 3). */
+type ShownStep = Exclude<OnboardingStep, 'connectors'>;
 
-const STEP_COPY: Record<OnboardingStep, { title: string; sub: string }> = {
+const STEP_COPY: Record<ShownStep, { title: string; sub: string }> = {
   choose:     { title: 'What would you like to manage?', sub: "We'll take you exactly where you need to go." },
-  connectors: { title: 'Connect your tools, unlock your workflow', sub: 'Start with a few. You can add more anytime.' },
   number:     { title: "What's your number?", sub: 'So your agents can reach you, and call on your behalf.' },
   invite:     { title: 'Invite people to your workspace', sub: 'Great tools are more fun with witnesses.' },
 };
 
-const ALL_STEPS: OnboardingStep[] = ['choose', 'connectors', 'number', 'invite'];
+const ALL_STEPS: ShownStep[] = ['choose', 'number', 'invite'];
 
 export default function OnboardingModal({
   onClose,
   onFinished,
   canInvite = true,
+  preview = false,
 }: {
   /** The ✕ / backdrop. Dismisses (recoverable) — never completes. */
   onClose: () => void;
@@ -79,6 +65,8 @@ export default function OnboardingModal({
    * there (403), so offering an input would only produce an error.
    */
   canInvite?: boolean;
+  /** Testing only (Help → Onboarding): walk the screens locally, never read or write the server. */
+  preview?: boolean;
 }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -89,7 +77,7 @@ export default function OnboardingModal({
   const [error, setError] = useState<string | null>(null);
 
   /** Local "went Back to look at an earlier step". The server owns the real position. */
-  const [viewing, setViewing] = useState<OnboardingStep | null>(null);
+  const [viewing, setViewing] = useState<ShownStep | null>(preview ? ALL_STEPS[0] : null);
 
   /**
    * Inputs are DERIVED from the server's saved answers until the user touches them. `null` means
@@ -106,26 +94,24 @@ export default function OnboardingModal({
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
+    if (preview) { setLoading(false); return; }
     getOnboarding()
       .then((s) => { if (alive.current) setState(s); })
       .catch((e) => { if (alive.current) setError(errorMessage(e)); })
       .finally(() => { if (alive.current) setLoading(false); });
     return () => { alive.current = false; };
-  }, []);
+  }, [preview]);
 
-  const steps = state?.steps ?? ALL_STEPS;
-  const step: OnboardingStep = viewing ?? state?.current_step ?? steps[steps.length - 1];
+  const steps = (state?.steps ?? ALL_STEPS).filter((s): s is ShownStep => s !== 'connectors');
+  // ponytail: a server parked on `connectors` is shown `number`; if the dashboard then refuses
+  // `number` out of order, skip `connectors` server-side here instead.
+  const serverStep = state?.current_step === 'connectors' ? 'number' : state?.current_step;
+  const step: ShownStep = viewing ?? serverStep ?? steps[steps.length - 1];
   const stepIndex = Math.max(0, steps.indexOf(step));
   const isLast = stepIndex === steps.length - 1;
 
   const saved = (state?.selections ?? {}) as Record<string, unknown>;
   const chosen = editedChosen ?? (Array.isArray(saved.choose) ? (saved.choose as string[]) : []);
-  const picked = useMemo(
-    () => (Array.isArray(saved.connectors) ? (saved.connectors as string[]) : []),
-    [saved.connectors],
-  );
-  const [editedPicked, setEditedPicked] = useState<string[] | null>(null);
-  const connectors = editedPicked ?? picked;
   const phone = editedPhone ?? (typeof saved.number === 'string' ? saved.number : '');
   const emails = editedEmails ?? (Array.isArray(saved.invite) ? (saved.invite as string[]).join(', ') : '');
 
@@ -136,15 +122,21 @@ export default function OnboardingModal({
   }
 
   /** What this step would submit, or undefined when it has nothing to say. */
-  function valueFor(s: OnboardingStep): unknown {
+  function valueFor(s: ShownStep): unknown {
     if (s === 'choose') return chosen.length ? chosen : undefined;
-    if (s === 'connectors') return connectors.length ? connectors : undefined;
     if (s === 'number') return phone.trim() || undefined;
     const list = parseEmails(emails);
     return list.length ? list : undefined;
   }
 
+  /** Preview mode: Next / Skip just move to the next screen, Finish closes. */
+  function previewNext() {
+    if (isLast) onClose();
+    else setViewing(steps[stepIndex + 1]);
+  }
+
   async function advance() {
+    if (preview) { previewNext(); return; }
     setError(null);
     setBusy(true);
     try {
@@ -166,6 +158,7 @@ export default function OnboardingModal({
   }
 
   async function skipThis() {
+    if (preview) { previewNext(); return; }
     setError(null);
     setBusy(true);
     try { applyState(await skipOnboardingStep(step)); }
@@ -174,6 +167,7 @@ export default function OnboardingModal({
   }
 
   async function close() {
+    if (preview) { onClose(); return; }
     // Close either way — a failed dismiss must not trap the user in the pop-up.
     try { await dismissOnboarding(); } catch { /* ignore */ }
     onClose();
@@ -260,40 +254,6 @@ export default function OnboardingModal({
                         );
                       })}
                     </div>
-                  )}
-
-                  {step === 'connectors' && (
-                    <>
-                      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))' }}>
-                        {CONNECTORS.map((c) => {
-                          const on = connectors.includes(c.id);
-                          return (
-                            <button
-                              key={c.id}
-                              aria-pressed={on}
-                              onClick={() => setEditedPicked(on ? connectors.filter((x) => x !== c.id) : [...connectors, c.id])}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
-                                padding: '14px 16px', borderRadius: 12, cursor: 'pointer',
-                                border: `1px solid ${on ? fg : line}`, background: card,
-                              }}
-                            >
-                              <span style={{ color: on ? fg : muted, display: 'grid', placeItems: 'center', width: 32, height: 32, borderRadius: 8, background: isDark ? '#27272a' : '#fff' }}>
-                                <Icon name={c.icon} size={16} />
-                              </span>
-                              <span style={{ flex: 1, minWidth: 0 }}>
-                                <span style={{ display: 'block', fontSize: 14, fontWeight: 500, color: fg }}>{c.name}</span>
-                                <span style={{ display: 'block', fontSize: 12, color: muted }}>{c.blurb}</span>
-                              </span>
-                              {on && <Icon name="check" size={14} className="" style={{ color: fg }} />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <p style={{ marginTop: 12, fontSize: 12, color: muted }}>
-                        Pick what you want — we&apos;ll walk you through connecting each one after setup.
-                      </p>
-                    </>
                   )}
 
                   {step === 'number' && (

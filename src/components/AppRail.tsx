@@ -12,6 +12,7 @@ import { getProfile } from '../api/profile';
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
 const ProfileModal = lazy(() => import('./ProfileModal'));
+const OnboardingModal = lazy(() => import('./OnboardingModal'));
 
 // Shared shell dimensions — Topbar, Sidebar and flows/index.tsx lay out against these.
 export const HEADER_H = 57; // 14 + 28 + 14 padding/row, plus the 1px bottom border
@@ -28,7 +29,7 @@ const SM_API = isLocal
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
   anchorRect, onClose, onSignOut, signingOut, navigate, addToast,
-  theme, setTheme, onReportIssue, onProfile,
+  theme, setTheme, onReportIssue, onProfile, onOnboarding,
 }: {
   anchorRect: DOMRect;
   onClose: () => void; onSignOut: () => void; signingOut: boolean;
@@ -36,6 +37,7 @@ function ProfileMenu({
   theme: string; setTheme: (t: 'light' | 'dark') => void;
   onReportIssue: () => void;
   onProfile: () => void;
+  onOnboarding: () => void;
 }) {
   const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
   const [subMenuY, setSubMenuY] = useState(0);
@@ -94,8 +96,8 @@ function ProfileMenu({
     </button>
   );
 
-  // Clamp so the flyout never bleeds below the viewport (4 items ≈ 160px + padding)
-  const safeFlyoutTop = Math.min(subMenuY, window.innerHeight - 172 - 12);
+  // Clamp so the flyout never bleeds below the viewport (5 items ≈ 200px + padding)
+  const safeFlyoutTop = Math.min(subMenuY, window.innerHeight - 212 - 12);
 
   const flyoutStyle: React.CSSProperties = {
     position: 'fixed',
@@ -195,6 +197,7 @@ function ProfileMenu({
           {menuItem('Terms & conditions', () => window.open('https://spacemarvel.com/terms', '_blank'))}
           {menuItem('Privacy policy',     () => window.open('https://spacemarvel.com/privacy', '_blank'))}
           {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
+          {menuItem('Onboarding',         () => { onOnboarding(); onClose(); })}
         </div>
       )}
     </>,
@@ -275,6 +278,7 @@ export default function AppRail() {
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
   const [reportIssuesOpen, setReportIssuesOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   // Overrides AppContext's cached name/avatar right after a save in ProfileModal, so the
   // rail reflects the edit immediately instead of waiting for the next login.
   const [profileOverride, setProfileOverride] = useState<{ name: string | null; avatarUrl: string | null } | null>(null);
@@ -455,7 +459,14 @@ export default function AppRail() {
           setTheme={setTheme}
           onReportIssue={() => setReportIssuesOpen(true)}
           onProfile={() => setProfileEditOpen(true)}
+          onOnboarding={() => setOnboardingOpen(true)}
         />
+      )}
+
+      {onboardingOpen && (
+        <Suspense fallback={null}>
+          <OnboardingModal preview onClose={() => setOnboardingOpen(false)} />
+        </Suspense>
       )}
 
       {reportIssuesOpen && (
