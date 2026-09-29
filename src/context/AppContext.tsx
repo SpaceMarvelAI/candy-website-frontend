@@ -203,9 +203,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (ssoHandled.current) return;
 
-    const params      = new URLSearchParams(window.location.search);
-    const token       = params.get('token') ?? params.get('sso_token') ?? params.get('access_token') ?? null;
-    const accessToken = params.get('access_token');
+    const params           = new URLSearchParams(window.location.search);
+    const token            = params.get('token') ?? params.get('sso_token') ?? params.get('access_token') ?? null;
+    const accessToken      = params.get('access_token');
+    // Explicit dashboard OAuth token (set by Candy's OIDC backend on direct login).
+    // Falls back to accessToken for cross-app SSO (Metaspace → Candy) where the dashboard
+    // token still arrives as access_token for backward compatibility.
+    const dashboardTokenFromUrl = params.get('dashboard_token') ?? accessToken;
     // Capture the ticket BEFORE the URL gets stripped below — reading it afterward (as a
     // previous version of this code did, further down) always found nothing, since the
     // query string was already gone by then. This was the actual reason "Open in Candy"
@@ -252,7 +256,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('dashboard_token');
 
     // Always persist the SpaceMarvel bearer — needed for Composio / cross-app SSO generate calls
-    if (accessToken) localStorage.setItem('dashboard_token', accessToken);
+    if (dashboardTokenFromUrl) localStorage.setItem('dashboard_token', dashboardTokenFromUrl);
 
     // No exchange token — redirect only carried a fresh dashboard_token for an already-signed-in user.
     if (!token) { setSsoLoading(false); return; }
