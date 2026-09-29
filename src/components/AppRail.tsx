@@ -352,7 +352,7 @@ export default function AppRail() {
     // Save intent so SSO callback can redirect there immediately after login
     localStorage.setItem('candy:sso_intent', item.ssoTarget);
     const candyCallback = window.location.origin + '/sso/callback';
-    window.location.href = `https://staging.spacemarvel.com/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
+    window.location.href = `https://spacemarvel.com/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 
   const userName      = profileOverride?.name || user?.full_name || user?.email?.split('@')[0] || 'User';
