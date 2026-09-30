@@ -25,8 +25,11 @@ export const SSO_INTENT_KEY = 'candy:sso_intent';
 // the instant a background 401 clears the session — see App.tsx) — whichever navigation wins
 // that race is what the browser actually follows, so the intent must be honored either way.
 // The age check is what still protects against a stale intent from a long-abandoned attempt
-// hijacking an unrelated later login.
-const SSO_INTENT_MAX_AGE_MS = 2 * 60 * 1000;
+// hijacking an unrelated later login. 10 minutes, not 2: a real login round-trip through the
+// SpaceMarvel dashboard (account picker, password/2FA, then two more redirects through Candy's
+// own OIDC callback) is a lot of screens for a human to click through — 2 minutes measured as
+// too tight in practice and silently dropped the intent before the round-trip even finished.
+const SSO_INTENT_MAX_AGE_MS = 10 * 60 * 1000;
 
 /** Stash the app the user clicked before sending them off to re-authenticate. */
 export function setSsoIntent(appUrl: string): void {
