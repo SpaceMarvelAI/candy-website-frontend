@@ -123,16 +123,38 @@ type Opts = {
 // No retry on purpose — these mutations are not idempotent.
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
+/**
+ * A 401 is NOT proof the session is over. Some Candy endpoints pass through a 401 from the
+ * SpaceMarvel dashboard ("No dashboard token stored" — Prompt Library proxy, and onboarding
+ * forwards dashboard statuses as-is) while Candy's own token is perfectly valid. Wiping the
+ * session on those is the "randomly signed out" bug. So before signing anyone out, ask
+ * /v1/auth/me — Candy's own session check — whether the token really is dead.
+ *
+ * Single-flight: a burst of 401s shares one check. A network error or 5xx answers "still
+ * valid" — a backend blip must not sign the user out; the next real 401 re-checks.
+ */
+let sessionCheck: Promise<boolean> | null = null;
+function sessionStillValid(token: string): Promise<boolean> {
+  sessionCheck ??= fetch(`${API_BASE}/v1/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(10_000),
+  })
+    .then((r) => r.status !== 401)
+    .catch(() => true)
+    .finally(() => { sessionCheck = null; });
+  return sessionCheck;
+}
+
+/** `_retried` is internal: set on the single retry after a 401, so it can never loop. */
+export async function api<T = any>(path: string, opts: Opts = {}, _retried = false): Promise<T> {
   const { method = 'GET', body, headers = {}, auth = true, signal, timeoutMs = DEFAULT_TIMEOUT_MS } = opts;
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
 
   const finalHeaders: Record<string, string> = { ...headers };
   if (!isForm && body !== undefined) finalHeaders['Content-Type'] = 'application/json';
-  if (auth) {
-    const tok = getToken();
-    if (tok) finalHeaders['Authorization'] = `Bearer ${tok}`;
-  }
+  // The token THIS request carries — compared on 401 so a stale request can't wipe a newer session.
+  const tok = auth ? getToken() : null;
+  if (tok) finalHeaders['Authorization'] = `Bearer ${tok}`;
 
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
 
@@ -204,10 +226,25 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
   }
 
   if (!res.ok) {
-    // 401 means the JWT is expired/invalid. Wipe it AND dispatch an event so
-    // the AppContext can clear the user and bounce back to the auth page —
-    // otherwise every following call returns nothing and the UI looks broken.
     if (res.status === 401 && auth) {
+      // The session changed while this request was in flight (fresh login / SSO exchange
+      // landed). Its 401 is about the OLD token — retry once with the new one instead of
+      // wiping the session that just started. This was the "sign-in doesn't happen" loop.
+      if (!_retried && getToken() !== tok) {
+        logger.info('[api] 401 for a replaced token — retrying with the current session', { url });
+        return api<T>(path, opts, true);
+      }
+      // Current token, but the 401 may be an upstream (dashboard) failure — see sessionStillValid.
+      if (tok && getToken() === tok && await sessionStillValid(tok)) {
+        logger.warn('[api] 401 from endpoint, but session is still valid — keeping user signed in', { url });
+        throw new ApiError(401, parsed);
+      }
+    }
+
+    // 401 with a dead session: wipe it AND dispatch an event so the AppContext can clear
+    // the user and bounce back to the auth page — otherwise every following call returns
+    // nothing and the UI looks broken. Only when the dead token is still the current one.
+    if (res.status === 401 && auth && getToken() === tok) {
       logger.warn('[api] 401 received — clearing token and dispatching candy:auth-expired', { url });
       try {
         // sessionStorage is where the live session lives; clear localStorage too

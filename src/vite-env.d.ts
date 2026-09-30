@@ -24,6 +24,8 @@ interface ImportMetaEnv {
   readonly VITE_META_API_URL?: string;
   readonly VITE_META_APP_URL?: string;
   readonly VITE_FINIXY_APP_URL?: string;
+  /** SpaceMarvel login host the rail sends signed-out users to (per env). */
+  readonly VITE_SM_LOGIN_URL?: string;
   /** PostHog (src/main.tsx). Analytics is skipped entirely without the key. */
   readonly VITE_PUBLIC_POSTHOG_KEY?: string;
   readonly VITE_PUBLIC_POSTHOG_HOST?: string;
