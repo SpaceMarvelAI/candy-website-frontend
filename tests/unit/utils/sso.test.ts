@@ -81,6 +81,23 @@ describe('redirectWithSso (rail Home/Finixy → other app, already signed in)', 
     expect(localStorage.getItem('dashboard_token')).toBeNull();
   });
 
+  it("retries with Candy's own token when the dashboard token is rejected", async () => {
+    const loc = stubLocation('app.candy.cx');
+    localStorage.setItem('dashboard_token', 'stale');
+    sessionStorage.setItem('access_token', 'candy-jwt');
+    const f = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_u, init) =>
+      (init?.headers as Record<string, string>).Authorization === 'Bearer candy-jwt'
+        ? Response.json({ sso_token: 'one-time' })
+        : new Response(null, { status: 401 }));
+    expect(await redirectWithSso('https://dev.spacemarvel.ai')).toBe(true);
+    expect(f).toHaveBeenCalledTimes(2);
+    expect(localStorage.getItem('dashboard_token')).toBeNull();
+    const url = new URL(loc.href);
+    expect(url.searchParams.get('sso_token')).toBe('one-time');
+    expect(url.searchParams.get('access_token')).toBe('candy-jwt');
+    sessionStorage.clear();
+  });
+
   it('opens the app with ?sso_token=<minted>&access_token=<dashboard token>', async () => {
     const loc = stubLocation('app.candy.cx');
     localStorage.setItem('dashboard_token', 'dt');
