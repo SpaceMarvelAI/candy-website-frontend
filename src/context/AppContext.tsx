@@ -10,7 +10,7 @@ import { themeStore } from '../hooks/useTheme';
 import { addToast, type AddToast } from '../hooks/useToast';
 import { logger } from '../utils/logger';
 import { errorMessage } from '../utils/apiError';
-import { PENDING_PROMPT_TICKET_KEY, takeReturnRoute } from '../utils/sso';
+import { PENDING_PROMPT_TICKET_KEY, SSO_INTENT_KEY, redirectWithSso, takeReturnRoute } from '../utils/sso';
 import { claimPromptTicket, type ClaimedPrompt } from '../api/prompts';
 
 // Bidirectional mapping between legacy view names and URL paths.
@@ -210,7 +210,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Explicit dashboard OAuth token (set by Candy's OIDC backend on direct login).
     // Falls back to accessToken for cross-app SSO (Metaspace → Candy) where the dashboard
     // token still arrives as access_token for backward compatibility.
-    const dashboardTokenFromUrl = params.get('dashboard_token') ?? accessToken;
+    // On Candy's own OIDC login (`via=oidc`) access_token is CANDY's session token, not a
+    // SpaceMarvel one — storing it as dashboard_token made every Home/Finixy click send Candy's
+    // token to the dashboard, get a 401, and bounce through login. Only trust it from other apps.
+    const dashboardTokenFromUrl =
+      params.get('dashboard_token') ?? (params.get('via') === 'oidc' ? null : accessToken);
     // Capture the ticket BEFORE the URL gets stripped below — reading it afterward (as a
     // previous version of this code did, further down) always found nothing, since the
     // query string was already gone by then. This was the actual reason "Open in Candy"
@@ -298,12 +302,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     exchange()
-      .then(({ user: u }) => {
+      .then(async ({ user: u }) => {
         logger.info('[AppContext] SSO exchange succeeded', { userId: u.user_id, email: u.email });
         themeStore.set('light');
         setUser(u);
         posthog.identify(u.user_id, { email: u.email, name: u.full_name });
         if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
+
+        // Back from the SpaceMarvel login the rail sent them to (Home/Finixy clicked with no
+        // valid dashboard token): carry on to that app instead of stopping in Candy. The
+        // #/sso/callback page that used to do this never mounts — the return URL has no "#".
+        const intent = localStorage.getItem(SSO_INTENT_KEY);
+        localStorage.removeItem(SSO_INTENT_KEY);
+        if (intent && params.get('via') !== 'oidc' && await redirectWithSso(intent)) return;
 
         // Claim the ticket directly, right here, right after login succeeds — this is the
         // exact instant auth is confirmed complete, so there's no separate component/effect

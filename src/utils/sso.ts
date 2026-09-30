@@ -17,6 +17,47 @@ export const PENDING_PROMPT_TICKET_KEY = 'candy_pending_prompt_ticket';
  */
 export const RETURN_ROUTE_KEY = 'candy.return_route';
 
+/** Metaspace/Finixy URL the user clicked in the rail, kept across the SpaceMarvel login round-trip. */
+export const SSO_INTENT_KEY = 'candy:sso_intent';
+
+const SM_API =
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? '/sm-api'
+    : (import.meta.env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
+
+/**
+ * Open Metaspace/Finixy already signed in. With the stored SpaceMarvel dashboard token, mint a
+ * one-time SSO token and navigate to `appUrl?sso_token=…&access_token=<dashboard token>` — the
+ * shape both apps read on arrival. Resolves false when that's not possible (no token, expired
+ * token, dashboard error) so the caller can fall back to the SpaceMarvel login.
+ */
+export async function redirectWithSso(appUrl: string): Promise<boolean> {
+  const dashboardToken = localStorage.getItem('dashboard_token');
+  if (!dashboardToken) return false;
+  try {
+    const res = await fetch(`${SM_API}/api/rbac/auth/sso/generate/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${dashboardToken}` },
+      body: JSON.stringify({ app_url: appUrl }),
+    });
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('dashboard_token');
+      return false;
+    }
+    if (!res.ok) return false;
+    const data = await res.json().catch(() => ({}));
+    const ssoToken = data.sso_token || data.token;
+    if (!ssoToken) return false;
+    const target = new URL(appUrl);
+    target.searchParams.set('sso_token', ssoToken);
+    target.searchParams.set('access_token', dashboardToken);
+    window.location.href = target.toString();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** One-shot read of the saved route; only real app pages, never auth/callback screens. */
 export function takeReturnRoute(): string | null {
   try {
