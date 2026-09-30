@@ -6,7 +6,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import posthog from 'posthog-js';
 import { loadStoredUser, fullLogout, ssoCallback, me, storeUser, type AuthUser } from '../api/auth';
 import { getToken, setToken } from '../api/client';
-import { themeStore } from '../hooks/useTheme';
 import { addToast, type AddToast } from '../hooks/useToast';
 import { logger } from '../utils/logger';
 import { errorMessage } from '../utils/apiError';
@@ -122,7 +121,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signedIn = useCallback((u: AuthUser) => {
     logger.info('[AppContext] signedIn', { userId: u.user_id, email: u.email, role: u.role, company: u.company_name });
-    themeStore.set('light');
     setUser(u);
     // If there's a pending prompt ticket, don't navigate — let PromptTicketHandler handle it
     const pendingTicket = sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY);
@@ -300,7 +298,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     exchange()
       .then(async ({ user: u }) => {
         logger.info('[AppContext] SSO exchange succeeded', { userId: u.user_id, email: u.email });
-        themeStore.set('light');
         setUser(u);
         posthog.identify(u.user_id, { email: u.email, name: u.full_name });
         if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
