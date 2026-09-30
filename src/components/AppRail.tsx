@@ -8,6 +8,7 @@ import type { AddToast } from '../hooks/useToast';
 import Icon from '../assets/icons';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
 import { getProfile } from '../api/profile';
+import { redirectWithSso, SSO_INTENT_KEY } from '../utils/sso';
 
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
@@ -20,14 +21,9 @@ export const RAIL_W   = 64;
 // Rail and sidebar float as borderless rounded panels with this gap on every side.
 export const SHELL_GAP = 4;
 
-const isLocal = typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 // Help → Onboarding is a testing shortcut: localhost + dev only, hidden on staging and prod.
 const SHOW_ONBOARDING_ITEM = typeof window !== 'undefined' &&
   ['localhost', '127.0.0.1', 'dev.candy.cx'].includes(window.location.hostname);
-const SM_API = isLocal
-  ? '/sm-api'
-  : (import.meta.env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
 
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
@@ -268,7 +264,6 @@ const PRODUCTS: Product[] = [
   { id: 'finixy',    label: 'Finixy', img: '/FinixyLogo.svg',
     ssoTarget: import.meta.env.VITE_FINIXY_APP_URL || 'https://app.finixy.ai' },
   { id: 'candy',     label: 'Candy',  img: '/Candy.svg', path: '/healthcare', current: true },
-  { id: 'scrum',     label: 'Scrum',  icon: 'team' },
 ];
 
 export default function AppRail() {
@@ -318,46 +313,10 @@ export default function AppRail() {
     // Candy pageview/backend event ever records that the click happened.
     posthog.capture('sidebar_product_link_clicked', { product: item.id });
 
-    const dashboardToken = localStorage.getItem('dashboard_token');
+    if (await redirectWithSso(item.ssoTarget)) return;
 
-    if (dashboardToken) {
-      try {
-        const res = await fetch(`${SM_API}/api/rbac/auth/sso/generate/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${dashboardToken}`,
-          },
-          body: JSON.stringify({ app_url: item.ssoTarget }),
-        });
-
-        if (res.status === 401 || res.status === 403) {
-          localStorage.removeItem('dashboard_token');
-          throw new Error(`token_expired:${res.status}`);
-        }
-
-        if (!res.ok) throw new Error(`sso_generate_error:${res.status}`);
-
-        const data = await res.json().catch(() => ({}));
-        const ssoToken = data.sso_token || data.token;
-
-        if (ssoToken) {
-          const target = new URL(item.ssoTarget);
-          target.searchParams.set('sso_token', ssoToken);
-          target.searchParams.set('access_token', dashboardToken);
-          window.location.href = target.toString();
-          return;
-        }
-
-        throw new Error('no_sso_token_in_response');
-      } catch {
-        // Fall through silently — the redirect below will take the user to
-        // SpaceMarvel login and back, which handles every failure case.
-      }
-    }
-
-    // Save intent so SSO callback can redirect there immediately after login
-    localStorage.setItem('candy:sso_intent', item.ssoTarget);
+    // No usable dashboard token: SpaceMarvel login, then AppContext finishes the trip to this app.
+    localStorage.setItem(SSO_INTENT_KEY, item.ssoTarget);
     const candyCallback = window.location.origin + '/sso/callback';
     window.location.href = `${import.meta.env.VITE_SM_LOGIN_URL || 'https://spacemarvel.com'}/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
