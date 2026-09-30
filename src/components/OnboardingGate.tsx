@@ -22,6 +22,7 @@ import { useTheme } from '../hooks/useTheme';
 import { getToken } from '../api/client';
 import { getOnboarding, type OnboardingState } from '../api/onboarding';
 import OnboardingModal from './OnboardingModal';
+import { visibleProgress } from '../utils/onboardingProgress';
 
 export default function OnboardingGate({ canInvite = true }: { canInvite?: boolean }) {
   const { theme } = useTheme();
@@ -65,6 +66,10 @@ export default function OnboardingGate({ canInvite = true }: { canInvite?: boole
 
   if (hidden) return null;
 
+  // The server counts the `connectors` step Candy never shows, so its steps_total is 4 while the
+  // pop-up has 3 screens. Show the count of what the user can actually see.
+  const { done, total } = visibleProgress(state);
+
   const bg = isDark ? 'rgba(24,24,27,0.92)' : 'rgba(255,255,255,0.96)';
   const line = isDark ? '#27272a' : '#e4e4e7';
   const fg = isDark ? '#ffffff' : '#18181b';
@@ -79,7 +84,7 @@ export default function OnboardingGate({ canInvite = true }: { canInvite?: boole
       }}>
         <button
           onClick={() => { posthog.capture('onboarding_widget_reopened', { product: 'candy' }); setOpen(true); }}
-          aria-label={`Finish setup, ${state.steps_done} of ${state.steps_total} done`}
+          aria-label={`Finish setup, ${done} of ${total} done`}
           style={{
             display: 'flex', alignItems: 'center', gap: 10, background: 'none',
             border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0,
@@ -88,7 +93,7 @@ export default function OnboardingGate({ canInvite = true }: { canInvite?: boole
           <Icon name="spark" size={16} style={{ color: '#fbbf24' }} />
           <span style={{ fontSize: 14, fontWeight: 500, color: fg }}>Finish setup</span>
           <span style={{ fontSize: 12, color: muted }}>
-            {state.steps_done} of {state.steps_total}
+            {done} of {total}
           </span>
         </button>
         <button

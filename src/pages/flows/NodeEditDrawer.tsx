@@ -12,7 +12,7 @@ import type { FlowNode, FlowNodeData, ConditionOperator, AIOperation } from '../
 import { webhookIdentity, isExecutableApp, CONDITION_OPERATORS, AI_OPERATIONS } from '../../api/workflows';
 import type { AppConnection } from '../../api/connections';
 import { saveConnection, connectionSaveErrorMessage, testConnection, startOAuth, APP_CATALOGUE } from '../../api/connections';
-import { createEmbedInstall, listEmbedInstalls, type EmbedInstall } from '../../api/agents';
+import { createEmbedInstall, listEmbedInstalls, hostedAgentUrl, type EmbedInstall } from '../../api/agents';
 import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import logger from '../../utils/logger';
@@ -506,7 +506,7 @@ function AgentEditor({ node }: { node: FlowNode }) {
   const agentId = node.data.agentId ?? '';
   const [tab, setTab] = useState<'embed' | 'hosted'>('embed');
 
-  const hostedUrl = `${window.location.protocol}//${window.location.host}/chat/${agentId}`;
+  const hostedUrl = hostedAgentUrl(agentId, isChat ? 'chat' : 'voice');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

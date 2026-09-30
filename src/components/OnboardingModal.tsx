@@ -22,6 +22,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from '../assets/icons';
 import { useTheme } from '../hooks/useTheme';
 import { errorMessage } from '../utils/apiError';
+import { visibleProgress } from '../utils/onboardingProgress';
 import {
   completeOnboarding,
   dismissOnboarding,
@@ -109,6 +110,11 @@ export default function OnboardingModal({
   const step: ShownStep = viewing ?? serverStep ?? steps[steps.length - 1];
   const stepIndex = Math.max(0, steps.indexOf(step));
   const isLast = stepIndex === steps.length - 1;
+
+  // Progress over the screens the user can see — the server's own total also counts the hidden
+  // `connectors` step (see utils/onboardingProgress). Preview mode has no server state: 0%.
+  const progress = state ? visibleProgress(state) : { done: 0, total: steps.length };
+  const progressPct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
 
   const saved = (state?.selections ?? {}) as Record<string, unknown>;
   const chosen = editedChosen ?? (Array.isArray(saved.choose) ? (saved.choose as string[]) : []);
@@ -323,7 +329,7 @@ export default function OnboardingModal({
           <div style={{ marginTop: 32, height: 3, borderRadius: 999, background: line }}>
             <div style={{
               height: '100%', borderRadius: 999, background: fg, transition: 'width .2s ease',
-              width: `${(((state?.steps_done ?? 0) / (state?.steps_total ?? 4)) * 100).toFixed(0)}%`,
+              width: `${progressPct}%`,
             }} />
           </div>
 

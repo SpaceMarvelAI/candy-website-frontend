@@ -137,6 +137,18 @@ export const EXECUTABLE_TRIGGER_TYPES: readonly string[] =
 export const isExecutableTrigger = (triggerType?: string): boolean =>
   !!triggerType && EXECUTABLE_TRIGGER_TYPES.includes(triggerType);
 
+/** Short badge text for a trigger edge on the canvas. Every executable trigger
+ *  needs its own case — anything unmatched reads as "both", which is wrong for
+ *  incoming_call. */
+export const triggerBadgeLabel = (triggerType?: string): string => {
+  switch (triggerType) {
+    case 'escalation':    return 'escalation';
+    case 'demo_booking':  return 'demo booked';
+    case 'incoming_call': return 'incoming call';
+    default:              return 'both';
+  }
+};
+
 export interface FlowNode {
   id:   string;
   type: NodeType;

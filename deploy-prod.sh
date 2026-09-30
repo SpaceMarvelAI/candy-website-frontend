@@ -113,11 +113,21 @@ if [ ! -d "$DIST_FOLDER" ]; then
 fi
 
 # ── Step 10: Sync dist to S3 ──────────────────────────────────────────────────
+# index.html is uploaded separately with no-cache — see deploy-dev.sh's comment on this
+# same step for why: without it, CloudFront's default TTL kept serving a stale index.html
+# (pointing at an already-deleted bundle) after every deploy.
 echo ""
 echo "Uploading files to S3..."
-aws s3 sync $DIST_FOLDER "s3://$BUCKET_NAME" --delete --region $REGION
+aws s3 sync $DIST_FOLDER "s3://$BUCKET_NAME" --delete --region $REGION \
+    --cache-control "public, max-age=31536000, immutable" \
+    --exclude "index.html"
 if [ $? -ne 0 ]; then
     fail "S3 upload failed — check AWS permissions"
+fi
+aws s3 cp "$DIST_FOLDER/index.html" "s3://$BUCKET_NAME/index.html" --region $REGION \
+    --cache-control "no-cache, no-store, must-revalidate"
+if [ $? -ne 0 ]; then
+    fail "S3 upload of index.html failed — check AWS permissions"
 fi
 echo "✓ Upload complete."
 
