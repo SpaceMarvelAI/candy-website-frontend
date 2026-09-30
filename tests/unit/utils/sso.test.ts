@@ -66,49 +66,31 @@ describe('redirectToOIDC', () => {
 });
 
 describe('redirectWithSso (rail Home/Finixy → other app, already signed in)', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => sessionStorage.clear());
 
-  it('returns false without calling the dashboard when there is no dashboard token', async () => {
+  it('returns false without calling the dashboard when there is no Candy session token', async () => {
     const f = vi.spyOn(globalThis, 'fetch');
     expect(await redirectWithSso('https://app.finixy.ai')).toBe(false);
     expect(f).not.toHaveBeenCalled();
   });
 
-  it('drops a rejected dashboard token and returns false (caller falls back to login)', async () => {
-    localStorage.setItem('dashboard_token', 'dt');
+  it('returns false when the dashboard rejects the token (caller falls back to login)', async () => {
+    sessionStorage.setItem('access_token', 'candy-jwt');
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 401 }));
     expect(await redirectWithSso('https://app.finixy.ai')).toBe(false);
-    expect(localStorage.getItem('dashboard_token')).toBeNull();
   });
 
-  it("retries with Candy's own token when the dashboard token is rejected", async () => {
+  it('opens the app with ?sso_token=<minted>&access_token=<Candy token>', async () => {
     const loc = stubLocation('app.candy.cx');
-    localStorage.setItem('dashboard_token', 'stale');
     sessionStorage.setItem('access_token', 'candy-jwt');
-    const f = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_u, init) =>
-      (init?.headers as Record<string, string>).Authorization === 'Bearer candy-jwt'
-        ? Response.json({ sso_token: 'one-time' })
-        : new Response(null, { status: 401 }));
-    expect(await redirectWithSso('https://dev.spacemarvel.ai')).toBe(true);
-    expect(f).toHaveBeenCalledTimes(2);
-    expect(localStorage.getItem('dashboard_token')).toBeNull();
-    const url = new URL(loc.href);
-    expect(url.searchParams.get('sso_token')).toBe('one-time');
-    expect(url.searchParams.get('access_token')).toBe('candy-jwt');
-    sessionStorage.clear();
-  });
-
-  it('opens the app with ?sso_token=<minted>&access_token=<dashboard token>', async () => {
-    const loc = stubLocation('app.candy.cx');
-    localStorage.setItem('dashboard_token', 'dt');
     const f = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ sso_token: 'one-time' }));
     expect(await redirectWithSso('https://app.finixy.ai')).toBe(true);
     const [, init] = f.mock.calls[0];
-    expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer dt' });
+    expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer candy-jwt' });
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ app_url: 'https://app.finixy.ai' });
     const url = new URL(loc.href);
     expect(url.origin).toBe('https://app.finixy.ai');
     expect(url.searchParams.get('sso_token')).toBe('one-time');
-    expect(url.searchParams.get('access_token')).toBe('dt');
+    expect(url.searchParams.get('access_token')).toBe('candy-jwt');
   });
 });

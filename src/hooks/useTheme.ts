@@ -32,7 +32,13 @@ function getInitialTheme(): Theme {
   } catch {
     // localStorage may throw in private mode / sandboxed iframes
   }
-  return 'light';
+  // No saved preference yet — default to the OS/browser preference instead of
+  // always assuming light.
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
 }
 
 // ─── Module-level state ────────────────────────────────────────────────────
