@@ -1,4 +1,14 @@
-import { api } from './client';
+import { api, API_BASE } from './client';
+
+/**
+ * Shareable public page for a published agent. These pages are served by the
+ * BACKEND (Candy-Agents: GET /chat/{id} in api/v1/chatbot.py, GET /voice-demo/{id}
+ * in api/v1/voice_stream.py), not by this SPA — the app and the API live on
+ * different hosts, so the URL must be built from the API base, never from
+ * window.location.
+ */
+export const hostedAgentUrl = (agentId: string, kind: 'chat' | 'voice' = 'chat'): string =>
+  `${API_BASE}/${kind === 'voice' ? 'voice-demo' : 'chat'}/${agentId}`;
 
 export interface Agent {
   id: string;
