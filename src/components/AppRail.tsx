@@ -8,8 +8,7 @@ import type { AddToast } from '../hooks/useToast';
 import Icon from '../assets/icons';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
 import { getProfile } from '../api/profile';
-import { getToken } from '../api/client';
-import { logger } from '../utils/logger';
+import { redirectWithSso, SSO_INTENT_KEY } from '../utils/sso';
 
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
@@ -22,14 +21,9 @@ export const RAIL_W   = 64;
 // Rail and sidebar float as borderless rounded panels with this gap on every side.
 export const SHELL_GAP = 4;
 
-const isLocal = typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 // Help → Onboarding is a testing shortcut: localhost + dev only, hidden on staging and prod.
 const SHOW_ONBOARDING_ITEM = typeof window !== 'undefined' &&
   ['localhost', '127.0.0.1', 'dev.candy.cx'].includes(window.location.hostname);
-const SM_API = isLocal
-  ? '/sm-api'
-  : (import.meta.env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
 
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
@@ -270,7 +264,6 @@ const PRODUCTS: Product[] = [
   { id: 'finixy',    label: 'Finixy', img: '/FinixyLogo.svg',
     ssoTarget: import.meta.env.VITE_FINIXY_APP_URL || 'https://app.finixy.ai' },
   { id: 'candy',     label: 'Candy',  img: '/Candy.svg', path: '/healthcare', current: true },
-  { id: 'scrum',     label: 'Scrum',  icon: 'team' },
 ];
 
 export default function AppRail() {
@@ -313,27 +306,6 @@ export default function AppRail() {
     else addToast(`"${item.label}" — coming soon`, 'info');
   }
 
-  // Calls the dashboard's SSO-generate endpoint with a given bearer token. Returns the
-  // sso_token on success, or null on any failure (bad/expired/unrecognized token, network
-  // error, malformed response) — callers decide what to try next.
-  async function trySsoGenerate(bearerToken: string, appUrl: string): Promise<string | null> {
-    try {
-      const res = await fetch(`${SM_API}/api/rbac/auth/sso/generate/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${bearerToken}`,
-        },
-        body: JSON.stringify({ app_url: appUrl }),
-      });
-      if (!res.ok) return null;
-      const data = await res.json().catch(() => ({}));
-      return data.sso_token || data.token || null;
-    } catch {
-      return null;
-    }
-  }
-
   async function openProduct(item: Product) {
     if (!item.ssoTarget) { handleNav(item); return; }
 
@@ -341,39 +313,10 @@ export default function AppRail() {
     // Candy pageview/backend event ever records that the click happened.
     posthog.capture('sidebar_product_link_clicked', { product: item.id });
 
-    const dashboardToken = localStorage.getItem('dashboard_token');
-    const candyToken = getToken();
+    if (await redirectWithSso(item.ssoTarget)) return;
 
-    // Try the real dashboard OAuth token first (the correct path). If the dashboard
-    // rejects it (401/403 — e.g. a stale token left over from before dashboard_token was
-    // wired up correctly, or any other reason it doesn't recognize it), retry ONCE with
-    // Candy's own session token before falling back to a full re-login. Candy's token is
-    // accepted by the dashboard's SSO-generate endpoint too (same signing key, same user
-    // IDs) — this is the same fallback path staging/prod have been relying on all along,
-    // now used as a safety net for dev rather than the only path.
-    for (const [bearerToken, isRetry] of [[dashboardToken, false], [candyToken, true]] as const) {
-      if (!bearerToken) continue;
-      if (isRetry) {
-        logger.info('[AppRail] dashboard_token rejected — retrying sso/generate with Candy token');
-      }
-      const ssoToken = await trySsoGenerate(bearerToken, item.ssoTarget);
-      if (ssoToken) {
-        const target = new URL(item.ssoTarget);
-        target.searchParams.set('sso_token', ssoToken);
-        target.searchParams.set('access_token', bearerToken);
-        window.location.href = target.toString();
-        return;
-      }
-      if (!isRetry) {
-        // dashboard_token didn't work — drop it so a future direct SSO exchange
-        // (which sets it fresh) isn't shadowed by this known-bad value.
-        localStorage.removeItem('dashboard_token');
-      }
-    }
-
-    // Both the dashboard token and Candy's own token failed (or neither existed) — save
-    // intent so SSO callback can redirect there immediately after login.
-    localStorage.setItem('candy:sso_intent', item.ssoTarget);
+    // No usable dashboard token: SpaceMarvel login, then AppContext finishes the trip to this app.
+    localStorage.setItem(SSO_INTENT_KEY, item.ssoTarget);
     const candyCallback = window.location.origin + '/sso/callback';
     window.location.href = `${import.meta.env.VITE_SM_LOGIN_URL || 'https://spacemarvel.com'}/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
