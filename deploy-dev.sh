@@ -112,11 +112,27 @@ if [ ! -d "$DIST_FOLDER" ]; then
 fi
 
 # ── Step 10: Sync dist to S3 ──────────────────────────────────────────────────
+# index.html is uploaded separately with no-cache: it's the only file whose name never
+# changes between deploys, so it's what actually tells the browser which content-hashed
+# JS/CSS bundle to load. Without this, S3/CloudFront had no Cache-Control at all on it,
+# so CloudFront's default TTL cached it — every deploy afterward silently kept serving an
+# old index.html (pointing at an already-deleted bundle) until that TTL happened to expire
+# or someone manually invalidated, which only cleared it once before it cached again on the
+# very next request. Confirmed live: a real deploy's fix sat invisible for 30+ minutes this
+# way. Hashed assets are safe to cache forever since a content change always produces a new
+# filename.
 echo ""
 echo "Uploading files to S3 (DEV bucket)..."
-aws s3 sync $DIST_FOLDER "s3://$BUCKET_NAME" --delete --region $REGION
+aws s3 sync $DIST_FOLDER "s3://$BUCKET_NAME" --delete --region $REGION \
+    --cache-control "public, max-age=31536000, immutable" \
+    --exclude "index.html"
 if [ $? -ne 0 ]; then
     fail "S3 upload failed — check AWS permissions"
+fi
+aws s3 cp "$DIST_FOLDER/index.html" "s3://$BUCKET_NAME/index.html" --region $REGION \
+    --cache-control "no-cache, no-store, must-revalidate"
+if [ $? -ne 0 ]; then
+    fail "S3 upload of index.html failed — check AWS permissions"
 fi
 echo "✓ Upload complete."
 
