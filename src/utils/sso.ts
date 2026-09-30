@@ -26,18 +26,18 @@ const SM_API =
     : (import.meta.env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
 
 /** One sso/generate call with `bearer`. The one-time sso_token, or null on any failure. */
-async function generateSsoToken(bearer: string, appUrl: string): Promise<{ token: string | null; rejected: boolean }> {
+async function generateSsoToken(bearer: string, appUrl: string): Promise<string | null> {
   try {
     const res = await fetch(`${SM_API}/api/rbac/auth/sso/generate/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bearer}` },
       body: JSON.stringify({ app_url: appUrl }),
     });
-    if (!res.ok) return { token: null, rejected: res.status === 401 || res.status === 403 };
+    if (!res.ok) return null;
     const data = await res.json().catch(() => ({}));
-    return { token: data.sso_token || data.token || null, rejected: false };
+    return data.sso_token || data.token || null;
   } catch {
-    return { token: null, rejected: false };
+    return null;
   }
 }
 
@@ -45,31 +45,26 @@ async function generateSsoToken(bearer: string, appUrl: string): Promise<{ token
  * Open Metaspace/Finixy already signed in: mint a one-time SSO token and navigate to
  * `appUrl?sso_token=…&access_token=<bearer used>` — the shape both apps read on arrival.
  *
- * Tries the stored SpaceMarvel dashboard token first (the correct path). If the dashboard
- * rejects it — e.g. a stale token cached from before the backend sent the real one — it is
- * dropped and the call is retried ONCE with Candy's own session token, which the dashboard
- * also accepts (same signing key, same user ids). That second path is what staging/prod
- * have relied on all along. Resolves false when neither works, so the caller can fall back
- * to the SpaceMarvel login.
+ * Uses Candy's own session token directly. It authenticates this call the same way it
+ * always has in staging/prod (same signing key, same user ids the dashboard recognizes)
+ * — a separate `dashboard_token` round-trip through the OIDC callback is not needed for
+ * this. (An earlier version tried a stored `dashboard_token` first and fell back to
+ * Candy's token on rejection — dropped after confirming live in dev that `dashboard_token`
+ * was landing as null even right after a successful login, so the "correct" path was
+ * silently never firing and every call already depended on this fallback anyway.)
+ * Resolves false when there's no session or the dashboard rejects it, so the caller can
+ * fall back to the SpaceMarvel login.
  */
 export async function redirectWithSso(appUrl: string): Promise<boolean> {
-  const dashboardToken = localStorage.getItem('dashboard_token');
-  for (const bearer of [dashboardToken, getToken()]) {
-    if (!bearer) continue;
-    const { token, rejected } = await generateSsoToken(bearer, appUrl);
-    if (token) {
-      const target = new URL(appUrl);
-      target.searchParams.set('sso_token', token);
-      target.searchParams.set('access_token', bearer);
-      window.location.href = target.toString();
-      return true;
-    }
-    if (bearer === dashboardToken) {
-      if (rejected) localStorage.removeItem('dashboard_token');
-      logger.info('[redirectWithSso] dashboard_token did not work — retrying with Candy token');
-    }
-  }
-  return false;
+  const bearer = getToken();
+  if (!bearer) return false;
+  const token = await generateSsoToken(bearer, appUrl);
+  if (!token) return false;
+  const target = new URL(appUrl);
+  target.searchParams.set('sso_token', token);
+  target.searchParams.set('access_token', bearer);
+  window.location.href = target.toString();
+  return true;
 }
 
 /** One-shot read of the saved route; only real app pages, never auth/callback screens. */
