@@ -20,6 +20,34 @@ export const RETURN_ROUTE_KEY = 'candy.return_route';
 /** Metaspace/Finixy URL the user clicked in the rail, kept across the SpaceMarvel login round-trip. */
 export const SSO_INTENT_KEY = 'candy:sso_intent';
 
+// How long a stashed intent stays valid. A re-login can come back via either the direct
+// SpaceMarvel-login path OR Candy's own OIDC re-auth (ProtectedRoute fires redirectToOIDC()
+// the instant a background 401 clears the session — see App.tsx) — whichever navigation wins
+// that race is what the browser actually follows, so the intent must be honored either way.
+// The age check is what still protects against a stale intent from a long-abandoned attempt
+// hijacking an unrelated later login.
+const SSO_INTENT_MAX_AGE_MS = 2 * 60 * 1000;
+
+/** Stash the app the user clicked before sending them off to re-authenticate. */
+export function setSsoIntent(appUrl: string): void {
+  try {
+    localStorage.setItem(SSO_INTENT_KEY, JSON.stringify({ appUrl, ts: Date.now() }));
+  } catch { /* best-effort */ }
+}
+
+/** One-shot read of the stashed intent. Null (and discarded) if missing, malformed, or older
+ * than SSO_INTENT_MAX_AGE_MS. */
+export function takeSsoIntent(): string | null {
+  try {
+    const raw = localStorage.getItem(SSO_INTENT_KEY);
+    localStorage.removeItem(SSO_INTENT_KEY);
+    if (!raw) return null;
+    const { appUrl, ts } = JSON.parse(raw);
+    if (typeof appUrl !== 'string' || typeof ts !== 'number') return null;
+    return Date.now() - ts <= SSO_INTENT_MAX_AGE_MS ? appUrl : null;
+  } catch { return null; }
+}
+
 const SM_API =
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? '/sm-api'

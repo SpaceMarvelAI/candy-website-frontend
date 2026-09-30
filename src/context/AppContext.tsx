@@ -10,7 +10,7 @@ import { themeStore } from '../hooks/useTheme';
 import { addToast, type AddToast } from '../hooks/useToast';
 import { logger } from '../utils/logger';
 import { errorMessage } from '../utils/apiError';
-import { PENDING_PROMPT_TICKET_KEY, SSO_INTENT_KEY, redirectWithSso, takeReturnRoute } from '../utils/sso';
+import { PENDING_PROMPT_TICKET_KEY, takeSsoIntent, redirectWithSso, takeReturnRoute } from '../utils/sso';
 import { claimPromptTicket, type ClaimedPrompt } from '../api/prompts';
 
 // Bidirectional mapping between legacy view names and URL paths.
@@ -305,12 +305,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         posthog.identify(u.user_id, { email: u.email, name: u.full_name });
         if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
 
-        // Back from the SpaceMarvel login the rail sent them to (Home/Finixy clicked with no
-        // valid dashboard token): carry on to that app instead of stopping in Candy. The
-        // #/sso/callback page that used to do this never mounts — the return URL has no "#".
-        const intent = localStorage.getItem(SSO_INTENT_KEY);
-        localStorage.removeItem(SSO_INTENT_KEY);
-        if (intent && params.get('via') !== 'oidc' && await redirectWithSso(intent)) return;
+        // Back from the login the rail sent them to (Home/Finixy clicked with no valid dashboard
+        // token): carry on to that app instead of stopping in Candy. The #/sso/callback page that
+        // used to do this never mounts — the return URL has no "#".
+        //
+        // Honored regardless of which login path actually completed (direct SpaceMarvel login,
+        // or Candy's own `via=oidc` re-auth): ProtectedRoute's redirectToOIDC() (App.tsx) fires
+        // the instant a background 401 clears the session, and that navigation can win the race
+        // against this click's own fallback-login redirect — so the OIDC path is not proof the
+        // click never happened. takeSsoIntent() is what actually guards against a stale/unrelated
+        // intent here, by discarding anything older than a couple of minutes.
+        const intent = takeSsoIntent();
+        if (intent && await redirectWithSso(intent)) return;
 
         // Claim the ticket directly, right here, right after login succeeds — this is the
         // exact instant auth is confirmed complete, so there's no separate component/effect

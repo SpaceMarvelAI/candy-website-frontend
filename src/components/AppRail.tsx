@@ -8,7 +8,7 @@ import type { AddToast } from '../hooks/useToast';
 import Icon from '../assets/icons';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
 import { getProfile } from '../api/profile';
-import { redirectWithSso, SSO_INTENT_KEY } from '../utils/sso';
+import { redirectWithSso, setSsoIntent } from '../utils/sso';
 
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
@@ -316,7 +316,7 @@ export default function AppRail() {
     if (await redirectWithSso(item.ssoTarget)) return;
 
     // No usable dashboard token: SpaceMarvel login, then AppContext finishes the trip to this app.
-    localStorage.setItem(SSO_INTENT_KEY, item.ssoTarget);
+    setSsoIntent(item.ssoTarget);
     const candyCallback = window.location.origin + '/sso/callback';
     window.location.href = `${import.meta.env.VITE_SM_LOGIN_URL || 'https://spacemarvel.com'}/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
