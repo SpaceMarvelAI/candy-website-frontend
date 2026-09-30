@@ -210,11 +210,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Explicit dashboard OAuth token (set by Candy's OIDC backend on direct login).
     // Falls back to accessToken for cross-app SSO (Metaspace → Candy) where the dashboard
     // token still arrives as access_token for backward compatibility.
-    // On Candy's own OIDC login (`via=oidc`) access_token is CANDY's session token, not a
-    // SpaceMarvel one — storing it as dashboard_token made every Home/Finixy click send Candy's
-    // token to the dashboard, get a 401, and bounce through login. Only trust it from other apps.
-    const dashboardTokenFromUrl =
-      params.get('dashboard_token') ?? (params.get('via') === 'oidc' ? null : accessToken);
+    const dashboardTokenFromUrl = params.get('dashboard_token') ?? accessToken;
     // Capture the ticket BEFORE the URL gets stripped below — reading it afterward (as a
     // previous version of this code did, further down) always found nothing, since the
     // query string was already gone by then. This was the actual reason "Open in Candy"
