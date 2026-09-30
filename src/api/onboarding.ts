@@ -1,5 +1,6 @@
 /**
- * Onboarding — the 4-step setup pop-up.
+ * Onboarding — the setup pop-up. The shared flow has 4 steps (`OnboardingStep`); Candy shows 3 and
+ * hides `connectors`, so display counts go through utils/onboardingProgress, not `steps_total`.
  *
  * These hit CANDY's own backend (`/v1/onboarding`), which forwards to the dashboard using the
  * dashboard token it already stores against the user. Candy's frontend has no dashboard token of
@@ -31,7 +32,7 @@ export interface OnboardingState {
   /**
    * The ONE flag to branch on:
    *   true                  -> open the pop-up at `current_step`
-   *   false && !completed    -> show the "Finish setup — 2 of 4" widget
+   *   false && !completed    -> show the "Finish setup — N of M" widget
    *   completed              -> show nothing, ever again
    *
    * The backend returns this so the frontend does not re-derive it from

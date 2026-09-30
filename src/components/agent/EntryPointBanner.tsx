@@ -16,6 +16,7 @@
  */
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
+import { hostedAgentUrl } from '../../api/agents';
 import { errorMessage, gateInfo, type GateInfo } from '../../utils/apiError';
 import PlanGateNotice from '../PlanGateNotice';
 import Icon from '../../assets/icons';
@@ -117,9 +118,7 @@ export default function EntryPointBanner({
   // 402/403 from the plan / credit / role gates — shown as a notice, not an error.
   const [gate, setGate] = useState<GateInfo | null>(null);
 
-  const hostedUrl = agentId
-    ? `${window.location.protocol}//${window.location.host}/chat/${agentId}`
-    : '';
+  const hostedUrl = agentId ? hostedAgentUrl(agentId) : '';
 
   const color = tintColor[tint] ?? tintColor.purple;
 
