@@ -224,6 +224,46 @@ describe('api() — 401 auth-expiry side-effects', () => {
   });
 });
 
+// ── 401 is not always a dead session ──────────────────────────────────────────
+
+describe('api() — 401 only signs out when the session is really dead', () => {
+  const expired = vi.fn();
+  beforeEach(() => {
+    setToken('t1');
+    window.addEventListener('candy:auth-expired', expired);
+    server.use(http.get(`${API_BASE}/v1/secure`, () =>
+      HttpResponse.json({ detail: 'No dashboard token stored' }, { status: 401 })));
+  });
+  afterEach(() => {
+    window.removeEventListener('candy:auth-expired', expired);
+    expired.mockReset();
+  });
+
+  it('keeps the session when /v1/auth/me says the token is still valid (upstream 401)', async () => {
+    await expect(api('/v1/secure')).rejects.toMatchObject({ status: 401 });
+    expect(getToken()).toBe('t1');
+    expect(expired).not.toHaveBeenCalled();
+  });
+
+  it('signs out when /v1/auth/me also returns 401', async () => {
+    server.use(http.get(`${API_BASE}/v1/auth/me`, () => new HttpResponse(null, { status: 401 })));
+    await expect(api('/v1/secure')).rejects.toMatchObject({ status: 401 });
+    expect(getToken()).toBeNull();
+    expect(expired).toHaveBeenCalledOnce();
+  });
+
+  it('a stale request cannot wipe a session that replaced it mid-flight — it retries', async () => {
+    server.use(http.get(`${API_BASE}/v1/secure`, ({ request }) => {
+      if (request.headers.get('Authorization') === 'Bearer t2') return HttpResponse.json({ ok: true });
+      setToken('t2');                        // a fresh sign-in lands while t1's request is out
+      return new HttpResponse(null, { status: 401 });
+    }));
+    await expect(api('/v1/secure')).resolves.toEqual({ ok: true });
+    expect(getToken()).toBe('t2');
+    expect(expired).not.toHaveBeenCalled();
+  });
+});
+
 // ── Token helpers ─────────────────────────────────────────────────────────────
 
 describe('getToken / setToken', () => {

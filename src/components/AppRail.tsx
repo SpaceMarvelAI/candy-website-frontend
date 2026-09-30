@@ -12,6 +12,7 @@ import { getProfile } from '../api/profile';
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
 const ProfileModal = lazy(() => import('./ProfileModal'));
+const OnboardingModal = lazy(() => import('./OnboardingModal'));
 
 // Shared shell dimensions — Topbar, Sidebar and flows/index.tsx lay out against these.
 export const HEADER_H = 57; // 14 + 28 + 14 padding/row, plus the 1px bottom border
@@ -21,6 +22,9 @@ export const SHELL_GAP = 4;
 
 const isLocal = typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+// Help → Onboarding is a testing shortcut: localhost + dev only, hidden on staging and prod.
+const SHOW_ONBOARDING_ITEM = typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1', 'dev.candy.cx'].includes(window.location.hostname);
 const SM_API = isLocal
   ? '/sm-api'
   : (import.meta.env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
@@ -28,7 +32,7 @@ const SM_API = isLocal
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
   anchorRect, onClose, onSignOut, signingOut, navigate, addToast,
-  theme, setTheme, onReportIssue, onProfile,
+  theme, setTheme, onReportIssue, onProfile, onOnboarding,
 }: {
   anchorRect: DOMRect;
   onClose: () => void; onSignOut: () => void; signingOut: boolean;
@@ -36,6 +40,7 @@ function ProfileMenu({
   theme: string; setTheme: (t: 'light' | 'dark') => void;
   onReportIssue: () => void;
   onProfile: () => void;
+  onOnboarding: () => void;
 }) {
   const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
   const [subMenuY, setSubMenuY] = useState(0);
@@ -94,8 +99,8 @@ function ProfileMenu({
     </button>
   );
 
-  // Clamp so the flyout never bleeds below the viewport (4 items ≈ 160px + padding)
-  const safeFlyoutTop = Math.min(subMenuY, window.innerHeight - 172 - 12);
+  // Clamp so the flyout never bleeds below the viewport (5 items ≈ 200px + padding)
+  const safeFlyoutTop = Math.min(subMenuY, window.innerHeight - 212 - 12);
 
   const flyoutStyle: React.CSSProperties = {
     position: 'fixed',
@@ -195,6 +200,7 @@ function ProfileMenu({
           {menuItem('Terms & conditions', () => window.open('https://spacemarvel.com/terms', '_blank'))}
           {menuItem('Privacy policy',     () => window.open('https://spacemarvel.com/privacy', '_blank'))}
           {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
+          {SHOW_ONBOARDING_ITEM && menuItem('Onboarding', () => { onOnboarding(); onClose(); })}
         </div>
       )}
     </>,
@@ -271,11 +277,11 @@ export default function AppRail() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [hasDashboardToken, setHasDashboardToken] = useState(() => !!localStorage.getItem('dashboard_token'));
   const [moreAnchor, setMoreAnchor] = useState<DOMRect | null>(null);
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
   const [reportIssuesOpen, setReportIssuesOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   // Overrides AppContext's cached name/avatar right after a save in ProfileModal, so the
   // rail reflects the edit immediately instead of waiting for the next login.
   const [profileOverride, setProfileOverride] = useState<{ name: string | null; avatarUrl: string | null } | null>(null);
@@ -327,7 +333,6 @@ export default function AppRail() {
 
         if (res.status === 401 || res.status === 403) {
           localStorage.removeItem('dashboard_token');
-          setHasDashboardToken(false);
           throw new Error(`token_expired:${res.status}`);
         }
 
@@ -354,7 +359,7 @@ export default function AppRail() {
     // Save intent so SSO callback can redirect there immediately after login
     localStorage.setItem('candy:sso_intent', item.ssoTarget);
     const candyCallback = window.location.origin + '/sso/callback';
-    window.location.href = `https://spacemarvel.com/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
+    window.location.href = `${import.meta.env.VITE_SM_LOGIN_URL || 'https://spacemarvel.com'}/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 
   const userName      = profileOverride?.name || user?.full_name || user?.email?.split('@')[0] || 'User';
@@ -403,19 +408,9 @@ export default function AppRail() {
       >
         {PRODUCTS.map(p => railBtn(
           p.id, p.label,
-          <span style={{ position: 'relative', display: 'inline-flex' }}>
-            {p.img
-              ? <img src={p.img} alt="" style={{ width: 24, height: 24, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)' }} />
-              : <Icon name={p.icon!} size={22} style={{ color: 'var(--shell-text-2)' }} />}
-            {p.id === 'metaspace' && hasDashboardToken && (
-              <span style={{
-                position: 'absolute', bottom: -3, right: -3,
-                width: 10, height: 10, borderRadius: '50%',
-                background: '#4CAF50', border: '1.5px solid var(--shell-bg)',
-                display: 'grid', placeItems: 'center',
-              }} />
-            )}
-          </span>,
+          p.img
+            ? <img src={p.img} alt="" style={{ width: 24, height: 24, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)' }} />
+            : <Icon name={p.icon!} size={22} style={{ color: 'var(--shell-text-2)' }} />,
           () => { void openProduct(p); },
           { current: p.current },
         ))}
@@ -467,7 +462,14 @@ export default function AppRail() {
           setTheme={setTheme}
           onReportIssue={() => setReportIssuesOpen(true)}
           onProfile={() => setProfileEditOpen(true)}
+          onOnboarding={() => setOnboardingOpen(true)}
         />
+      )}
+
+      {onboardingOpen && (
+        <Suspense fallback={null}>
+          <OnboardingModal preview onClose={() => setOnboardingOpen(false)} />
+        </Suspense>
       )}
 
       {reportIssuesOpen && (
