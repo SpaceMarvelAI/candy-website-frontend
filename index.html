@@ -16,7 +16,12 @@
       (function () {
         try {
           var saved = localStorage.getItem('theme');
-          var theme = (saved === 'light' || saved === 'dark') ? saved : 'light';
+          var theme;
+          if (saved === 'light' || saved === 'dark') {
+            theme = saved;
+          } else {
+            theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+          }
           document.documentElement.setAttribute('data-theme', theme);
         } catch (e) {}
       })();

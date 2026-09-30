@@ -9,7 +9,7 @@ import PromptEditor from './PromptEditor';
 import ChatTestPanel from './ChatTestPanel';
 import EntryPointBanner from './EntryPointBanner';
 import WhatsAppConnectionPanel from './WhatsAppConnectionPanel';
-import { listAgents, createAgent, deleteAgent, type Agent } from '../../api/agents';
+import { listAgents, createAgent, deleteAgent, hostedAgentUrl, type Agent } from '../../api/agents';
 import { getRequirements } from '../../api/requirements';
 import { listKnowledge, type KnowledgeDoc } from '../../api/knowledge';
 import { publishAgent } from '../../api/agents';
@@ -87,7 +87,7 @@ export default function ChatbotWorkspace({
   const canPublish = !!agent && (status === 'ready_to_test' || status === 'published');
 
   const widgetUrl = (agent?.agent_flow_status === 'published' || statusOverride === 'published')
-    ? `${window.location.protocol}//${window.location.host}/chat/${agent?.id}`
+    ? hostedAgentUrl(agent?.id ?? '')
     : null;
 
   const color = tintColor[tint] ?? tintColor.purple;

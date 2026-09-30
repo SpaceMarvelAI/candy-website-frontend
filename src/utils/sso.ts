@@ -20,24 +20,55 @@ export const RETURN_ROUTE_KEY = 'candy.return_route';
 /** Metaspace/Finixy URL the user clicked in the rail, kept across the SpaceMarvel login round-trip. */
 export const SSO_INTENT_KEY = 'candy:sso_intent';
 
+// How long a stashed intent stays valid. A re-login can come back via either the direct
+// SpaceMarvel-login path OR Candy's own OIDC re-auth (ProtectedRoute fires redirectToOIDC()
+// the instant a background 401 clears the session — see App.tsx) — whichever navigation wins
+// that race is what the browser actually follows, so the intent must be honored either way.
+// The age check is what still protects against a stale intent from a long-abandoned attempt
+// hijacking an unrelated later login. 10 minutes, not 2: a real login round-trip through the
+// SpaceMarvel dashboard (account picker, password/2FA, then two more redirects through Candy's
+// own OIDC callback) is a lot of screens for a human to click through — 2 minutes measured as
+// too tight in practice and silently dropped the intent before the round-trip even finished.
+const SSO_INTENT_MAX_AGE_MS = 10 * 60 * 1000;
+
+/** Stash the app the user clicked before sending them off to re-authenticate. */
+export function setSsoIntent(appUrl: string): void {
+  try {
+    localStorage.setItem(SSO_INTENT_KEY, JSON.stringify({ appUrl, ts: Date.now() }));
+  } catch { /* best-effort */ }
+}
+
+/** One-shot read of the stashed intent. Null (and discarded) if missing, malformed, or older
+ * than SSO_INTENT_MAX_AGE_MS. */
+export function takeSsoIntent(): string | null {
+  try {
+    const raw = localStorage.getItem(SSO_INTENT_KEY);
+    localStorage.removeItem(SSO_INTENT_KEY);
+    if (!raw) return null;
+    const { appUrl, ts } = JSON.parse(raw);
+    if (typeof appUrl !== 'string' || typeof ts !== 'number') return null;
+    return Date.now() - ts <= SSO_INTENT_MAX_AGE_MS ? appUrl : null;
+  } catch { return null; }
+}
+
 const SM_API =
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? '/sm-api'
     : (import.meta.env.VITE_SM_API_URL || 'https://dashboard-api.spacemarvel.ai');
 
 /** One sso/generate call with `bearer`. The one-time sso_token, or null on any failure. */
-async function generateSsoToken(bearer: string, appUrl: string): Promise<{ token: string | null; rejected: boolean }> {
+async function generateSsoToken(bearer: string, appUrl: string): Promise<string | null> {
   try {
     const res = await fetch(`${SM_API}/api/rbac/auth/sso/generate/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bearer}` },
       body: JSON.stringify({ app_url: appUrl }),
     });
-    if (!res.ok) return { token: null, rejected: res.status === 401 || res.status === 403 };
+    if (!res.ok) return null;
     const data = await res.json().catch(() => ({}));
-    return { token: data.sso_token || data.token || null, rejected: false };
+    return data.sso_token || data.token || null;
   } catch {
-    return { token: null, rejected: false };
+    return null;
   }
 }
 
@@ -45,31 +76,26 @@ async function generateSsoToken(bearer: string, appUrl: string): Promise<{ token
  * Open Metaspace/Finixy already signed in: mint a one-time SSO token and navigate to
  * `appUrl?sso_token=…&access_token=<bearer used>` — the shape both apps read on arrival.
  *
- * Tries the stored SpaceMarvel dashboard token first (the correct path). If the dashboard
- * rejects it — e.g. a stale token cached from before the backend sent the real one — it is
- * dropped and the call is retried ONCE with Candy's own session token, which the dashboard
- * also accepts (same signing key, same user ids). That second path is what staging/prod
- * have relied on all along. Resolves false when neither works, so the caller can fall back
- * to the SpaceMarvel login.
+ * Uses Candy's own session token directly. It authenticates this call the same way it
+ * always has in staging/prod (same signing key, same user ids the dashboard recognizes)
+ * — a separate `dashboard_token` round-trip through the OIDC callback is not needed for
+ * this. (An earlier version tried a stored `dashboard_token` first and fell back to
+ * Candy's token on rejection — dropped after confirming live in dev that `dashboard_token`
+ * was landing as null even right after a successful login, so the "correct" path was
+ * silently never firing and every call already depended on this fallback anyway.)
+ * Resolves false when there's no session or the dashboard rejects it, so the caller can
+ * fall back to the SpaceMarvel login.
  */
 export async function redirectWithSso(appUrl: string): Promise<boolean> {
-  const dashboardToken = localStorage.getItem('dashboard_token');
-  for (const bearer of [dashboardToken, getToken()]) {
-    if (!bearer) continue;
-    const { token, rejected } = await generateSsoToken(bearer, appUrl);
-    if (token) {
-      const target = new URL(appUrl);
-      target.searchParams.set('sso_token', token);
-      target.searchParams.set('access_token', bearer);
-      window.location.href = target.toString();
-      return true;
-    }
-    if (bearer === dashboardToken) {
-      if (rejected) localStorage.removeItem('dashboard_token');
-      logger.info('[redirectWithSso] dashboard_token did not work — retrying with Candy token');
-    }
-  }
-  return false;
+  const bearer = getToken();
+  if (!bearer) return false;
+  const token = await generateSsoToken(bearer, appUrl);
+  if (!token) return false;
+  const target = new URL(appUrl);
+  target.searchParams.set('sso_token', token);
+  target.searchParams.set('access_token', bearer);
+  window.location.href = target.toString();
+  return true;
 }
 
 /** One-shot read of the saved route; only real app pages, never auth/callback screens. */

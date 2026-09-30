@@ -20,7 +20,7 @@ import {
 } from '../../api/composio';
 import {
   listWorkflows, createWorkflow, updateWorkflow, deleteWorkflow, testWorkflow,
-  withWebhookIdentity, isExecutableApp, isExecutableTrigger,
+  withWebhookIdentity, isExecutableApp, isExecutableTrigger, triggerBadgeLabel,
   type FlowNode, type FlowEdge, type WorkflowGraph, type Workflow, type WorkflowTestStep,
 } from '../../api/workflows';
 import logger from '../../utils/logger';
@@ -1370,9 +1370,7 @@ export default function FlowsPage() {
                 ? (edge.branch ? 'TRUE' : 'FALSE')
                 : isW2A
                 ? `${tgt.data.agentName ?? 'agent'}`
-                : edge.triggerType === 'escalation' ? 'escalation'
-                : edge.triggerType === 'demo_booking' ? 'demo booked'
-                : 'both';
+                : triggerBadgeLabel(edge.triggerType);
               const labelW = isW2A ? Math.min(120, (tgt.data.agentName?.length ?? 5) * 7 + 18) : 76;
               const edgeLabel = isBranch
                 ? `${labelText} branch. Enter to change or delete it.`
