@@ -22,29 +22,16 @@ import { getToken, setToken } from '../api/client';
 import { errorMessage } from '../utils/apiError';
 import { me, storeUser } from '../api/auth';
 import { listMyWorkspaces, switchWorkspace, type MyWorkspace } from '../api/workspaces';
+import { decodeWorkspaceIdFromToken } from '../utils/jwt';
 
 /**
- * Which workspace is active, read from Candy's own token.
- *
- * `_mint_jwt` puts the workspace under `org_id`, `workspace_id`, AND `subscription_workspace_id`
- * (same value, all three — mid-rename), so read the final name first and fall back through the
- * older ones — tokens minted before this change carry only `org_id`, and live for hours. Nothing
- * else in this app decodes the token, hence the small local reader rather than a dependency.
+ * Which workspace is active, read from Candy's own token. Decoding itself now
+ * lives in utils/jwt.ts (decodeWorkspaceIdFromToken) — shared with the
+ * SSO/login posthog.group('workspace', ...) call sites, which need the exact
+ * same claim-fallback logic.
  */
 function activeWorkspaceFromToken(): string | null {
-  const t = getToken();
-  if (!t) return null;
-  try {
-    const body = t.split('.')[1];
-    if (!body) return null;
-    const claims = JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/'))) as {
-      subscription_workspace_id?: string; workspace_id?: string; org_id?: string;
-    };
-    // FINAL name first — see the note above and Candy's own api/v1/auth.py:_mint_jwt.
-    return claims.subscription_workspace_id || claims.workspace_id || claims.org_id || null;
-  } catch {
-    return null;   // not a JWT we can read — the tick just won't show
-  }
+  return decodeWorkspaceIdFromToken(getToken());
 }
 
 export default function WorkspaceSwitcher({

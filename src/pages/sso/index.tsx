@@ -4,6 +4,7 @@ import posthog from 'posthog-js';
 import { ssoCallback } from '../../api/auth';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
+import { decodeWorkspaceIdFromToken } from '../../utils/jwt';
 
 type Status = 'loading' | 'error';
 
@@ -54,6 +55,12 @@ export default function SSOCallbackPage() {
 
         posthog.identify(user.user_id, { email: user.email, name: user.full_name });
         if (user.company_id) posthog.group('company', user.company_id, { name: user.company_name });
+        // company = ClientCompany (a sub-tenant), workspace = SubscriptionWorkspace (the real
+        // billing entity) — same split as every backend this session. The workspace id is only
+        // in candyToken's JWT claims (never on the `user` API response), same decode
+        // WorkspaceSwitcher.tsx already uses to show the active workspace.
+        const workspaceId = decodeWorkspaceIdFromToken(candyToken);
+        if (workspaceId) posthog.group('workspace', workspaceId);
 
         // If the user was trying to reach Metaspace/Finixy before being sent
         // to login, generate an SSO token for that app and redirect there.
