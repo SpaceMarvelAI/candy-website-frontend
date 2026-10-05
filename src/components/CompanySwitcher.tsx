@@ -101,7 +101,7 @@ export default function CompanySwitcher({ style }: { style?: CSSProperties } = {
   if (!user) return null;
 
   return (
-    <div ref={rootRef} data-tour="company-switcher" style={{ position: 'relative', flexShrink: 0, ...style }}>
+    <div ref={rootRef} style={{ position: 'relative', flexShrink: 0, ...style }}>
       <button
         onClick={toggle}
         aria-haspopup="listbox"

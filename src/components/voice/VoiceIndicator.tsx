@@ -65,7 +65,6 @@ export default function VoiceIndicator() {
 
       <button
         type="button"
-        data-tour="voice-control"
         disabled={!supported}
         aria-label={supported ? 'Hold to speak a command' : HINT.unsupported}
         aria-pressed={live}

@@ -51,10 +51,11 @@ function DirBadge({ direction }: { direction: Direction }) {
   );
 }
 
-function UseCaseCard({ uc, onCreate }: { uc: HealthcareUseCase; onCreate: () => void }) {
+function UseCaseCard({ uc, onCreate, tourId }: { uc: HealthcareUseCase; onCreate: () => void; tourId?: string }) {
   return (
     <div
       onClick={onCreate}
+      data-tour={tourId}
       style={{
         position: 'relative', background: 'var(--card-bg)',
         border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)',
@@ -184,6 +185,7 @@ function CreateModal({
     >
       <div
         onClick={e => e.stopPropagation()}
+        data-tour="create-modal"
         style={{
           width: 'min(640px, 100%)', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto',
           background: 'var(--card-bg)',
@@ -379,7 +381,9 @@ export default function HealthcareDomain() {
       </div>
       {dirFilter !== 'outbound' && (
         <div style={grid}>
-          {inbound.map(uc => <UseCaseCard key={uc.key} uc={uc} onCreate={() => setActive(uc)} />)}
+          {inbound.map((uc, i) => (
+            <UseCaseCard key={uc.key} uc={uc} onCreate={() => setActive(uc)} tourId={i === 0 ? 'usecase-card' : undefined} />
+          ))}
         </div>
       )}
 

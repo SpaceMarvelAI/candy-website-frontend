@@ -2,20 +2,34 @@
  * ProductTour — spotlight-popover walkthrough of the nav rail, sidebar and topbar. Triggered
  * manually from Profile → Help → Product Tour (AppRail.tsx), never auto-opened.
  *
- * No dimming backdrop: steps point at real, still-clickable parts of the shell (reference
- * designs do the same — the Connectors step is a live page behind the card), so this is a
- * coach-mark, not a blocking modal. A step is dropped up front if its `data-tour` anchor isn't
- * in the DOM when the tour opens (e.g. "finish-setup" once onboarding is already done).
+ * The backdrop is 4 blurred/dimmed panels framing a cutout over the anchor (no CSS mask/
+ * clip-path — plain rects work in every browser that supports backdrop-filter), so only the
+ * spotlighted element stays sharp and clickable. A step is dropped up front if its `data-tour`
+ * anchor isn't in the DOM when the tour opens (e.g. "finish-setup" once onboarding is done).
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { Icon } from '../assets/icons';
 import { useTheme } from '../hooks/useTheme';
-import { PRODUCT_TOUR_STEPS, type TourPlacement, type TourStep } from '../data/productTour';
+import { tourActiveStore } from '../hooks/useTourActive';
+import { PRODUCT_TOUR_STEPS, TOUR_END_PATH, type TourPlacement, type TourStep } from '../data/productTour';
 
 const ACCENT = '#8b5cf6';
 const MARGIN = 16;
+const HOLE_PAD = 6;
+
+function panelStyle(r: { top: number | string; left: number | string; width: number | string; height: number | string }): CSSProperties {
+  return {
+    position: 'fixed', ...r,
+    background: 'rgba(0,0,0,0.6)',
+    backdropFilter: 'blur(6px)',
+    WebkitBackdropFilter: 'blur(6px)',
+    zIndex: 9999,
+    transition: 'top .18s ease, left .18s ease, width .18s ease, height .18s ease',
+  } as CSSProperties;
+}
 
 function findAnchor(id: string | null): HTMLElement | null {
   return id ? document.querySelector<HTMLElement>(`[data-tour="${id}"]`) : null;
@@ -56,10 +70,13 @@ function arrowPos(rect: DOMRect | null, placement: TourPlacement, pos: { top: nu
 export default function ProductTour({ onClose }: { onClose: () => void }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Snapshot once, at open: drop any step whose anchor isn't currently mounted.
+  // Snapshot once, at open: drop any step whose anchor isn't currently mounted — except a
+  // step with its own `path`, which isn't expected to exist until the tour navigates there.
   const [steps] = useState<TourStep[]>(() =>
-    PRODUCT_TOUR_STEPS.filter((s) => s.anchor === null || findAnchor(s.anchor))
+    PRODUCT_TOUR_STEPS.filter((s) => s.anchor === null || s.path || findAnchor(s.anchor))
   );
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -71,26 +88,62 @@ export default function ProductTour({ onClose }: { onClose: () => void }) {
   const isFirst = index === 0;
   const isLast = index === steps.length - 1;
 
+  // Keep the sidebar's labelled panel open for the whole tour, not just the steps that spotlight it.
   useEffect(() => {
-    function update() {
+    tourActiveStore.set(true);
+    return () => tourActiveStore.set(false);
+  }, []);
+
+  // Entering a step: navigate to its route if needed, optionally click another anchor to
+  // reveal this one (e.g. a use-case card that opens the create-agent modal), then poll for
+  // the anchor — a fresh route/modal mounts a beat after navigate()/click(), not synchronously.
+  useEffect(() => {
+    let alive = true;
+    let clicked = false;
+    setRect(null);
+
+    if (step?.path && location.pathname !== step.path) navigate(step.path, { replace: true });
+
+    function tick(triesLeft: number) {
+      if (!alive) return;
+      if (step?.clickAnchor && !clicked) {
+        const trigger = findAnchor(step.clickAnchor);
+        if (trigger) { trigger.click(); clicked = true; }
+      }
+      const el = step?.anchor ? findAnchor(step.anchor) : null;
+      if (el) { setRect(el.getBoundingClientRect()); return; }
+      if (!step?.anchor) return; // centered step, nothing to find
+      if (triesLeft > 0) setTimeout(() => tick(triesLeft - 1), 75);
+      // else: give up quietly — the card falls back to a centered, un-spotlit layout.
+    }
+    tick(40); // ~3s
+
+    function onResize() {
       setRect(step?.anchor ? findAnchor(step.anchor)?.getBoundingClientRect() ?? null : null);
       setCardW(Math.min(400, window.innerWidth - 32));
     }
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    window.addEventListener('resize', onResize);
+    return () => { alive = false; window.removeEventListener('resize', onResize); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
   useLayoutEffect(() => {
     if (cardRef.current) setCardH(cardRef.current.offsetHeight);
   }, [index, step, rect]);
 
-  function next() { if (isLast) onClose(); else setIndex((i) => i + 1); }
+  // Every way the tour ends — Finish, Skip tour, the ✕, Escape — lands back on the
+  // Healthcare dashboard rather than wherever the last step happened to navigate to.
+  function finish() {
+    if (location.pathname !== TOUR_END_PATH) navigate(TOUR_END_PATH, { replace: true });
+    onClose();
+  }
+
+  function next() { if (isLast) finish(); else setIndex((i) => i + 1); }
   function back() { setIndex((i) => Math.max(0, i - 1)); }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') finish();
       else if (e.key === 'ArrowRight' || e.key === 'Enter') next();
       else if (e.key === 'ArrowLeft') back();
     }
@@ -111,14 +164,30 @@ export default function ProductTour({ onClose }: { onClose: () => void }) {
   const eyebrowColor = isDark ? '#c4b5fd' : '#7c3aed';
   const progressPct = ((index + 1) / steps.length) * 100;
 
+  const hole = rect ? {
+    top: rect.top - HOLE_PAD, left: rect.left - HOLE_PAD,
+    width: rect.width + HOLE_PAD * 2, height: rect.height + HOLE_PAD * 2,
+  } : null;
+
   return createPortal(
     <>
-      {rect && (
+      {!step.noBlur && (hole ? (
+        <>
+          <div aria-hidden style={panelStyle({ top: 0, left: 0, width: '100vw', height: hole.top })} />
+          <div aria-hidden style={panelStyle({ top: hole.top + hole.height, left: 0, width: '100vw', height: `calc(100vh - ${hole.top + hole.height}px)` })} />
+          <div aria-hidden style={panelStyle({ top: hole.top, left: 0, width: hole.left, height: hole.height })} />
+          <div aria-hidden style={panelStyle({ top: hole.top, left: hole.left + hole.width, width: `calc(100vw - ${hole.left + hole.width}px)`, height: hole.height })} />
+        </>
+      ) : (
+        <div aria-hidden style={panelStyle({ top: 0, left: 0, width: '100vw', height: '100vh' })} />
+      ))}
+
+      {hole && (
         <div
           aria-hidden
           style={{
-            position: 'fixed', top: rect.top - 6, left: rect.left - 6,
-            width: rect.width + 12, height: rect.height + 12,
+            position: 'fixed', top: hole.top, left: hole.left,
+            width: hole.width, height: hole.height,
             borderRadius: 14, border: `2px solid ${ACCENT}`,
             boxShadow: `0 0 0 4px rgba(139,92,246,0.18), 0 0 20px rgba(139,92,246,0.35)`,
             pointerEvents: 'none', zIndex: 10000,
@@ -152,7 +221,7 @@ export default function ProductTour({ onClose }: { onClose: () => void }) {
             {step.eyebrow} · {index + 1} OF {steps.length}
           </span>
           <button
-            onClick={onClose}
+            onClick={finish}
             aria-label="Close tour"
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: muted, padding: 2, lineHeight: 0, flexShrink: 0 }}
           >
@@ -172,7 +241,7 @@ export default function ProductTour({ onClose }: { onClose: () => void }) {
 
         <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <button
-            onClick={onClose}
+            onClick={finish}
             style={{ background: 'none', border: 'none', fontSize: 13, color: muted, cursor: 'pointer', padding: '8px 4px' }}
           >
             Skip tour
