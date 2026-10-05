@@ -52,6 +52,7 @@ export default function Topbar({ onMenuOpen }: TopbarProps) {
           {!isSmallMobile && <CompanySwitcher />}
           <button
             className="shell-upgrade-btn"
+            data-tour="upgrade-btn"
             onClick={() => { window.location.href = 'https://spacemarvel.ai/dashboard/billing'; }}
           >
             <Icon name="crown" size={14} />
