@@ -11,7 +11,7 @@ import { logger } from '../utils/logger';
 import { errorMessage } from '../utils/apiError';
 import { PENDING_PROMPT_TICKET_KEY, takeSsoIntent, redirectWithSso, takeReturnRoute } from '../utils/sso';
 import { claimPromptTicket, type ClaimedPrompt } from '../api/prompts';
-import { decodeWorkspaceIdFromToken } from '../utils/jwt';
+import { decodeWorkspaceIdFromToken, decodeWorkspaceNameFromToken } from '../utils/jwt';
 
 // Bidirectional mapping between legacy view names and URL paths.
 // All existing showView('dashboard') calls keep working unchanged.
@@ -308,7 +308,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // already stored the current token via setToken()/ssoCallback, so getToken() here
         // reads the just-validated one, same decode WorkspaceSwitcher.tsx already uses.
         const workspaceId = decodeWorkspaceIdFromToken(getToken());
-        if (workspaceId) posthog.group('workspace', workspaceId);
+        const workspaceName = decodeWorkspaceNameFromToken(getToken());
+        if (workspaceId) posthog.group('workspace', workspaceId, workspaceName ? { name: workspaceName } : undefined);
 
         // Back from the login the rail sent them to (Home/Finixy clicked with no valid dashboard
         // token): carry on to that app instead of stopping in Candy. The #/sso/callback page that
