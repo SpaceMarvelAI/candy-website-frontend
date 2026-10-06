@@ -1,5 +1,9 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { redirectToSSO, redirectToOIDC, redirectWithSso, PENDING_PROMPT_TICKET_KEY } from '../../../src/utils/sso';
+import {
+  redirectToSSO, redirectToOIDC, redirectWithSso, PENDING_PROMPT_TICKET_KEY,
+  setSsoIntent, takeSsoIntent, SSO_INTENT_KEY,
+  takeReturnRoute, RETURN_ROUTE_KEY,
+} from '../../../src/utils/sso';
 
 const originalLocation = window.location;
 
@@ -62,6 +66,84 @@ describe('redirectToOIDC', () => {
     redirectToOIDC();
     expect(loc.href).not.toContain('ticket=');
     expect(sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY)).toBeNull();
+  });
+
+  it('stashes the current hash route for return-after-login when not already at root', () => {
+    const loc = stubLocation('app.candy.cx');
+    loc.hash = '#/live/demo';
+    redirectToOIDC();
+    expect(sessionStorage.getItem(RETURN_ROUTE_KEY)).toBe('/live/demo');
+  });
+
+  it('does not stash a route when already at the root hash', () => {
+    const loc = stubLocation('app.candy.cx');
+    loc.hash = '#/';
+    redirectToOIDC();
+    expect(sessionStorage.getItem(RETURN_ROUTE_KEY)).toBeNull();
+  });
+});
+
+describe('setSsoIntent / takeSsoIntent', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('round-trips the app URL via takeSsoIntent, one-shot (second read is null)', () => {
+    setSsoIntent('https://app.finixy.ai');
+    expect(takeSsoIntent()).toBe('https://app.finixy.ai');
+    expect(takeSsoIntent()).toBeNull();
+  });
+
+  it('returns null when nothing was stashed', () => {
+    expect(takeSsoIntent()).toBeNull();
+  });
+
+  it('returns null and discards a malformed stashed value', () => {
+    localStorage.setItem(SSO_INTENT_KEY, 'not json');
+    expect(takeSsoIntent()).toBeNull();
+    expect(localStorage.getItem(SSO_INTENT_KEY)).toBeNull();
+  });
+
+  it('returns null for a stashed value missing appUrl/ts', () => {
+    localStorage.setItem(SSO_INTENT_KEY, JSON.stringify({ appUrl: 123, ts: 'x' }));
+    expect(takeSsoIntent()).toBeNull();
+  });
+
+  it('returns null once the intent is older than 10 minutes', () => {
+    const now = Date.now();
+    const spy = vi.spyOn(Date, 'now');
+    spy.mockReturnValueOnce(now).mockReturnValueOnce(now + 10 * 60 * 1000 + 1);
+    setSsoIntent('https://app.finixy.ai');
+    expect(takeSsoIntent()).toBeNull();
+  });
+});
+
+describe('takeReturnRoute', () => {
+  beforeEach(() => sessionStorage.clear());
+
+  it('returns null when nothing was stashed', () => {
+    expect(takeReturnRoute()).toBeNull();
+  });
+
+  it('returns a stashed real app route, one-shot', () => {
+    sessionStorage.setItem(RETURN_ROUTE_KEY, '/healthcare');
+    expect(takeReturnRoute()).toBe('/healthcare');
+    expect(sessionStorage.getItem(RETURN_ROUTE_KEY)).toBeNull();
+  });
+
+  it('rejects a route that does not start with "/"', () => {
+    sessionStorage.setItem(RETURN_ROUTE_KEY, 'healthcare');
+    expect(takeReturnRoute()).toBeNull();
+  });
+
+  it('rejects the bare root route "/"', () => {
+    sessionStorage.setItem(RETURN_ROUTE_KEY, '/');
+    expect(takeReturnRoute()).toBeNull();
+  });
+
+  it('rejects /sso and /auth screens', () => {
+    sessionStorage.setItem(RETURN_ROUTE_KEY, '/sso/callback');
+    expect(takeReturnRoute()).toBeNull();
+    sessionStorage.setItem(RETURN_ROUTE_KEY, '/auth');
+    expect(takeReturnRoute()).toBeNull();
   });
 });
 
