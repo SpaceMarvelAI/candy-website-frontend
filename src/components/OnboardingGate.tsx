@@ -76,7 +76,7 @@ export default function OnboardingGate({ canInvite = true }: { canInvite?: boole
   const muted = isDark ? '#a1a1aa' : '#71717a';
 
   return (
-    <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9998 }}>
+    <div data-tour="finish-setup" style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9998 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12, padding: '10px 8px 10px 16px',
         borderRadius: 999, border: `1px solid ${line}`, background: bg,

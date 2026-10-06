@@ -4,7 +4,7 @@ import posthog from 'posthog-js';
 import { ssoCallback } from '../../api/auth';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
-import { decodeWorkspaceIdFromToken } from '../../utils/jwt';
+import { decodeWorkspaceIdFromToken, decodeWorkspaceNameFromToken } from '../../utils/jwt';
 
 type Status = 'loading' | 'error';
 
@@ -60,7 +60,8 @@ export default function SSOCallbackPage() {
         // in candyToken's JWT claims (never on the `user` API response), same decode
         // WorkspaceSwitcher.tsx already uses to show the active workspace.
         const workspaceId = decodeWorkspaceIdFromToken(candyToken);
-        if (workspaceId) posthog.group('workspace', workspaceId);
+        const workspaceName = decodeWorkspaceNameFromToken(candyToken);
+        if (workspaceId) posthog.group('workspace', workspaceId, workspaceName ? { name: workspaceName } : undefined);
 
         // If the user was trying to reach Metaspace/Finixy before being sent
         // to login, generate an SSO token for that app and redirect there.
