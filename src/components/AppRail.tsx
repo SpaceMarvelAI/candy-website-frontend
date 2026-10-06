@@ -14,6 +14,7 @@ import { redirectWithSso, setSsoIntent } from '../utils/sso';
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
 const ProfileModal = lazy(() => import('./ProfileModal'));
 const OnboardingModal = lazy(() => import('./OnboardingModal'));
+const ProductTour = lazy(() => import('./ProductTour'));
 
 // Shared shell dimensions — Topbar, Sidebar and flows/index.tsx lay out against these.
 export const HEADER_H = 57; // 14 + 28 + 14 padding/row, plus the 1px bottom border
@@ -28,7 +29,7 @@ const SHOW_ONBOARDING_ITEM = typeof window !== 'undefined' &&
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
   anchorRect, onClose, onSignOut, signingOut, navigate, addToast,
-  theme, setTheme, onReportIssue, onProfile, onOnboarding,
+  theme, setTheme, onReportIssue, onProfile, onOnboarding, onProductTour,
 }: {
   anchorRect: DOMRect;
   onClose: () => void; onSignOut: () => void; signingOut: boolean;
@@ -37,6 +38,7 @@ function ProfileMenu({
   onReportIssue: () => void;
   onProfile: () => void;
   onOnboarding: () => void;
+  onProductTour: () => void;
 }) {
   const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
   const [subMenuY, setSubMenuY] = useState(0);
@@ -197,6 +199,7 @@ function ProfileMenu({
           {menuItem('Privacy policy',     () => window.open('https://spacemarvel.com/privacy', '_blank'))}
           {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
           {SHOW_ONBOARDING_ITEM && menuItem('Onboarding', () => { onOnboarding(); onClose(); })}
+          {menuItem('Product Tour', () => { onProductTour(); onClose(); }, { icon: 'globe' })}
         </div>
       )}
     </>,
@@ -277,6 +280,7 @@ export default function AppRail() {
   const [reportIssuesOpen, setReportIssuesOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [productTourOpen, setProductTourOpen] = useState(false);
   // Overrides AppContext's cached name/avatar right after a save in ProfileModal, so the
   // rail reflects the edit immediately instead of waiting for the next login.
   const [profileOverride, setProfileOverride] = useState<{ name: string | null; avatarUrl: string | null } | null>(null);
@@ -326,13 +330,14 @@ export default function AppRail() {
   const userAvatarUrl = profileOverride ? profileOverride.avatarUrl : (user?.avatar_url || null);
   const initials      = userName.slice(0, 1).toUpperCase();
 
-  const railBtn = (key: string, label: string, glyph: React.ReactNode, onClick: (e: React.MouseEvent<HTMLButtonElement>) => void, opts: { current?: boolean; expanded?: boolean } = {}) => (
+  const railBtn = (key: string, label: string, glyph: React.ReactNode, onClick: (e: React.MouseEvent<HTMLButtonElement>) => void, opts: { current?: boolean; expanded?: boolean; tourId?: string } = {}) => (
     <button
       key={key}
       onClick={onClick}
       className="shell-rail-btn"
       aria-current={opts.current ? 'page' : undefined}
       aria-expanded={opts.expanded}
+      data-tour={opts.tourId}
       style={{
         width: 56, padding: '6px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
         border: 'none', borderRadius: 10, cursor: 'pointer',
@@ -365,16 +370,18 @@ export default function AppRail() {
           background: 'var(--shell-bg)', borderRadius: 4, zIndex: 51,
         }}
       >
-        {PRODUCTS.map(p => railBtn(
-          p.id, p.label,
-          p.img
-            ? <img src={p.img} alt="" style={{ width: 24, height: 24, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)' }} />
-            : <Icon name={p.icon!} size={22} style={{ color: 'var(--shell-text-2)' }} />,
-          () => { void openProduct(p); },
-          { current: p.current },
-        ))}
+        <div data-tour="rail" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          {PRODUCTS.map(p => railBtn(
+            p.id, p.label,
+            p.img
+              ? <img src={p.img} alt="" style={{ width: 24, height: 24, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)' }} />
+              : <Icon name={p.icon!} size={22} style={{ color: 'var(--shell-text-2)' }} />,
+            () => { void openProduct(p); },
+            { current: p.current },
+          ))}
+        </div>
         {railBtn('more', 'More', <Icon name="apps" size={20} style={{ color: 'var(--shell-text-2)' }} />,
-          e => setMoreAnchor(e.currentTarget.getBoundingClientRect()), { expanded: !!moreAnchor })}
+          e => setMoreAnchor(e.currentTarget.getBoundingClientRect()), { expanded: !!moreAnchor, tourId: 'rail-more' })}
 
         <button
           ref={profileRef}
@@ -422,12 +429,19 @@ export default function AppRail() {
           onReportIssue={() => setReportIssuesOpen(true)}
           onProfile={() => setProfileEditOpen(true)}
           onOnboarding={() => setOnboardingOpen(true)}
+          onProductTour={() => setProductTourOpen(true)}
         />
       )}
 
       {onboardingOpen && (
         <Suspense fallback={null}>
           <OnboardingModal preview onClose={() => setOnboardingOpen(false)} />
+        </Suspense>
+      )}
+
+      {productTourOpen && (
+        <Suspense fallback={null}>
+          <ProductTour onClose={() => setProductTourOpen(false)} />
         </Suspense>
       )}
 

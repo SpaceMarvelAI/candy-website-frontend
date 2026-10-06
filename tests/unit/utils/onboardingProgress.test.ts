@@ -63,4 +63,20 @@ describe('visibleProgress', () => {
     expect(visibleProgress({ ...four, steps: [] as never, steps_total: 3 }))
       .toEqual({ done: 0, total: 3 });
   });
+
+  it('defaults to 0 when the step list AND steps_total are both missing (defensive, malformed server response)', () => {
+    expect(visibleProgress({ steps: undefined, steps_total: undefined } as unknown as Input))
+      .toEqual({ done: 0, total: 0 });
+  });
+
+  it('never reports a negative total even if the server sends one', () => {
+    expect(visibleProgress({ steps: [] as never, steps_total: -5 } as unknown as Input))
+      .toEqual({ done: 0, total: 0 });
+  });
+
+  it('treats missing selections/skipped_steps as none done (defensive, malformed server response)', () => {
+    expect(visibleProgress({
+      steps: ['choose', 'number', 'invite'], selections: undefined, skipped_steps: undefined, steps_total: 3,
+    } as unknown as Input)).toEqual({ done: 0, total: 3 });
+  });
 });
