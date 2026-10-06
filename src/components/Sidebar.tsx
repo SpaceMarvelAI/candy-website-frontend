@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useTourActive } from '../hooks/useTourActive';
 import Icon from '../assets/icons';
 import { HEADER_H, RAIL_W, SHELL_GAP } from './AppRail';
 
@@ -28,6 +29,14 @@ const NAV_SECTIONS = [
   },
 ];
 
+/** data-tour anchors for ProductTour.tsx — keyed by nav item id. */
+const TOUR_ID: Record<string, string> = {
+  healthcare: 'nav-healthcare',
+  voice:      'nav-live',
+  analytics:  'nav-analytics',
+  flows:      'nav-flows',
+};
+
 const PATH_TO_NAV: [string, string][] = [
   ['/healthcare', 'healthcare'],
   ['/dashboard',  'healthcare'],
@@ -49,6 +58,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const [expanded, setExpanded] = useState(true);
   const [useCaseOpen, setUseCaseOpen] = useState(true);
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
+  const tourActive = useTourActive();
   const [headerHovered, setHeaderHovered] = useState(false);
 
   const activeId = PATH_TO_NAV.find(([prefix]) =>
@@ -72,7 +82,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     }
   }
 
-  const panelExpanded = isMobileOrTablet ? true : expanded;
+  const panelExpanded = isMobileOrTablet ? true : (expanded || tourActive);
   const panelWidth    = isMobileOrTablet ? MOBILE_W : (panelExpanded ? EXPANDED_W : COLLAPSED_W);
 
   const panelTransform = isMobileOrTablet
@@ -236,6 +246,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                                   key={sub.id}
                                   onClick={() => handleNav(sub)}
                                   className="shell-row"
+                                  data-tour={TOUR_ID[sub.id]}
                                   aria-current={subActive ? 'page' : undefined}
                                   style={{
                                     display: 'flex', alignItems: 'center', gap: 8, width: '100%',
@@ -270,6 +281,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                       onClick={() => handleNav(item)}
                       className={`shell-row${!panelExpanded ? ' tooltip-wrap' : ''}`}
                       data-tip={!panelExpanded ? item.label : undefined}
+                      data-tour={TOUR_ID[item.id]}
                       aria-current={isActive ? 'page' : undefined}
                       style={{
                         ...styles.navBtn,

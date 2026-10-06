@@ -11,6 +11,7 @@ import { logger } from '../utils/logger';
 import { errorMessage } from '../utils/apiError';
 import { PENDING_PROMPT_TICKET_KEY, takeSsoIntent, redirectWithSso, takeReturnRoute } from '../utils/sso';
 import { claimPromptTicket, type ClaimedPrompt } from '../api/prompts';
+import { decodeWorkspaceIdFromToken } from '../utils/jwt';
 
 // Bidirectional mapping between legacy view names and URL paths.
 // All existing showView('dashboard') calls keep working unchanged.
@@ -301,6 +302,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setUser(u);
         posthog.identify(u.user_id, { email: u.email, name: u.full_name });
         if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
+        // company = ClientCompany (a sub-tenant), workspace = SubscriptionWorkspace (the real
+        // billing entity) — same split as every backend this session. The workspace id lives
+        // only in the JWT's claims (never on the `user` API response) — exchange() above
+        // already stored the current token via setToken()/ssoCallback, so getToken() here
+        // reads the just-validated one, same decode WorkspaceSwitcher.tsx already uses.
+        const workspaceId = decodeWorkspaceIdFromToken(getToken());
+        if (workspaceId) posthog.group('workspace', workspaceId);
 
         // Back from the login the rail sent them to (Home/Finixy clicked with no valid dashboard
         // token): carry on to that app instead of stopping in Candy. The #/sso/callback page that
