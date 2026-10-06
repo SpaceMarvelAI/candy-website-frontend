@@ -2,7 +2,7 @@
 /**
  * scripts/check-audit.mjs
  *
- * npm audit gate with one scoped, documented exception.
+ * npm audit gate with scoped, documented exceptions (see ACCEPTED_ADVISORIES).
  *
  * GHSA-qwww-vcr4-c8h2 (react-router CSRF bypass in RSC Mode / Framework Mode
  * server actions) is accepted as non-applicable: this app uses HashRouter
@@ -25,6 +25,19 @@ import { spawnSync } from 'node:child_process';
 
 const ACCEPTED_ADVISORIES = new Set([
   'https://github.com/advisories/GHSA-qwww-vcr4-c8h2',
+  // 2026-10-06: two DOMPurify lows — no fixed release exists (npm reports fix:
+  // None). This app never imports DOMPurify directly (only transitively via
+  // posthog-js's product-tours bundles); both CVEs require explicit IN_PLACE
+  // opt-in plus attacker-influenced hooks, which nothing here configures.
+  // Severity low; accepted until an upstream patch lands.
+  'https://github.com/advisories/GHSA-p98j-92pf-mc4p',
+  'https://github.com/advisories/GHSA-6688-9rhm-gjv2',
+  // 2026-10-06: source-map-js high (event-loop DoS via crafted source-map
+  // offsets) — no fixed release exists (fix: None). Dev/build-time only
+  // (@vitest/coverage-v8, jsdom, vite/postcss chain): never ships to browsers
+  // and only ever processes this repo's own build output, never untrusted
+  // input. Accepted until upstream ships a patch.
+  'https://github.com/advisories/GHSA-68fv-2mgg-jv7q',
 ]);
 
 const levelArg = process.argv.find((a) => a.startsWith('--audit-level='));
