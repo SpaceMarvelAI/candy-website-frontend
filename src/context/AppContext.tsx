@@ -193,6 +193,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('candy:auth-expired', onAuthExpired);
   }, []);
 
+  // Real bug fixed 2026-10-07 (same root cause as ChatPlatform-frontend-new's
+  // SSOAuthContext commit ebfd4df): `initialUser` above is seeded straight from
+  // sessionStorage on every mount, but posthog.identify()/group() only ever ran
+  // from the SSO-exchange effect further down — which only fires on a fresh
+  // login, never on a plain reload of an already-signed-in tab. Since most real
+  // sessions are reloads of an existing session, not fresh logins, this meant
+  // most real events carried no PostHog identity/group at all. Re-establish it
+  // here too, once, for whatever user was already in sessionStorage at mount.
+  useEffect(() => {
+    if (!initialUser) return;
+    posthog.identify(initialUser.user_id, { email: initialUser.email, name: initialUser.full_name });
+    if (initialUser.company_id) {
+      posthog.group('company', initialUser.company_id, { name: initialUser.company_name });
+    }
+    const workspaceId = decodeWorkspaceIdFromToken(getToken());
+    const workspaceName = decodeWorkspaceNameFromToken(getToken());
+    if (workspaceId) posthog.group('workspace', workspaceId, workspaceName ? { name: workspaceName } : undefined);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Intercept ?sso_token= / ?access_token= on ANY page (SpaceMarvel may redirect to /dashboard).
   // CONFIRMED (via live console trace) to be the ONLY code path that actually runs the OIDC
   // login exchange on a real page load — the backend redirects to a plain path
