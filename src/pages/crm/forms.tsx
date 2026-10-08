@@ -5,7 +5,7 @@
  */
 import React, { useId } from 'react';
 import type { CrmErrorInfo } from '../../utils/crmErrors';
-import { buttonStyle, selectStyle } from './ui';
+import { Select, buttonStyle, selectStyle } from './ui';
 
 const PHI_INPUT = 'ph-mask ph-no-capture';
 const controlStyle: React.CSSProperties = { ...selectStyle, width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 13.5 };
@@ -58,9 +58,7 @@ export function SelectField<T extends string>({ label, value, onChange, options,
   const id = useId();
   return (
     <FormField label={label} id={id}>
-      <select id={id} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value as T)} style={controlStyle}>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
+      <Select ariaLabel={label} value={value} disabled={disabled} onChange={onChange} options={options} style={{ width: '100%' }} />
     </FormField>
   );
 }

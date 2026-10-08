@@ -11,6 +11,7 @@ import { SkeletonTable } from '../../components/Skeleton';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { CrmErrorInfo } from '../../utils/crmErrors';
 import { CRM_MAX_OFFSET, nextOffset, prevOffset } from '../../api/crm';
+import Icon from '../../assets/icons';
 
 export const PHI_CLASS = 'ph-mask ph-no-capture';
 
@@ -67,6 +68,88 @@ export const selectStyle: React.CSSProperties = {
   padding: '8px 10px', background: 'var(--surface)', border: '1px solid var(--border)',
   borderRadius: 'var(--radius)', color: 'var(--text-1)', fontSize: 13,
 };
+
+/**
+ * Themed dropdown — a native <select>'s open popup can't be restyled cross-browser (it renders
+ * with OS chrome, not CSS), so this is a button + absolute-positioned listbox instead, following
+ * the same visual pattern as CompanySwitcher.tsx (the one other custom dropdown in the app).
+ */
+export function Select<T extends string>({ value, onChange, options, ariaLabel, disabled, style }: {
+  value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; ariaLabel: string;
+  disabled?: boolean; style?: React.CSSProperties;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  const current = options.find((o) => o.value === value);
+
+  return (
+    <div ref={rootRef} style={{ position: 'relative', ...style }}>
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          ...selectStyle,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          width: '100%', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1,
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current?.label ?? ''}</span>
+        <Icon name="chevronDown" size={12} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          aria-label={ariaLabel}
+          style={{
+            position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: '100%', width: 'max-content',
+            maxWidth: 320, maxHeight: 280, overflowY: 'auto', background: 'var(--bg-0)',
+            border: '1px solid var(--border-strong)', borderRadius: 10,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)', padding: 6, zIndex: 50,
+          }}
+        >
+          {options.map((o) => {
+            const isActive = o.value === value;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                role="option"
+                aria-selected={isActive}
+                onClick={() => { onChange(o.value); setOpen(false); }}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                  width: '100%', padding: '8px 10px', borderRadius: 8, border: 'none',
+                  background: isActive ? 'var(--tint-2)' : 'transparent', color: 'var(--text-1)',
+                  fontSize: 13, textAlign: 'left', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--tint-1)'; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <span>{o.label}</span>
+                {isActive && <Icon name="check" size={13} style={{ color: 'var(--blue)', flexShrink: 0 }} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function RefreshButton({ onClick }: { onClick: () => void }) {
   return <button type="button" onClick={onClick} style={buttonStyle}>Refresh</button>;

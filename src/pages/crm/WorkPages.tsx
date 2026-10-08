@@ -14,7 +14,7 @@ import {
 } from '../../api/crm';
 import {
   Badge, Card, CrmPage, EmptyState, ErrorState, FieldList, PageHeader, Pagination, Phi, RefreshButton,
-  RowLink, TableCard, TableSkeleton, Td, Th, fmtDateTime, label, selectStyle, type Tone,
+  RowLink, Select, TableCard, TableSkeleton, Td, Th, fmtDateTime, label, type Tone,
 } from './ui';
 import { useCrmQuery } from './useCrmQuery';
 import { useApp } from '../../context/AppContext';
@@ -71,14 +71,16 @@ export function CasesPage() {
       )}
       <PatientFilterNote patientId={patientId} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-        <select aria-label="Case status" value={status} onChange={(e) => { setStatus(e.target.value as CaseStatus | ''); setOffset(0); }} style={selectStyle}>
-          <option value="">All statuses</option>
-          {(['open', 'in_progress', 'resolved', 'closed'] as CaseStatus[]).map((s) => <option key={s} value={s}>{label(s)}</option>)}
-        </select>
-        <select aria-label="Case priority" value={priority} onChange={(e) => { setPriority(e.target.value as Priority | ''); setOffset(0); }} style={selectStyle}>
-          <option value="">All priorities</option>
-          {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
+        <Select
+          ariaLabel="Case status" value={status} style={{ minWidth: 150 }}
+          onChange={(v) => { setStatus(v); setOffset(0); }}
+          options={[{ value: '', label: 'All statuses' }, ...(['open', 'in_progress', 'resolved', 'closed'] as CaseStatus[]).map((s) => ({ value: s, label: label(s) }))]}
+        />
+        <Select
+          ariaLabel="Case priority" value={priority} style={{ minWidth: 150 }}
+          onChange={(v) => { setPriority(v); setOffset(0); }}
+          options={[{ value: '', label: 'All priorities' }, ...PRIORITIES.map((p) => ({ value: p, label: p }))]}
+        />
       </div>
       {q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : (
         <>
@@ -205,14 +207,16 @@ export function TasksPage() {
       )}
       <PatientFilterNote patientId={patientId} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-        <select aria-label="Task status" value={status} onChange={(e) => { setStatus(e.target.value as TaskStatus | ''); setOffset(0); }} style={selectStyle}>
-          <option value="">All statuses</option>
-          {(['open', 'in_progress', 'done', 'cancelled', 'expired'] as TaskStatus[]).map((s) => <option key={s} value={s}>{label(s)}</option>)}
-        </select>
-        <select aria-label="Task priority" value={priority} onChange={(e) => { setPriority(e.target.value as Priority | ''); setOffset(0); }} style={selectStyle}>
-          <option value="">All priorities</option>
-          {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
+        <Select
+          ariaLabel="Task status" value={status} style={{ minWidth: 150 }}
+          onChange={(v) => { setStatus(v); setOffset(0); }}
+          options={[{ value: '', label: 'All statuses' }, ...(['open', 'in_progress', 'done', 'cancelled', 'expired'] as TaskStatus[]).map((s) => ({ value: s, label: label(s) }))]}
+        />
+        <Select
+          ariaLabel="Task priority" value={priority} style={{ minWidth: 150 }}
+          onChange={(v) => { setPriority(v); setOffset(0); }}
+          options={[{ value: '', label: 'All priorities' }, ...PRIORITIES.map((p) => ({ value: p, label: p }))]}
+        />
       </div>
       {q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : (
         <>

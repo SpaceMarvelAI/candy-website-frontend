@@ -11,7 +11,7 @@ import {
 } from '../../api/crm';
 import {
   Badge, Card, CrmPage, EmptyState, ErrorState, FieldList, PageHeader, Pagination, Phi, RefreshButton,
-  RowLink, TableCard, TableSkeleton, Td, Th, fmtDateTime, label, selectStyle, type Tone,
+  RowLink, Select, TableCard, TableSkeleton, Td, Th, fmtDateTime, label, type Tone,
 } from './ui';
 import { useCrmQuery } from './useCrmQuery';
 
@@ -50,10 +50,11 @@ export function AppointmentsPage() {
         </p>
       )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-        <select aria-label="Appointment status" value={status} onChange={(e) => { setStatus(e.target.value as AppointmentStatus | ''); setOffset(0); }} style={selectStyle}>
-          <option value="">All statuses</option>
-          {APPT_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
-        </select>
+        <Select
+          ariaLabel="Appointment status" value={status} style={{ minWidth: 150 }}
+          onChange={(v) => { setStatus(v); setOffset(0); }}
+          options={[{ value: '', label: 'All statuses' }, ...APPT_STATUSES.map((s) => ({ value: s, label: label(s) }))]}
+        />
       </div>
       {q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : (
         <>
@@ -132,9 +133,11 @@ export function ProvidersPage() {
       <PageHeader eyebrow="CRM · Providers" title="Providers" subtitle="Clinicians and services patients can be booked with."
         crumbs={[{ label: 'CRM', to: '/crm' }, { label: 'Providers' }]} actions={<RefreshButton onClick={q.reload} />} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-        <select aria-label="Provider availability" value={active} onChange={(e) => { setActive(e.target.value as '' | 'true' | 'false'); setOffset(0); }} style={selectStyle}>
-          <option value="">All providers</option><option value="true">Active</option><option value="false">Inactive</option>
-        </select>
+        <Select
+          ariaLabel="Provider availability" value={active} style={{ minWidth: 150 }}
+          onChange={(v) => { setActive(v); setOffset(0); }}
+          options={[{ value: '', label: 'All providers' }, { value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' }]}
+        />
       </div>
       {q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : (
         <>

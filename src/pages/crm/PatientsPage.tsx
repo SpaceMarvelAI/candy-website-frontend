@@ -5,7 +5,7 @@ import {
 } from '../../api/crm';
 import {
   Badge, CrmPage, EmptyState, ErrorState, PageHeader, Pagination, Phi, RefreshButton, RowLink,
-  TableCard, TableSkeleton, Td, Th, buttonStyle, fmtDateTime, label, selectStyle, type Tone,
+  Select, TableCard, TableSkeleton, Td, Th, buttonStyle, fmtDateTime, label, selectStyle, type Tone,
 } from './ui';
 import { useCrmQuery } from './useCrmQuery';
 
@@ -86,9 +86,7 @@ export default function PatientsPage() {
       />
 
       <form onSubmit={submitSearch} role="search" aria-label="Search patients" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <select aria-label="Search by" value={mode} onChange={(e) => setMode(e.target.value as SearchMode)} style={selectStyle}>
-          {SEARCH_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-        </select>
+        <Select ariaLabel="Search by" value={mode} onChange={setMode} options={SEARCH_MODES} style={{ minWidth: 160 }} />
         <input
           aria-label="Search value" value={draft} onChange={(e) => setDraft(e.target.value)}
           autoComplete="off" spellCheck={false}
@@ -101,12 +99,16 @@ export default function PatientsPage() {
 
       {!active && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-          <select aria-label="Lifecycle stage" value={stage} onChange={(e) => { setStage(e.target.value as LifecycleStage | ''); setOffset(0); }} style={selectStyle}>
-            <option value="">All stages</option><option value="enquiry">Enquiry</option><option value="patient">Patient</option>
-          </select>
-          <select aria-label="Status" value={status} onChange={(e) => { setStatus(e.target.value as PatientStatus | ''); setOffset(0); }} style={selectStyle}>
-            <option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="merged">Merged</option>
-          </select>
+          <Select
+            ariaLabel="Lifecycle stage" value={stage} style={{ minWidth: 160 }}
+            onChange={(v) => { setStage(v); setOffset(0); }}
+            options={[{ value: '', label: 'All stages' }, { value: 'enquiry', label: 'Enquiry' }, { value: 'patient', label: 'Patient' }]}
+          />
+          <Select
+            ariaLabel="Status" value={status} style={{ minWidth: 160 }}
+            onChange={(v) => { setStatus(v); setOffset(0); }}
+            options={[{ value: '', label: 'All statuses' }, { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'merged', label: 'Merged' }]}
+          />
         </div>
       )}
 
