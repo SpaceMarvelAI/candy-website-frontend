@@ -1,0 +1,20 @@
+# Code ownership for sensitive paths.
+# Uses individual emails (no GitHub org/Team required — works on any plan,
+# free or paid, as long as each address matches a verified GitHub account
+# email). TODO(owner): pick which of these people actually owns each path —
+# right now every known contributor is listed on every sensitive path.
+# Enforcing this via "Require review from Code Owners" in branch protection
+# is optional and may be limited on some GitHub plans for private repos —
+# the file itself (used for visibility/review routing) works regardless.
+
+# Auth / identity
+src/api/auth.ts                 jishmitha@spacemarvel.ai manjit.naskar@spacemarvel.ai raju.kumar@spacemarvel.ai
+src/contexts/                   jishmitha@spacemarvel.ai manjit.naskar@spacemarvel.ai raju.kumar@spacemarvel.ai
+
+# Secrets / env / CI
+.env*                           jishmitha@spacemarvel.ai manjit.naskar@spacemarvel.ai raju.kumar@spacemarvel.ai
+buildspec.yml                   jishmitha@spacemarvel.ai manjit.naskar@spacemarvel.ai raju.kumar@spacemarvel.ai
+.github/                        jishmitha@spacemarvel.ai manjit.naskar@spacemarvel.ai raju.kumar@spacemarvel.ai
+
+# Direct-credential / cloud access code
+src/api/reportIssues.ts         jishmitha@spacemarvel.ai manjit.naskar@spacemarvel.ai raju.kumar@spacemarvel.ai

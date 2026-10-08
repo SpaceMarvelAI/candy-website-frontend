@@ -9,6 +9,7 @@ import './styles/globals.css'
 import { GlobalErrorBoundary } from './components/ErrorBoundary'
 import { logger } from './utils/logger'
 import { installDevAuth } from './utils/devAuth'
+import { scrubAnalyticsEvent } from './utils/analyticsScrub'
 import { purgeLegacyAuthStorage } from './api/client'
 
 // The session is sessionStorage-scoped (see client.ts). Drop any auth left in
@@ -71,7 +72,8 @@ if (posthogKey) {
       if (typeof cr.properties?.$referrer === 'string') {
         cr.properties.$referrer = stripSensitiveParams(cr.properties.$referrer);
       }
-      return cr;
+      // CRM record ids in route/query URLs (#/crm/patients/<uuid>, ?patient_id=<uuid>) never leave the browser.
+      return scrubAnalyticsEvent(cr);
     },
   });
   // Tags every event from this app with which SpaceMarvel product it came

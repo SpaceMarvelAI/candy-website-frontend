@@ -8,6 +8,7 @@ import type { AddToast } from '../hooks/useToast';
 import Icon from '../assets/icons';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
 import { getProfile } from '../api/profile';
+import { listMyWorkspaces } from '../api/workspaces';
 import { redirectWithSso, setSsoIntent } from '../utils/sso';
 
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
@@ -30,6 +31,7 @@ const SHOW_ONBOARDING_ITEM = typeof window !== 'undefined' &&
 function ProfileMenu({
   anchorRect, onClose, onSignOut, signingOut, navigate, addToast,
   theme, setTheme, onReportIssue, onProfile, onOnboarding, onProductTour,
+  userName, userEmail, userAvatarUrl, initials, avatarLoadFailed,
 }: {
   anchorRect: DOMRect;
   onClose: () => void; onSignOut: () => void; signingOut: boolean;
@@ -39,9 +41,21 @@ function ProfileMenu({
   onProfile: () => void;
   onOnboarding: () => void;
   onProductTour: () => void;
+  userName: string; userEmail: string; userAvatarUrl: string | null; initials: string; avatarLoadFailed: boolean;
 }) {
-  const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
-  const [subMenuY, setSubMenuY] = useState(0);
+  const [subMenu, setSubMenu] = useState<null | 'workspace' | 'appearance' | 'help'>(null);
+  // Whether to show the "Workspace" row at all — mirrors WorkspaceSwitcher's own "don't show a
+  // list of one" rule, checked independently here so the row can be shown/hidden before the
+  // flyout (which is what actually mounts WorkspaceSwitcher) is ever opened.
+  const [hasWorkspaceChoice, setHasWorkspaceChoice] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listMyWorkspaces()
+      .then((ws) => { if (!cancelled) setHasWorkspaceChoice(ws.length >= 2); })
+      .catch(() => { /* leave the row hidden */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const menuWidth   = 220;
   const flyoutWidth = 190;
@@ -49,61 +63,66 @@ function ProfileMenu({
   const bottom = window.innerHeight - anchorRect.bottom;
   const flyoutLeft = left + menuWidth + 4;
 
-  function toggleSub(name: 'appearance' | 'help', e: React.MouseEvent) {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setSubMenuY(rect.top);
+  // Only the Workspace flyout needs this — Appearance/Help stay bottom-anchored to the main
+  // menu (flyoutStyle, below) regardless of where their row sits.
+  const [workspaceRowTop, setWorkspaceRowTop] = useState(0);
+
+  function toggleSub(name: 'workspace' | 'appearance' | 'help') {
     setSubMenu(s => s === name ? null : name);
   }
 
-  const subBtn = (label: string, icon: string, name: 'appearance' | 'help') => (
+  const subBtn = (label: string, icon: string, name: 'workspace' | 'appearance' | 'help') => (
     <button
-      onClick={e => toggleSub(name, e)}
+      onClick={(e) => {
+        if (name === 'workspace') setWorkspaceRowTop(e.currentTarget.getBoundingClientRect().top);
+        toggleSub(name);
+      }}
       className="shell-menu-item"
       style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-        padding: '8px 12px',
+        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 12px',
         background: subMenu === name ? 'var(--shell-menu-hover)' : undefined,
         border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-        fontSize: 13, fontWeight: 500, transition: 'background 0.12s',
+        fontSize: 13.5, fontWeight: 500, transition: 'background 0.12s',
       }}
     >
-      <Icon name={icon} size={14} />
+      <Icon name={icon} size={15} />
       <span style={{ flex: 1 }}>{label}</span>
-      <span style={{ fontSize: 10, opacity: 0.4 }}>›</span>
+      <span style={{ fontSize: 11, opacity: 0.4 }}>›</span>
     </button>
   );
 
   const menuItem = (
     label: string,
     onClick: () => void,
-    opts: { icon?: string; danger?: boolean; active?: boolean } = {}
+    opts: { icon?: string; iconColor?: string; danger?: boolean; active?: boolean } = {}
   ) => (
     <button
       onClick={onClick}
       className="shell-menu-item"
       aria-checked={opts.active ? true : undefined}
       style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-        padding: '8px 12px',
+        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 12px',
         border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-        fontSize: 13, fontWeight: 500,
+        fontSize: 13.5, fontWeight: 500,
         color: opts.danger ? '#f87171' : undefined,
         transition: 'background 0.12s',
       }}
     >
-      {opts.icon && <Icon name={opts.icon} size={14} />}
+      {opts.icon && <Icon name={opts.icon} size={15} style={opts.iconColor ? { color: opts.iconColor } : undefined} />}
       <span style={{ flex: 1 }}>{label}</span>
       {opts.active && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />}
     </button>
   );
 
-  // Clamp so the flyout never bleeds below the viewport (5 items ≈ 200px + padding)
-  const safeFlyoutTop = Math.min(subMenuY, window.innerHeight - 212 - 12);
-
+  // Bottom-anchored at the SAME coordinate as the main menu (not the clicked row's top) so
+  // both panels' bottom edges always line up, regardless of which item was clicked. Used by
+  // Appearance/Help only.
   const flyoutStyle: React.CSSProperties = {
     position: 'fixed',
     left: flyoutLeft,
-    top: safeFlyoutTop,
+    bottom,
     width: flyoutWidth,
     background: 'var(--shell-menu-bg)',
     border: '1px solid var(--shell-menu-border)',
@@ -112,6 +131,22 @@ function ProfileMenu({
     boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
     zIndex: 201,
     animation: 'menuFadeIn 0.12s ease',
+  };
+
+  // Top-anchored at the Workspace row's own position, so this one pops out level with the row
+  // that opened it instead of sharing the Appearance/Help flyouts' bottom-anchored placement.
+  const workspaceFlyoutStyle: React.CSSProperties = {
+    ...flyoutStyle,
+    bottom: undefined,
+    top: workspaceRowTop,
+    maxHeight: 300,
+    overflowY: 'auto',
+    // Wide enough that a real workspace name isn't forced to ellipsize the way it would at
+    // the Appearance/Help flyouts' fixed 190px — grows to fit, capped so a pathologically
+    // long name still can't blow out past the viewport.
+    width: 'max-content',
+    minWidth: flyoutWidth,
+    maxWidth: 320,
   };
 
   return createPortal(
@@ -136,30 +171,36 @@ function ProfileMenu({
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         zIndex: 200, animation: 'menuFadeUp 0.15s ease',
       }}>
-        {/* Subscription workspaces, at the very top — the slot Claude uses, and what
-            HANDOFF_TO_TEAMS.md specifies. Renders nothing when the user has only one, so a
-            single-workspace account sees this menu exactly as before. */}
-        <WorkspaceSwitcher />
+        {/* Header: avatar + "Hello {name}" + email */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px 12px' }}>
+          {userAvatarUrl && !avatarLoadFailed ? (
+            <img src={userAvatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+          ) : (
+            <div style={{
+              width: 40, height: 40, borderRadius: '50%', background: 'var(--shell-avatar)',
+              display: 'grid', placeItems: 'center', fontSize: 15, fontWeight: 700, color: '#fff', flexShrink: 0,
+            }}>
+              {initials}
+            </div>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--shell-text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Hello {userName}
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--shell-text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {userEmail}
+            </div>
+          </div>
+        </div>
 
-        {/* Upgrade plan */}
-        <button
-          onClick={() => { addToast('Upgrade plan — coming soon', 'info'); onClose(); }}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-            padding: '8px 12px', background: 'rgba(139,92,246,0.08)',
-            border: '1px solid rgba(139,92,246,0.2)', borderRadius: 8,
-            cursor: 'pointer', fontSize: 13, fontWeight: 600,
-            color: 'var(--purple-hi)', marginBottom: 4, transition: 'background 0.12s',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.15)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.08)'; }}
-        >
-          <Icon name="zap" size={14} />
-          <span style={{ flex: 1 }}>Upgrade plan</span>
-        </button>
+        <div style={{ borderTop: '1px solid var(--shell-menu-border)', margin: '0 0 4px' }} />
 
-        <div style={{ borderTop: '1px solid var(--shell-menu-border)', margin: '4px 0' }} />
+        {/* Subscription workspaces — the slot Claude uses, and what HANDOFF_TO_TEAMS.md
+            specifies. Hidden entirely for a single-workspace account (hasWorkspaceChoice),
+            same rule WorkspaceSwitcher used to enforce on its own when it rendered inline. */}
+        {hasWorkspaceChoice && subBtn('Workspace', 'team', 'workspace')}
 
+        {menuItem('Upgrade plan', () => { addToast('Upgrade plan — coming soon', 'info'); onClose(); }, { icon: 'crown', iconColor: '#f59e0b' })}
         {menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
         {menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
         {subBtn('Appearance', 'sun',  'appearance')}
@@ -177,6 +218,13 @@ function ProfileMenu({
           { icon: 'logout', danger: true },
         )}
       </div>
+
+      {/* ── Workspace flyout ── */}
+      {subMenu === 'workspace' && (
+        <div style={workspaceFlyoutStyle}>
+          <WorkspaceSwitcher />
+        </div>
+      )}
 
       {/* ── Appearance flyout ── */}
       {subMenu === 'appearance' && (
@@ -430,6 +478,11 @@ export default function AppRail() {
           onProfile={() => setProfileEditOpen(true)}
           onOnboarding={() => setOnboardingOpen(true)}
           onProductTour={() => setProductTourOpen(true)}
+          userName={userName}
+          userEmail={userEmail}
+          userAvatarUrl={userAvatarUrl}
+          initials={initials}
+          avatarLoadFailed={avatarLoadFailed}
         />
       )}
 

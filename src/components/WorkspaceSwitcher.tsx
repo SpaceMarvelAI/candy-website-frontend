@@ -90,43 +90,54 @@ export default function WorkspaceSwitcher({
     }
   }
 
+  const renderRow = (ws: MyWorkspace) => {
+    const isActive = ws.org_id === active;
+    const isTeam = ws.workspace_type === 'business';
+    return (
+      <button
+        key={ws.org_id}
+        onClick={() => void pick(ws)}
+        disabled={!!busy}
+        aria-current={isActive ? 'true' : undefined}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+          padding: '8px 12px', background: 'transparent', border: 'none',
+          borderRadius: 8, cursor: busy ? 'default' : 'pointer',
+          fontSize: 13, color: 'var(--text)', textAlign: 'left',
+        }}
+        onMouseEnter={(e) => { if (!busy) (e.currentTarget as HTMLElement).style.background = 'var(--surface-hover, rgba(255,255,255,0.05))'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+      >
+        <Icon name={isTeam ? 'team' : 'user'} size={14} />
+        <span style={{
+          flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          fontWeight: isActive ? 700 : 400,
+        }}>
+          {ws.org_name}
+        </span>
+        {busy === ws.org_id && <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>…</span>}
+      </button>
+    );
+  };
+
+  const sectionLabel = (text: string) => (
+    <div style={{ padding: '8px 12px 4px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text-dim)' }}>
+      {text}
+    </div>
+  );
+
+  // Grouped under "Team" / "Personal" headers instead of a per-row plan badge, and the
+  // active workspace is shown by bolding its name rather than a checkmark.
+  const teamItems     = items.filter((ws) => ws.workspace_type === 'business');
+  const personalItems = items.filter((ws) => ws.workspace_type !== 'business');
+
   return (
-    <div style={{ paddingBottom: 4, marginBottom: 4, borderBottom: '1px solid var(--border)' }}>
-      {items.map((ws) => {
-        const isActive = ws.org_id === active;
-        const isTeam = ws.workspace_type === 'business';
-        return (
-          <button
-            key={ws.org_id}
-            onClick={() => void pick(ws)}
-            disabled={!!busy}
-            aria-current={isActive ? 'true' : undefined}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-              padding: '8px 12px', background: 'transparent', border: 'none',
-              borderRadius: 8, cursor: busy ? 'default' : 'pointer',
-              fontSize: 13, color: 'var(--text)', textAlign: 'left',
-            }}
-            onMouseEnter={(e) => { if (!busy) (e.currentTarget as HTMLElement).style.background = 'var(--surface-hover, rgba(255,255,255,0.05))'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-          >
-            <Icon name={isTeam ? 'team' : 'user'} size={14} />
-            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {ws.org_name}
-            </span>
-            {/* Plan badge, like Claude's "Team" / "Free" */}
-            <span style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'capitalize' }}>
-              {isTeam ? 'Team' : ws.plan === 'free' ? 'Free' : ws.plan}
-            </span>
-            {busy === ws.org_id
-              ? <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>…</span>
-              : isActive ? <Icon name="check" size={13} /> : <span style={{ width: 13 }} />}
-          </button>
-        );
-      })}
+    <>
+      {teamItems.length > 0 && (<>{sectionLabel('Team')}{teamItems.map(renderRow)}</>)}
+      {personalItems.length > 0 && (<>{sectionLabel('Personal')}{personalItems.map(renderRow)}</>)}
       {error && (
         <div style={{ padding: '6px 12px', fontSize: 11, color: 'var(--danger, #f87171)' }}>{error}</div>
       )}
-    </div>
+    </>
   );
 }

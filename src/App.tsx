@@ -34,6 +34,19 @@ const FlowsPage      = lazy(() => import('./pages/flows'));
 const ChatbotsPage   = lazy(() => import('./pages/chatbots'));
 const HealthcareDomainPage = lazy(() => import('./pages/healthcare-domain'));
 
+// CRM (patients, cases, tasks, appointments, providers)
+const CrmHomePage           = lazy(() => import('./pages/crm'));
+const CrmPatientsPage       = lazy(() => import('./pages/crm/PatientsPage'));
+const CrmPatientDetailPage  = lazy(() => import('./pages/crm/PatientDetailPage'));
+const CrmCasesPage          = lazy(() => import('./pages/crm/WorkPages').then((m) => ({ default: m.CasesPage })));
+const CrmCaseDetailPage     = lazy(() => import('./pages/crm/WorkPages').then((m) => ({ default: m.CaseDetailPage })));
+const CrmTasksPage          = lazy(() => import('./pages/crm/WorkPages').then((m) => ({ default: m.TasksPage })));
+const CrmTaskDetailPage     = lazy(() => import('./pages/crm/WorkPages').then((m) => ({ default: m.TaskDetailPage })));
+const CrmAppointmentsPage   = lazy(() => import('./pages/crm/SchedulingPages').then((m) => ({ default: m.AppointmentsPage })));
+const CrmAppointmentDetailPage = lazy(() => import('./pages/crm/SchedulingPages').then((m) => ({ default: m.AppointmentDetailPage })));
+const CrmProvidersPage      = lazy(() => import('./pages/crm/SchedulingPages').then((m) => ({ default: m.ProvidersPage })));
+const CrmProviderDetailPage = lazy(() => import('./pages/crm/SchedulingPages').then((m) => ({ default: m.ProviderDetailPage })));
+
 // Chatbot workspaces
 const ChatbotCS      = lazy(() => import('./pages/chatbot-cs'));
 const ChatbotTech    = lazy(() => import('./pages/chatbot-tech'));
@@ -253,6 +266,19 @@ export default function App() {
 
           {/* Healthcare domain — the primary landing (15 use cases) */}
           <Route path="/healthcare"     element={<AppRoute skeleton={<DashboardSkeleton />}><HealthcareDomainPage /></AppRoute>} />
+
+          {/* CRM — patient IDs in routes; phone/email never appear in a URL */}
+          <Route path="/crm"                    element={<AppRoute><CrmHomePage /></AppRoute>} />
+          <Route path="/crm/patients"           element={<AppRoute><CrmPatientsPage /></AppRoute>} />
+          <Route path="/crm/patients/:id"       element={<AppRoute><CrmPatientDetailPage /></AppRoute>} />
+          <Route path="/crm/cases"              element={<AppRoute><CrmCasesPage /></AppRoute>} />
+          <Route path="/crm/cases/:id"          element={<AppRoute><CrmCaseDetailPage /></AppRoute>} />
+          <Route path="/crm/tasks"              element={<AppRoute><CrmTasksPage /></AppRoute>} />
+          <Route path="/crm/tasks/:id"          element={<AppRoute><CrmTaskDetailPage /></AppRoute>} />
+          <Route path="/crm/appointments"       element={<AppRoute><CrmAppointmentsPage /></AppRoute>} />
+          <Route path="/crm/appointments/:id"   element={<AppRoute><CrmAppointmentDetailPage /></AppRoute>} />
+          <Route path="/crm/providers"          element={<AppRoute><CrmProvidersPage /></AppRoute>} />
+          <Route path="/crm/providers/:id"      element={<AppRoute><CrmProviderDetailPage /></AppRoute>} />
 
           {/* App views — rendered inside AppLayout (sidebar + topbar) */}
           {/* Legacy Voice-Bots dashboard now redirects into the healthcare domain */}
