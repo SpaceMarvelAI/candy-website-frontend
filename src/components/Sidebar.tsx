@@ -73,7 +73,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const location     = useLocation();
   const [expanded, setExpanded] = useState(true);
   // Open/closed state per expandable group (Use Case, CRM).
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ usecase: true, crm: true });
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ usecase: true, crm: false });
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
   const tourActive = useTourActive();
   const [headerHovered, setHeaderHovered] = useState(false);
