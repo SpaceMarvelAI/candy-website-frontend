@@ -5,6 +5,22 @@
     <link rel="icon" type="image/svg+xml" href="/Candy.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Candy</title>
+    <!--
+      Defense-in-depth CSP + Referrer-Policy, mirrored exactly from the live
+      CloudFront response-headers policy (664d73ce-680d-423c-aa96-52543b3e13bf,
+      see CLOUDFRONT_SECURITY_HEADERS.md) so this works even in environments
+      where that policy isn't attached yet (prod, as of this writing). Kept
+      identical to the CloudFront body on purpose: 'unsafe-inline' in
+      script-src is required by the theme-flash-guard script below, and the
+      S3/blob hosts in media-src/connect-src are required by TestPanel.tsx and
+      KnowledgeBase.tsx audio/attachment playback — see that file for why.
+      This meta tag CANNOT set X-Frame-Options, HSTS, nosniff or
+      Permissions-Policy (browsers only honor those as real HTTP headers) —
+      attaching the CloudFront policy to the prod distribution is still the
+      tracked fix for those (CLOUDFRONT_SECURITY_HEADERS.md action #1).
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://*.posthog.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; media-src 'self' blob: https://*.s3.amazonaws.com https://*.s3.ap-south-1.amazonaws.com; connect-src 'self' blob: https://staging-api.candy.cx https://api.candy.cx https://dev-api.candy.cx https://dashboard-api-staging.spacemarvel.ai https://dashboard-api.spacemarvel.ai https://meta-api-staging.spacemarvel.ai https://meta-api.spacemarvel.ai https://*.s3.amazonaws.com https://*.s3.ap-south-1.amazonaws.com https://*.posthog.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
