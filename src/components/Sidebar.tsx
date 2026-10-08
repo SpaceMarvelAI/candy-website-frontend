@@ -82,6 +82,13 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     location.pathname === prefix || location.pathname.startsWith(prefix + '/')
   )?.[1] ?? null;
 
+  // CRM defaults collapsed, but landing directly on a CRM route (not just clicking into one
+  // from an already-open sidebar) must still reveal the active item instead of hiding it inside
+  // a closed group. Doesn't fight a manual close afterward — only opens it, never re-closes it.
+  useEffect(() => {
+    if (activeId?.startsWith('crm')) setOpenGroups((g) => (g.crm ? g : { ...g, crm: true }));
+  }, [activeId]);
+
   useEffect(() => {
     document.body.style.overflow = (isMobileOrTablet && mobileOpen) ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };

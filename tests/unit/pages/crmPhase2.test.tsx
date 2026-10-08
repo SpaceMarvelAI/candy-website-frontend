@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../mocks/server';
 import { API_BASE } from '../../mocks/fixtures';
+import { getOptionValues, getValue, selectValue } from '../../mocks/dropdown';
 import PatientDetailPage from '../../../src/pages/crm/PatientDetailPage';
 import { NotesCard } from '../../../src/pages/crm/NotesCard';
 import { CaseDetailPage, CasesPage, TaskDetailPage, TasksPage } from '../../../src/pages/crm/WorkPages';
@@ -69,7 +70,7 @@ describe('Notes', () => {
     const text = await screen.findByText(SECRET_NOTE);
     expect(text.closest('.ph-mask')).not.toBeNull();
     expect(text.closest('.ph-no-capture')).not.toBeNull();
-    expect(screen.getAllByText('Staff', { selector: 'span' })).toHaveLength(2);   // note type + author
+    expect(screen.getAllByText('Staff', { selector: 'span' })).toHaveLength(3);   // Note type dropdown's current value + note type badge + author
   });
 
   it('shows an empty state', async () => {
@@ -93,7 +94,7 @@ describe('Notes', () => {
     renderNotes();
     await screen.findByText('No notes yet');
     await userEvent.type(screen.getByLabelText('New note'), '  Synthetic note text  ');
-    await userEvent.selectOptions(screen.getByLabelText('Note type'), 'follow_up');
+    await selectValue(screen.getByLabelText('Note type'), 'follow_up');
     await userEvent.click(screen.getByRole('button', { name: 'Add note' }));
     expect(await screen.findByText('Note added.')).toBeInTheDocument();
     expect(posts).toHaveLength(1);
@@ -220,11 +221,11 @@ describe('Case creation', () => {
     await screen.findByText('No cases found');
     await userEvent.click(screen.getByRole('button', { name: 'New case' }));
     await userEvent.type(screen.getByLabelText('Subject'), 'Refill');
-    await userEvent.selectOptions(screen.getByLabelText('Type'), 'medication_refill');
-    await userEvent.selectOptions(screen.getByLabelText('Priority'), 'P1');
+    await selectValue(screen.getByLabelText('Type'), 'medication_refill');
+    await selectValue(screen.getByLabelText('Priority'), 'P1');
     await userEvent.type(screen.getByLabelText('Category (optional)'), 'pharmacy');
     await userEvent.type(screen.getByLabelText('Description (optional)'), 'Synthetic description');
-    await userEvent.selectOptions(screen.getByLabelText('Assignee'), 'me');
+    await selectValue(screen.getByLabelText('Assignee'), 'me');
     await userEvent.click(screen.getByRole('button', { name: 'Create case' }));
     await waitFor(() => expect(body).toBeDefined());
     expect(body).toEqual({
@@ -331,8 +332,8 @@ describe('Case update', () => {
   it('PATCHes only the changed fields and confirms success', async () => {
     const patches = renderCase();
     await screen.findByRole('form', { name: 'Update case' });
-    await userEvent.selectOptions(screen.getByLabelText('Status'), 'resolved');
-    await userEvent.selectOptions(screen.getByLabelText('Priority'), 'P1');
+    await selectValue(screen.getByLabelText('Status'), 'resolved');
+    await selectValue(screen.getByLabelText('Priority'), 'P1');
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(await screen.findByText('Case updated.')).toBeInTheDocument();
     expect(patches).toEqual([{ status: 'resolved', priority: 'P1' }]);
@@ -340,18 +341,18 @@ describe('Case update', () => {
 
   it('offers only legal status moves (no jump to an illegal state, no unknown values)', async () => {
     renderCase(caseRow({ status: 'resolved' }));
-    const select = (await screen.findByLabelText('Status')) as HTMLSelectElement;
-    expect([...select.options].map((o) => o.value).sort()).toEqual(['closed', 'in_progress', 'open', 'resolved']);
+    const select = await screen.findByLabelText('Status');
+    expect((await getOptionValues(select)).sort()).toEqual(['closed', 'in_progress', 'open', 'resolved']);
   });
 
   it('assigns to me, then unassigns with an explicit null', async () => {
     const patches = renderCase();
     await screen.findByRole('form', { name: 'Update case' });
-    await userEvent.selectOptions(screen.getByLabelText('Assignee'), 'me');
+    await selectValue(screen.getByLabelText('Assignee'), 'me');
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await screen.findByText('Case updated.');
-    await waitFor(() => expect((screen.getByLabelText('Assignee') as HTMLSelectElement).value).toBe('keep'));
-    await userEvent.selectOptions(screen.getByLabelText('Assignee'), 'none');
+    await waitFor(() => expect(getValue(screen.getByLabelText('Assignee'))).toBe('keep'));
+    await selectValue(screen.getByLabelText('Assignee'), 'none');
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(patches).toHaveLength(2));
     expect(patches[0]).toEqual({ assigned_to_user_id: 'user-me-1' });
@@ -388,7 +389,7 @@ describe('Case update', () => {
   it('closing a case still confirms success even though the case becomes read-only', async () => {
     const patches = renderCase();
     await screen.findByRole('form', { name: 'Update case' });
-    await userEvent.selectOptions(screen.getByLabelText('Status'), 'closed');
+    await selectValue(screen.getByLabelText('Status'), 'closed');
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(await screen.findByText('Case updated.')).toBeInTheDocument();
     expect(await screen.findByText('A closed case cannot be changed.')).toBeInTheDocument();
@@ -410,7 +411,7 @@ describe('Case update', () => {
       );
       renderAt('/crm/cases/c1', '/crm/cases/:id', <CaseDetailPage />);
       await screen.findByRole('form', { name: 'Update case' });
-      await userEvent.selectOptions(screen.getByLabelText('Priority'), 'P4');
+      await selectValue(screen.getByLabelText('Priority'), 'P4');
       await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
       expect(await screen.findByText(new RegExp(title))).toBeInTheDocument();
       expect(document.body.textContent).not.toContain(SECRET_ERR);
@@ -442,11 +443,11 @@ describe('Task creation', () => {
     await screen.findByText('No tasks found');
     await userEvent.click(screen.getByRole('button', { name: 'New task' }));
     await userEvent.type(screen.getByLabelText('Title'), '  Call back  ');
-    await userEvent.selectOptions(screen.getByLabelText('Type'), 'callback');
-    await userEvent.selectOptions(screen.getByLabelText('Priority'), 'P2');
+    await selectValue(screen.getByLabelText('Type'), 'callback');
+    await selectValue(screen.getByLabelText('Priority'), 'P2');
     fireEvent.change(screen.getByLabelText('Due (optional)'), { target: { value: '2026-01-06T10:30' } });
     await userEvent.type(screen.getByLabelText('Details (optional)'), 'Synthetic details');
-    await userEvent.selectOptions(screen.getByLabelText('Assignee'), 'me');
+    await selectValue(screen.getByLabelText('Assignee'), 'me');
     await userEvent.click(screen.getByRole('button', { name: 'Create task' }));
     await waitFor(() => expect(body).toBeDefined());
     expect(body).toEqual({
@@ -544,7 +545,7 @@ describe('Task update', () => {
   it('completes a task with an outcome — only the changed fields are sent', async () => {
     const patches = renderTask();
     await screen.findByRole('form', { name: 'Update task' });
-    await userEvent.selectOptions(screen.getByLabelText('Status'), 'done');
+    await selectValue(screen.getByLabelText('Status'), 'done');
     await userEvent.type(screen.getByLabelText('Outcome'), 'Reached the patient');
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(await screen.findByText('Task updated.')).toBeInTheDocument();
@@ -553,8 +554,8 @@ describe('Task update', () => {
 
   it('never offers the system-only "expired" status, and offers only legal moves', async () => {
     renderTask();
-    const select = (await screen.findByLabelText('Status')) as HTMLSelectElement;
-    expect([...select.options].map((o) => o.value).sort()).toEqual(['cancelled', 'done', 'in_progress', 'open']);
+    const select = await screen.findByLabelText('Status');
+    expect((await getOptionValues(select)).sort()).toEqual(['cancelled', 'done', 'in_progress', 'open']);
   });
 
   it('sets, then clears the due date (explicit null)', async () => {
@@ -574,7 +575,7 @@ describe('Task update', () => {
   it('assigns to me', async () => {
     const patches = renderTask();
     await screen.findByRole('form', { name: 'Update task' });
-    await userEvent.selectOptions(screen.getByLabelText('Assignee'), 'me');
+    await selectValue(screen.getByLabelText('Assignee'), 'me');
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(patches).toHaveLength(1));
     expect(patches[0]).toEqual({ assigned_to_user_id: 'user-me-1' });
@@ -605,7 +606,7 @@ describe('Task update', () => {
       );
       renderAt('/crm/tasks/t1', '/crm/tasks/:id', <TaskDetailPage />);
       await screen.findByRole('form', { name: 'Update task' });
-      await userEvent.selectOptions(screen.getByLabelText('Priority'), 'P4');
+      await selectValue(screen.getByLabelText('Priority'), 'P4');
       await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
       expect(await screen.findByText(new RegExp(title))).toBeInTheDocument();
       expect(document.body.textContent).not.toContain(SECRET_ERR);

@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../mocks/server';
 import { API_BASE } from '../../mocks/fixtures';
+import { selectValue } from '../../mocks/dropdown';
 import Sidebar from '../../../src/components/Sidebar';
 import CrmHomePage from '../../../src/pages/crm';
 import PatientsPage from '../../../src/pages/crm/PatientsPage';
@@ -56,9 +57,10 @@ const get = (path: string, body: unknown, status = 200) =>
 describe('CRM navigation', () => {
   const sidebarAt = (path: string) => render(<MemoryRouter initialEntries={[path]}><Sidebar /><Where /></MemoryRouter>);
 
-  it('shows the CRM group with its sections', () => {
+  it('shows the CRM group with its sections', async () => {
     sidebarAt('/healthcare');
-    expect(screen.getByRole('button', { name: 'CRM' })).toBeInTheDocument();
+    // CRM defaults collapsed on a non-CRM route — open it the way a user would.
+    await userEvent.click(screen.getByRole('button', { name: 'CRM' }));
     for (const name of ['Overview', 'Patients', 'Cases', 'Tasks', 'Appointments', 'Providers']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
     }
@@ -160,7 +162,7 @@ describe('Patients list', () => {
     }));
     renderAt('/crm/patients', '/crm/patients', <PatientsPage />);
     await screen.findByText('No patients yet');
-    await userEvent.selectOptions(screen.getByLabelText('Search by'), 'phone');
+    await selectValue(screen.getByLabelText('Search by'), 'phone');
     await userEvent.type(screen.getByLabelText('Search value'), '+910000000001');
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
     await screen.findByText('Found Patient');

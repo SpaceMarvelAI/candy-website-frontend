@@ -99,6 +99,7 @@ export function Select<T extends string>({ value, onChange, options, ariaLabel, 
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
+        data-value={value}
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
         style={{
@@ -130,6 +131,7 @@ export function Select<T extends string>({ value, onChange, options, ariaLabel, 
                 type="button"
                 role="option"
                 aria-selected={isActive}
+                data-value={o.value}
                 onClick={() => { onChange(o.value); setOpen(false); }}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,

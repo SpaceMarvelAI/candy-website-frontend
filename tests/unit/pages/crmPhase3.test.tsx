@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../mocks/server';
 import { API_BASE } from '../../mocks/fixtures';
+import { getOptionValues, getValue, selectValue } from '../../mocks/dropdown';
 import PatientDetailPage from '../../../src/pages/crm/PatientDetailPage';
 import { ConsentCard, stateOf } from '../../../src/pages/crm/ConsentCard';
 import { PatientEditCard } from '../../../src/pages/crm/PatientEditCard';
@@ -194,8 +195,8 @@ describe('Consent — recording', () => {
     auth.role = role;
     setup();
     await fill();
-    await userEvent.selectOptions(screen.getByLabelText('Entry'), 'granted');
-    await userEvent.selectOptions(screen.getByLabelText('Channel'), 'phone');
+    await selectValue(screen.getByLabelText('Entry'), 'granted');
+    await selectValue(screen.getByLabelText('Channel'), 'phone');
     await userEvent.type(screen.getByLabelText('Language (optional)'), 'en-IN');
     fireEvent.change(screen.getByLabelText('Expires (optional)'), { target: { value: FUTURE } });
     await review();
@@ -218,7 +219,7 @@ describe('Consent — recording', () => {
   it('records a denial and a withdrawal as new entries', async () => {
     setup();
     await fill('recording');
-    await userEvent.selectOptions(screen.getByLabelText('Entry'), 'withdrawn');
+    await selectValue(screen.getByLabelText('Entry'), 'withdrawn');
     await review();
     await userEvent.click(await confirmBtn());
     await screen.findByText('Consent entry recorded.');
@@ -304,7 +305,7 @@ describe('Consent — recording', () => {
     await review();
     await userEvent.click(await confirmBtn());
     await screen.findByText('Something went wrong.');
-    await userEvent.selectOptions(screen.getByLabelText('Entry'), 'denied');
+    await selectValue(screen.getByLabelText('Entry'), 'denied');
     await review();
     await userEvent.click(await confirmBtn());
     await waitFor(() => expect(posts).toHaveLength(2));
@@ -375,8 +376,8 @@ describe('Patient editing', () => {
     expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Synthetic Patient');   // prefilled
     await userEvent.clear(screen.getByLabelText('Name'));
     await userEvent.type(screen.getByLabelText('Name'), '  Renamed Patient  ');
-    await userEvent.selectOptions(screen.getByLabelText('Lifecycle stage'), 'enquiry');
-    await userEvent.selectOptions(screen.getByLabelText('Status'), 'inactive');
+    await selectValue(screen.getByLabelText('Lifecycle stage'), 'enquiry');
+    await selectValue(screen.getByLabelText('Status'), 'inactive');
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(await screen.findByText('Patient updated.')).toBeInTheDocument();
     expect(patches).toEqual([{ full_name: 'Renamed Patient', lifecycle_stage: 'enquiry', status: 'inactive' }]);
@@ -389,21 +390,26 @@ describe('Patient editing', () => {
     const form = screen.getByRole('form', { name: 'Edit patient' });
     expect(within(form).getAllByRole('textbox')).toHaveLength(2);                                          // name + provider
     for (const label of [/phone/i, /email/i, /date of birth/i, /external/i, /^merged/i]) expect(within(form).queryByLabelText(label)).toBeNull();
-    const status = screen.getByLabelText('Status') as HTMLSelectElement;
-    expect([...status.options].map((o) => o.value)).toEqual(['active', 'inactive']);                      // "merged" cannot be set
+    const status = screen.getByLabelText('Status');
+    expect(await getOptionValues(status)).toEqual(['active', 'inactive']);                      // "merged" cannot be set
   });
 
   it('sets the preferred language from the public catalog, by id; clearing sends an explicit null', async () => {
     const { patches } = renderEdit(patient({ preferred_language_id: 1 }));
     await open();
-    const lang = (await screen.findByLabelText('Preferred language')) as HTMLSelectElement;
-    await waitFor(() => expect([...lang.options].map((o) => o.textContent)).toEqual(['Not set', 'English', 'Hindi']));
-    expect(lang.value).toBe('1');
-    await userEvent.selectOptions(lang, '2');
+    const lang = await screen.findByLabelText('Preferred language');
+    await userEvent.click(lang);
+    await waitFor(() => {
+      const labels = Array.from(document.querySelectorAll('[role="option"]')).map((o) => o.textContent ?? '');
+      expect(labels).toEqual(['Not set', 'English', 'Hindi']);
+    });
+    await userEvent.click(lang); // close again without selecting — just verifying the catalog loaded
+    expect(getValue(lang)).toBe('1');
+    await selectValue(lang, '2');
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await screen.findByText('Patient updated.');
     await open();
-    await userEvent.selectOptions(await screen.findByLabelText('Preferred language'), '');
+    await selectValue(await screen.findByLabelText('Preferred language'), '');
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(patches).toHaveLength(2));
     expect(patches[0]).toEqual({ preferred_language_id: 2 });

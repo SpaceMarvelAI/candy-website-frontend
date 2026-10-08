@@ -6,20 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Candy</title>
     <!--
-      Defense-in-depth CSP + Referrer-Policy, mirrored exactly from the live
-      CloudFront response-headers policy (664d73ce-680d-423c-aa96-52543b3e13bf,
-      see CLOUDFRONT_SECURITY_HEADERS.md) so this works even in environments
-      where that policy isn't attached yet (prod, as of this writing). Kept
-      identical to the CloudFront body on purpose: 'unsafe-inline' in
-      script-src is required by the theme-flash-guard script below, and the
+      Defense-in-depth CSP + Referrer-Policy, mirrored from the live CloudFront
+      response-headers policy (664d73ce-680d-423c-aa96-52543b3e13bf, see
+      CLOUDFRONT_SECURITY_HEADERS.md) so this works even in environments where
+      that policy isn't attached yet (prod, as of this writing). 'unsafe-inline'
+      in script-src is required by the theme-flash-guard script below, and the
       S3/blob hosts in media-src/connect-src are required by TestPanel.tsx and
       KnowledgeBase.tsx audio/attachment playback — see that file for why.
-      This meta tag CANNOT set X-Frame-Options, HSTS, nosniff or
-      Permissions-Policy (browsers only honor those as real HTTP headers) —
-      attaching the CloudFront policy to the prod distribution is still the
-      tracked fix for those (CLOUDFRONT_SECURITY_HEADERS.md action #1).
+      connect-src also allows http://localhost:* (NOT in the CloudFront body)
+      so local dev/test mock backends (e.g. tests/e2e/smoke.spec.ts's
+      TEST_API_BASE on :8002) aren't blocked — harmless for prod, since once
+      the real CloudFront header is attached there it applies ALONGSIDE this
+      meta tag (CSP policies from multiple sources are enforced together, not
+      replaced), and that header never allowlists localhost either.
+      frame-ancestors is deliberately NOT set here: browsers ignore that
+      directive entirely when delivered via <meta> (logs a console warning,
+      enforces nothing) — it only ever works as a real HTTP header, which is
+      exactly the still-tracked CloudFront attach action (action #1). Same
+      applies to X-Frame-Options, HSTS, nosniff and Permissions-Policy.
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://*.posthog.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; media-src 'self' blob: https://*.s3.amazonaws.com https://*.s3.ap-south-1.amazonaws.com; connect-src 'self' blob: https://staging-api.candy.cx https://api.candy.cx https://dev-api.candy.cx https://dashboard-api-staging.spacemarvel.ai https://dashboard-api.spacemarvel.ai https://meta-api-staging.spacemarvel.ai https://meta-api.spacemarvel.ai https://*.s3.amazonaws.com https://*.s3.ap-south-1.amazonaws.com https://*.posthog.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://*.posthog.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; media-src 'self' blob: https://*.s3.amazonaws.com https://*.s3.ap-south-1.amazonaws.com; connect-src 'self' blob: http://localhost:* https://staging-api.candy.cx https://api.candy.cx https://dev-api.candy.cx https://dashboard-api-staging.spacemarvel.ai https://dashboard-api.spacemarvel.ai https://meta-api-staging.spacemarvel.ai https://meta-api.spacemarvel.ai https://*.s3.amazonaws.com https://*.s3.ap-south-1.amazonaws.com https://*.posthog.com; base-uri 'none'; object-src 'none'" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
