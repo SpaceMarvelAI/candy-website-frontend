@@ -22,6 +22,15 @@ const NAV_SECTIONS = [
           { id: 'legal',            label: 'Legal',            path: null, soon: true },
           { id: 'customer-support', label: 'Customer Support', path: null, soon: true },
         ] },
+      { id: 'crm', label: 'CRM', icon: 'team', path: '/crm',
+        subItems: [
+          { id: 'crm',              label: 'Overview',     path: '/crm' },
+          { id: 'crm-patients',    label: 'Patients',     path: '/crm/patients' },
+          { id: 'crm-cases',        label: 'Cases',        path: '/crm/cases' },
+          { id: 'crm-tasks',        label: 'Tasks',        path: '/crm/tasks' },
+          { id: 'crm-appointments', label: 'Appointments', path: '/crm/appointments' },
+          { id: 'crm-providers',    label: 'Providers',    path: '/crm/providers' },
+        ] },
       { id: 'voice',      label: 'Live Calls', icon: 'livecall', path: '/live' },
       { id: 'analytics',  label: 'Analytics',  icon: 'chart',    path: '/analytics' },
       { id: 'flows',      label: 'Flows',      icon: 'flowsnav', path: '/flows' },
@@ -40,6 +49,13 @@ const TOUR_ID: Record<string, string> = {
 const PATH_TO_NAV: [string, string][] = [
   ['/healthcare', 'healthcare'],
   ['/dashboard',  'healthcare'],
+  // Specific CRM prefixes first: the first match wins. `/crm` itself is the group's overview.
+  ['/crm/patients',     'crm-patients'],
+  ['/crm/cases',        'crm-cases'],
+  ['/crm/tasks',        'crm-tasks'],
+  ['/crm/appointments', 'crm-appointments'],
+  ['/crm/providers',    'crm-providers'],
+  ['/crm',              'crm'],
   ['/live',       'voice'],
   ['/analytics',  'analytics'],
   ['/flows',      'flows'],
@@ -56,7 +72,8 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const navigate     = useNavigate();
   const location     = useLocation();
   const [expanded, setExpanded] = useState(true);
-  const [useCaseOpen, setUseCaseOpen] = useState(true);
+  // Open/closed state per expandable group (Use Case, CRM).
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ usecase: true, crm: true });
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
   const tourActive = useTourActive();
   const [headerHovered, setHeaderHovered] = useState(false);
@@ -204,11 +221,14 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
               <div style={{ padding: panelExpanded ? '0 8px' : '0 4px' }}>
                 {section.items.map((item: any) => {
                   if (item.subItems) {
-                    const groupActive = item.subItems.some((s: any) => s.id === activeId);
+                    const groupActive = item.id === activeId || item.subItems.some((s: any) => s.id === activeId);
+                    const groupOpen = openGroups[item.id] ?? true;
                     return (
                       <div key={item.id}>
                         <button
-                          onClick={() => panelExpanded ? setUseCaseOpen(o => !o) : handleNav(item.subItems[0])}
+                          onClick={() => panelExpanded
+                            ? setOpenGroups(g => ({ ...g, [item.id]: !(g[item.id] ?? true) }))
+                            : handleNav(item.path ? item : item.subItems[0])}
                           className={`shell-row${!panelExpanded ? ' tooltip-wrap' : ''}`}
                           data-tip={!panelExpanded ? item.label : undefined}
                           aria-current={groupActive ? 'page' : undefined}
@@ -231,13 +251,13 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                               <span style={{ flex: 1, whiteSpace: 'nowrap', textAlign: 'left' }}>{item.label}</span>
                               <Icon name="chevronDown" size={13} style={{
                                 opacity: 0.5, flexShrink: 0,
-                                transform: useCaseOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transform: groupOpen ? 'rotate(180deg)' : 'rotate(0deg)',
                                 transition: 'transform 0.2s ease',
                               }} />
                             </>
                           )}
                         </button>
-                        {panelExpanded && useCaseOpen && (
+                        {panelExpanded && groupOpen && (
                           <div style={{ marginBottom: 2 }}>
                             {item.subItems.map((sub: any) => {
                               const subActive = activeId === sub.id;
