@@ -123,6 +123,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signedIn = useCallback((u: AuthUser) => {
     logger.info('[AppContext] signedIn', { userId: u.user_id, email: u.email, role: u.role, company: u.company_name });
     setUser(u);
+    // Isolation audit Pass 6 finding: this function had ZERO PostHog calls, yet
+    // CompanySwitcher.tsx calls it directly after a company switch — relying only on the hard
+    // reload that follows to fix identity via the mount effect below. Between the switch and
+    // that reload, any event (and the reload's own analytics) still carried the PRE-switch
+    // company. Same resetGroups()-then-recompute shape as the mount effect / SSO exchange below.
+    posthog.identify(u.user_id, { email: u.email, name: u.full_name });
+    posthog.resetGroups();
+    if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
+    const workspaceId = decodeWorkspaceIdFromToken(getToken());
+    const workspaceName = decodeWorkspaceNameFromToken(getToken());
+    if (workspaceId) posthog.group('workspace', workspaceId, workspaceName ? { name: workspaceName } : undefined);
     // If there's a pending prompt ticket, don't navigate — let PromptTicketHandler handle it
     const pendingTicket = sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY);
     if (!pendingTicket) {
@@ -188,6 +199,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     function onAuthExpired() {
       logger.warn('[AppContext] candy:auth-expired event received — clearing user state');
       setUser(null);
+      // Isolation audit Pass 6 finding: this cleared app state but never told PostHog the
+      // session ended — a DIFFERENT human signing in afterward (shared device) would otherwise
+      // have their events/identify merged under whoever was last `identify()`'d here. Neither
+      // this handler's own mount-effect re-run (user is now null) nor the client.ts 401 path
+      // below ever called this before.
+      posthog.reset();
     }
     window.addEventListener('candy:auth-expired', onAuthExpired);
     return () => window.removeEventListener('candy:auth-expired', onAuthExpired);
