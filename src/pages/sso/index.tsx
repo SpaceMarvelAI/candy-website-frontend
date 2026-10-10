@@ -54,6 +54,12 @@ export default function SSOCallbackPage() {
         if (dashboardToken) localStorage.setItem('dashboard_token', dashboardToken);
 
         posthog.identify(user.user_id, { email: user.email, name: user.full_name });
+        // resetGroups() first (isolation audit critical #2) — the localStorage.clear() above
+        // wipes posthog-js's own persisted state, but not whatever it already holds in memory
+        // from this page's own load (groups survive a storage wipe; only the SDK's own API
+        // clears them). Without this, a previous user's company/workspace group on this
+        // browser could still be aliased into the new identify() above.
+        posthog.resetGroups();
         if (user.company_id) posthog.group('company', user.company_id, { name: user.company_name });
         // company = ClientCompany (a sub-tenant), workspace = SubscriptionWorkspace (the real
         // billing entity) — same split as every backend this session. The workspace id is only
