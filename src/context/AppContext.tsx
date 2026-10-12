@@ -204,6 +204,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!initialUser) return;
     posthog.identify(initialUser.user_id, { email: initialUser.email, name: initialUser.full_name });
+    // resetGroups() first (isolation audit critical #2) — posthog-js has no selective
+    // single-group unset (only this blanket clear), and this mount effect is also what
+    // WorkspaceSwitcher.tsx relies on after its hard reload (it has no posthog call of its
+    // own) — without this, a stale group from before the switch/reload could otherwise
+    // persist underneath whatever gets re-set below.
+    posthog.resetGroups();
     if (initialUser.company_id) {
       posthog.group('company', initialUser.company_id, { name: initialUser.company_name });
     }
@@ -321,6 +327,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         logger.info('[AppContext] SSO exchange succeeded', { userId: u.user_id, email: u.email });
         setUser(u);
         posthog.identify(u.user_id, { email: u.email, name: u.full_name });
+        // resetGroups() first (isolation audit critical #2) — a `preserve-on-fail, success
+        // without reset` identify here used to alias whichever user was previously signed in
+        // on this browser into the new one; posthog-js has no selective single-group unset,
+        // only this blanket clear.
+        posthog.resetGroups();
         if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
         // company = ClientCompany (a sub-tenant), workspace = SubscriptionWorkspace (the real
         // billing entity) — same split as every backend this session. The workspace id lives
