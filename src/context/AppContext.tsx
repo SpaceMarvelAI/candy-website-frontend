@@ -123,6 +123,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signedIn = useCallback((u: AuthUser) => {
     logger.info('[AppContext] signedIn', { userId: u.user_id, email: u.email, role: u.role, company: u.company_name });
     setUser(u);
+    // Isolation audit Pass 6 finding: this function had ZERO PostHog calls, yet
+    // CompanySwitcher.tsx calls it directly after a company switch — relying only on the hard
+    // reload that follows to fix identity via the mount effect below. Between the switch and
+    // that reload, any event (and the reload's own analytics) still carried the PRE-switch
+    // company. Same resetGroups()-then-recompute shape as the mount effect / SSO exchange below.
+    posthog.identify(u.user_id, { email: u.email, name: u.full_name });
+    posthog.resetGroups();
+    if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
+    const workspaceId = decodeWorkspaceIdFromToken(getToken());
+    const workspaceName = decodeWorkspaceNameFromToken(getToken());
+    if (workspaceId) posthog.group('workspace', workspaceId, workspaceName ? { name: workspaceName } : undefined);
     // If there's a pending prompt ticket, don't navigate — let PromptTicketHandler handle it
     const pendingTicket = sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY);
     if (!pendingTicket) {
@@ -188,6 +199,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     function onAuthExpired() {
       logger.warn('[AppContext] candy:auth-expired event received — clearing user state');
       setUser(null);
+      // Isolation audit Pass 6 finding: this cleared app state but never told PostHog the
+      // session ended — a DIFFERENT human signing in afterward (shared device) would otherwise
+      // have their events/identify merged under whoever was last `identify()`'d here. Neither
+      // this handler's own mount-effect re-run (user is now null) nor the client.ts 401 path
+      // below ever called this before.
+      posthog.reset();
     }
     window.addEventListener('candy:auth-expired', onAuthExpired);
     return () => window.removeEventListener('candy:auth-expired', onAuthExpired);
@@ -204,6 +221,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!initialUser) return;
     posthog.identify(initialUser.user_id, { email: initialUser.email, name: initialUser.full_name });
+    // resetGroups() first (isolation audit critical #2) — posthog-js has no selective
+    // single-group unset (only this blanket clear), and this mount effect is also what
+    // WorkspaceSwitcher.tsx relies on after its hard reload (it has no posthog call of its
+    // own) — without this, a stale group from before the switch/reload could otherwise
+    // persist underneath whatever gets re-set below.
+    posthog.resetGroups();
     if (initialUser.company_id) {
       posthog.group('company', initialUser.company_id, { name: initialUser.company_name });
     }
@@ -321,6 +344,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         logger.info('[AppContext] SSO exchange succeeded', { userId: u.user_id, email: u.email });
         setUser(u);
         posthog.identify(u.user_id, { email: u.email, name: u.full_name });
+        // resetGroups() first (isolation audit critical #2) — a `preserve-on-fail, success
+        // without reset` identify here used to alias whichever user was previously signed in
+        // on this browser into the new one; posthog-js has no selective single-group unset,
+        // only this blanket clear.
+        posthog.resetGroups();
         if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
         // company = ClientCompany (a sub-tenant), workspace = SubscriptionWorkspace (the real
         // billing entity) — same split as every backend this session. The workspace id lives
