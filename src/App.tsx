@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
+import { useFeatureFlagEnabled } from 'posthog-js/react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AmbientBg   from './components/AmbientBg';
 import ToastHost   from './components/Toast';
@@ -234,6 +235,7 @@ function AppRoute({
 
 export default function App() {
   const { claimedPrompt, setClaimedPrompt } = useApp();
+  const flagOnboarding = useFeatureFlagEnabled('onboarding');
   return (
     // Supplies useConfirm() to the destructive-delete call sites. Wraps the whole
     // tree so the dialog renders above every route and layout.
@@ -244,7 +246,7 @@ export default function App() {
           a single flag (`auto_open`) and two copies would both try to open. It renders null with
           no session and null once the flow is complete, so it costs nothing on a public page or a
           finished account. */}
-      <OnboardingGate />
+      {flagOnboarding !== false && <OnboardingGate />}
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* `#/` is a pure redirect — into the app if signed in, else to the IDP */}

@@ -2,20 +2,19 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import posthog from 'posthog-js';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useFeatureFlagEnabled } from 'posthog-js/react';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
 import type { AddToast } from '../hooks/useToast';
 import Icon from '../assets/icons';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
 import { getProfile } from '../api/profile';
-import { listMyWorkspaces } from '../api/workspaces';
 import { redirectWithSso, setSsoIntent } from '../utils/sso';
 
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
 const ProfileModal = lazy(() => import('./ProfileModal'));
 const OnboardingModal = lazy(() => import('./OnboardingModal'));
-const ProductTour = lazy(() => import('./ProductTour'));
 
 // Shared shell dimensions — Topbar, Sidebar and flows/index.tsx lay out against these.
 export const HEADER_H = 57; // 14 + 28 + 14 padding/row, plus the 1px bottom border
@@ -30,8 +29,7 @@ const SHOW_ONBOARDING_ITEM = typeof window !== 'undefined' &&
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
   anchorRect, onClose, onSignOut, signingOut, navigate, addToast,
-  theme, setTheme, onReportIssue, onProfile, onOnboarding, onProductTour,
-  userName, userEmail, userAvatarUrl, initials, avatarLoadFailed,
+  theme, setTheme, onReportIssue, onProfile, onOnboarding,
 }: {
   anchorRect: DOMRect;
   onClose: () => void; onSignOut: () => void; signingOut: boolean;
@@ -40,22 +38,14 @@ function ProfileMenu({
   onReportIssue: () => void;
   onProfile: () => void;
   onOnboarding: () => void;
-  onProductTour: () => void;
-  userName: string; userEmail: string; userAvatarUrl: string | null; initials: string; avatarLoadFailed: boolean;
 }) {
-  const [subMenu, setSubMenu] = useState<null | 'workspace' | 'appearance' | 'help'>(null);
-  // Whether to show the "Workspace" row at all — mirrors WorkspaceSwitcher's own "don't show a
-  // list of one" rule, checked independently here so the row can be shown/hidden before the
-  // flyout (which is what actually mounts WorkspaceSwitcher) is ever opened.
-  const [hasWorkspaceChoice, setHasWorkspaceChoice] = useState(false);
+  const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
+  const [subMenuY, setSubMenuY] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    listMyWorkspaces()
-      .then((ws) => { if (!cancelled) setHasWorkspaceChoice(ws.length >= 2); })
-      .catch(() => { /* leave the row hidden */ });
-    return () => { cancelled = true; };
-  }, []);
+  // Feature flags
+  const flagWorkspaceSwitching = useFeatureFlagEnabled('workspace_switching');
+  const flagProfileSettings    = useFeatureFlagEnabled('profile_settings');
+  const flagAppConnections     = useFeatureFlagEnabled('app_connections');
 
   const menuWidth   = 220;
   const flyoutWidth = 190;
@@ -63,66 +53,61 @@ function ProfileMenu({
   const bottom = window.innerHeight - anchorRect.bottom;
   const flyoutLeft = left + menuWidth + 4;
 
-  // Only the Workspace flyout needs this — Appearance/Help stay bottom-anchored to the main
-  // menu (flyoutStyle, below) regardless of where their row sits.
-  const [workspaceRowTop, setWorkspaceRowTop] = useState(0);
-
-  function toggleSub(name: 'workspace' | 'appearance' | 'help') {
+  function toggleSub(name: 'appearance' | 'help', e: React.MouseEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setSubMenuY(rect.top);
     setSubMenu(s => s === name ? null : name);
   }
 
-  const subBtn = (label: string, icon: string, name: 'workspace' | 'appearance' | 'help') => (
+  const subBtn = (label: string, icon: string, name: 'appearance' | 'help') => (
     <button
-      onClick={(e) => {
-        if (name === 'workspace') setWorkspaceRowTop(e.currentTarget.getBoundingClientRect().top);
-        toggleSub(name);
-      }}
+      onClick={e => toggleSub(name, e)}
       className="shell-menu-item"
       style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-        padding: '10px 12px',
+        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+        padding: '8px 12px',
         background: subMenu === name ? 'var(--shell-menu-hover)' : undefined,
         border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-        fontSize: 13.5, fontWeight: 500, transition: 'background 0.12s',
+        fontSize: 13, fontWeight: 500, transition: 'background 0.12s',
       }}
     >
-      <Icon name={icon} size={15} />
+      <Icon name={icon} size={14} />
       <span style={{ flex: 1 }}>{label}</span>
-      <span style={{ fontSize: 11, opacity: 0.4 }}>›</span>
+      <span style={{ fontSize: 10, opacity: 0.4 }}>›</span>
     </button>
   );
 
   const menuItem = (
     label: string,
     onClick: () => void,
-    opts: { icon?: string; iconColor?: string; danger?: boolean; active?: boolean } = {}
+    opts: { icon?: string; danger?: boolean; active?: boolean } = {}
   ) => (
     <button
       onClick={onClick}
       className="shell-menu-item"
       aria-checked={opts.active ? true : undefined}
       style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-        padding: '10px 12px',
+        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+        padding: '8px 12px',
         border: 'none', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-        fontSize: 13.5, fontWeight: 500,
+        fontSize: 13, fontWeight: 500,
         color: opts.danger ? '#f87171' : undefined,
         transition: 'background 0.12s',
       }}
     >
-      {opts.icon && <Icon name={opts.icon} size={15} style={opts.iconColor ? { color: opts.iconColor } : undefined} />}
+      {opts.icon && <Icon name={opts.icon} size={14} />}
       <span style={{ flex: 1 }}>{label}</span>
       {opts.active && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />}
     </button>
   );
 
-  // Bottom-anchored at the SAME coordinate as the main menu (not the clicked row's top) so
-  // both panels' bottom edges always line up, regardless of which item was clicked. Used by
-  // Appearance/Help only.
+  // Clamp so the flyout never bleeds below the viewport (5 items ≈ 200px + padding)
+  const safeFlyoutTop = Math.min(subMenuY, window.innerHeight - 212 - 12);
+
   const flyoutStyle: React.CSSProperties = {
     position: 'fixed',
     left: flyoutLeft,
-    bottom,
+    top: safeFlyoutTop,
     width: flyoutWidth,
     background: 'var(--shell-menu-bg)',
     border: '1px solid var(--shell-menu-border)',
@@ -131,22 +116,6 @@ function ProfileMenu({
     boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
     zIndex: 201,
     animation: 'menuFadeIn 0.12s ease',
-  };
-
-  // Top-anchored at the Workspace row's own position, so this one pops out level with the row
-  // that opened it instead of sharing the Appearance/Help flyouts' bottom-anchored placement.
-  const workspaceFlyoutStyle: React.CSSProperties = {
-    ...flyoutStyle,
-    bottom: undefined,
-    top: workspaceRowTop,
-    maxHeight: 300,
-    overflowY: 'auto',
-    // Wide enough that a real workspace name isn't forced to ellipsize the way it would at
-    // the Appearance/Help flyouts' fixed 190px — grows to fit, capped so a pathologically
-    // long name still can't blow out past the viewport.
-    width: 'max-content',
-    minWidth: flyoutWidth,
-    maxWidth: 320,
   };
 
   return createPortal(
@@ -171,38 +140,32 @@ function ProfileMenu({
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         zIndex: 200, animation: 'menuFadeUp 0.15s ease',
       }}>
-        {/* Header: avatar + "Hello {name}" + email */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px 12px' }}>
-          {userAvatarUrl && !avatarLoadFailed ? (
-            <img src={userAvatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-          ) : (
-            <div style={{
-              width: 40, height: 40, borderRadius: '50%', background: 'var(--shell-avatar)',
-              display: 'grid', placeItems: 'center', fontSize: 15, fontWeight: 700, color: '#fff', flexShrink: 0,
-            }}>
-              {initials}
-            </div>
-          )}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--shell-text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              Hello {userName}
-            </div>
-            <div style={{ fontSize: 12.5, color: 'var(--shell-text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {userEmail}
-            </div>
-          </div>
-        </div>
+        {/* Subscription workspaces, at the very top — the slot Claude uses, and what
+            HANDOFF_TO_TEAMS.md specifies. Renders nothing when the user has only one, so a
+            single-workspace account sees this menu exactly as before. */}
+        {flagWorkspaceSwitching !== false && <WorkspaceSwitcher />}
 
-        <div style={{ borderTop: '1px solid var(--shell-menu-border)', margin: '0 0 4px' }} />
+        {/* Upgrade plan */}
+        <button
+          onClick={() => { addToast('Upgrade plan — coming soon', 'info'); onClose(); }}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+            padding: '8px 12px', background: 'rgba(139,92,246,0.08)',
+            border: '1px solid rgba(139,92,246,0.2)', borderRadius: 8,
+            cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            color: 'var(--purple-hi)', marginBottom: 4, transition: 'background 0.12s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.15)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.08)'; }}
+        >
+          <Icon name="zap" size={14} />
+          <span style={{ flex: 1 }}>Upgrade plan</span>
+        </button>
 
-        {/* Subscription workspaces — the slot Claude uses, and what HANDOFF_TO_TEAMS.md
-            specifies. Hidden entirely for a single-workspace account (hasWorkspaceChoice),
-            same rule WorkspaceSwitcher used to enforce on its own when it rendered inline. */}
-        {hasWorkspaceChoice && subBtn('Workspace', 'team', 'workspace')}
+        <div style={{ borderTop: '1px solid var(--shell-menu-border)', margin: '4px 0' }} />
 
-        {menuItem('Upgrade plan', () => { addToast('Upgrade plan — coming soon', 'info'); onClose(); }, { icon: 'crown', iconColor: '#f59e0b' })}
-        {menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
-        {menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
+        {flagAppConnections !== false && menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
+        {flagProfileSettings !== false && menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
         {subBtn('Appearance', 'sun',  'appearance')}
         {menuItem('Settings',  () => { addToast('Settings — coming soon', 'info'); onClose(); }, { icon: 'settings' })}
         {subBtn('Help', 'help', 'help')}
@@ -218,13 +181,6 @@ function ProfileMenu({
           { icon: 'logout', danger: true },
         )}
       </div>
-
-      {/* ── Workspace flyout ── */}
-      {subMenu === 'workspace' && (
-        <div style={workspaceFlyoutStyle}>
-          <WorkspaceSwitcher />
-        </div>
-      )}
 
       {/* ── Appearance flyout ── */}
       {subMenu === 'appearance' && (
@@ -247,7 +203,6 @@ function ProfileMenu({
           {menuItem('Privacy policy',     () => window.open('https://spacemarvel.com/privacy', '_blank'))}
           {menuItem('Contact support',    () => addToast('Contact support — coming soon', 'info'))}
           {SHOW_ONBOARDING_ITEM && menuItem('Onboarding', () => { onOnboarding(); onClose(); })}
-          {menuItem('Product Tour', () => { onProductTour(); onClose(); }, { icon: 'globe' })}
         </div>
       )}
     </>,
@@ -266,6 +221,11 @@ function MoreMenu({ anchorRect, onClose, onPick }: {
   onClose: () => void;
   onPick: (item: { label: string; path: string | null }) => void;
 }) {
+  const flagAppConnections = useFeatureFlagEnabled('app_connections');
+  const visibleItems = MORE_ITEMS.filter(item =>
+    !(item.id === 'connectors' && flagAppConnections === false),
+  );
+
   return createPortal(
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 198 }} onClick={onClose} />
@@ -274,7 +234,7 @@ function MoreMenu({ anchorRect, onClose, onPick }: {
         background: 'var(--shell-menu-bg)', border: '1px solid var(--shell-menu-border)',
         borderRadius: 12, padding: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 200,
       }}>
-        {MORE_ITEMS.map(item => (
+        {visibleItems.map(item => (
           <button
             key={item.id}
             role="menuitem"
@@ -328,7 +288,6 @@ export default function AppRail() {
   const [reportIssuesOpen, setReportIssuesOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
-  const [productTourOpen, setProductTourOpen] = useState(false);
   // Overrides AppContext's cached name/avatar right after a save in ProfileModal, so the
   // rail reflects the edit immediately instead of waiting for the next login.
   const [profileOverride, setProfileOverride] = useState<{ name: string | null; avatarUrl: string | null } | null>(null);
@@ -378,14 +337,13 @@ export default function AppRail() {
   const userAvatarUrl = profileOverride ? profileOverride.avatarUrl : (user?.avatar_url || null);
   const initials      = userName.slice(0, 1).toUpperCase();
 
-  const railBtn = (key: string, label: string, glyph: React.ReactNode, onClick: (e: React.MouseEvent<HTMLButtonElement>) => void, opts: { current?: boolean; expanded?: boolean; tourId?: string } = {}) => (
+  const railBtn = (key: string, label: string, glyph: React.ReactNode, onClick: (e: React.MouseEvent<HTMLButtonElement>) => void, opts: { current?: boolean; expanded?: boolean } = {}) => (
     <button
       key={key}
       onClick={onClick}
       className="shell-rail-btn"
       aria-current={opts.current ? 'page' : undefined}
       aria-expanded={opts.expanded}
-      data-tour={opts.tourId}
       style={{
         width: 56, padding: '6px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
         border: 'none', borderRadius: 10, cursor: 'pointer',
@@ -418,18 +376,16 @@ export default function AppRail() {
           background: 'var(--shell-bg)', borderRadius: 4, zIndex: 51,
         }}
       >
-        <div data-tour="rail" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-          {PRODUCTS.map(p => railBtn(
-            p.id, p.label,
-            p.img
-              ? <img src={p.img} alt="" style={{ width: 24, height: 24, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)' }} />
-              : <Icon name={p.icon!} size={22} style={{ color: 'var(--shell-text-2)' }} />,
-            () => { void openProduct(p); },
-            { current: p.current },
-          ))}
-        </div>
+        {PRODUCTS.map(p => railBtn(
+          p.id, p.label,
+          p.img
+            ? <img src={p.img} alt="" style={{ width: 24, height: 24, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)' }} />
+            : <Icon name={p.icon!} size={22} style={{ color: 'var(--shell-text-2)' }} />,
+          () => { void openProduct(p); },
+          { current: p.current },
+        ))}
         {railBtn('more', 'More', <Icon name="apps" size={20} style={{ color: 'var(--shell-text-2)' }} />,
-          e => setMoreAnchor(e.currentTarget.getBoundingClientRect()), { expanded: !!moreAnchor, tourId: 'rail-more' })}
+          e => setMoreAnchor(e.currentTarget.getBoundingClientRect()), { expanded: !!moreAnchor })}
 
         <button
           ref={profileRef}
@@ -477,24 +433,12 @@ export default function AppRail() {
           onReportIssue={() => setReportIssuesOpen(true)}
           onProfile={() => setProfileEditOpen(true)}
           onOnboarding={() => setOnboardingOpen(true)}
-          onProductTour={() => setProductTourOpen(true)}
-          userName={userName}
-          userEmail={userEmail}
-          userAvatarUrl={userAvatarUrl}
-          initials={initials}
-          avatarLoadFailed={avatarLoadFailed}
         />
       )}
 
       {onboardingOpen && (
         <Suspense fallback={null}>
           <OnboardingModal preview onClose={() => setOnboardingOpen(false)} />
-        </Suspense>
-      )}
-
-      {productTourOpen && (
-        <Suspense fallback={null}>
-          <ProductTour onClose={() => setProductTourOpen(false)} />
         </Suspense>
       )}
 

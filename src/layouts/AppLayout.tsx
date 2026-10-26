@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useFeatureFlagEnabled } from 'posthog-js/react';
 import AppRail from '../components/AppRail';
 import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
@@ -13,6 +14,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const fullBleed = FULL_BLEED.some(p => pathname === p || pathname.startsWith(p + '/'));
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const flagVoiceSttTts = useFeatureFlagEnabled('voice_stt_tts');
 
   // Close mobile drawer whenever the route changes
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
@@ -46,7 +48,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           Alt+Space would open a second capture in the middle of a live test
           call. If voice is ever wanted on those pages it needs a shared mic
           arbiter, not a second recorder. */}
-      <VoiceIndicator />
+      {flagVoiceSttTts !== false && <VoiceIndicator />}
     </div>
   );
 }
