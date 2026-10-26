@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useFeatureFlagEnabled } from 'posthog-js/react';
 import { useApp } from '../context/AppContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import Icon from '../assets/icons';
@@ -50,6 +51,12 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const [useCaseOpen, setUseCaseOpen] = useState(true);
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
   const [headerHovered, setHeaderHovered] = useState(false);
+
+  // Feature flags — items show while loading (undefined) and when on (true); hidden only when off (false).
+  const flagHealthcareCrm        = useFeatureFlagEnabled('healthcare_crm');
+  const flagSessionHistory       = useFeatureFlagEnabled('session_history');
+  const flagAnalyticsDashboard   = useFeatureFlagEnabled('analytics_dashboard');
+  const flagFlowBuilderWorkflows = useFeatureFlagEnabled('flow_builder_workflows');
 
   const activeId = PATH_TO_NAV.find(([prefix]) =>
     location.pathname === prefix || location.pathname.startsWith(prefix + '/')
@@ -193,6 +200,12 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
               <div style={{ padding: panelExpanded ? '0 8px' : '0 4px' }}>
                 {section.items.map((item: any) => {
+                  // Feature-flag gates: hide each item only when its flag is explicitly false.
+                  if (item.id === 'usecase' && flagHealthcareCrm === false) return null;
+                  if (item.id === 'voice'    && flagSessionHistory === false) return null;
+                  if (item.id === 'analytics' && flagAnalyticsDashboard === false) return null;
+                  if (item.id === 'flows'    && flagFlowBuilderWorkflows === false) return null;
+
                   if (item.subItems) {
                     const groupActive = item.subItems.some((s: any) => s.id === activeId);
                     return (
