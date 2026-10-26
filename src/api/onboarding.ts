@@ -16,7 +16,7 @@
  */
 import { api } from './client';
 
-export type OnboardingStep = 'choose' | 'connectors' | 'number' | 'company' | 'invite';
+export type OnboardingStep = 'choose' | 'connectors' | 'number' | 'invite';
 
 export interface OnboardingState {
   current_step: OnboardingStep | null;
@@ -75,27 +75,4 @@ export async function dismissOnboarding(): Promise<OnboardingState> {
 export async function completeOnboarding(): Promise<OnboardingState> {
   const res = await api<Envelope>('/v1/onboarding', { method: 'POST', body: { action: 'complete' } });
   return res.data;
-}
-
-interface EnrichedOrgProfile {
-  id: string;
-  name: string;
-  industry?: string | null;
-  org_size?: string | null;
-  website?: string | null;
-  logo_url?: string | null;
-  enriched: Record<string, unknown>;
-}
-
-/** Enrich the current org with PDL industry/headcount. Best-effort — never rejects. */
-export async function enrichOrg(domain: string): Promise<EnrichedOrgProfile | null> {
-  try {
-    const res = await api<{ status: string; data: EnrichedOrgProfile }>('/v1/onboarding/enrich', {
-      method: 'POST',
-      body: { domain },
-    });
-    return res.data;
-  } catch {
-    return null;
-  }
 }
