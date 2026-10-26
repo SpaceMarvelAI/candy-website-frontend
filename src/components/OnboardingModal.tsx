@@ -26,6 +26,7 @@ import { visibleProgress } from '../utils/onboardingProgress';
 import {
   completeOnboarding,
   dismissOnboarding,
+  enrichOrg,
   getOnboarding,
   saveOnboardingStep,
   skipOnboardingStep,
@@ -45,12 +46,13 @@ const MANAGE_OPTIONS = [
 type ShownStep = Exclude<OnboardingStep, 'connectors'>;
 
 const STEP_COPY: Record<ShownStep, { title: string; sub: string }> = {
-  choose:     { title: 'What would you like to manage?', sub: "We'll take you exactly where you need to go." },
-  number:     { title: "What's your number?", sub: 'So your agents can reach you, and call on your behalf.' },
-  invite:     { title: 'Invite people to your workspace', sub: 'Great tools are more fun with witnesses.' },
+  choose:  { title: 'What would you like to manage?', sub: "We'll take you exactly where you need to go." },
+  number:  { title: "What's your number?", sub: 'So your agents can reach you, and call on your behalf.' },
+  company: { title: 'Tell us about your organisation', sub: "Enter your company domain and we'll find the logo automatically." },
+  invite:  { title: 'Invite people to your workspace', sub: 'Great tools are more fun with witnesses.' },
 };
 
-const ALL_STEPS: ShownStep[] = ['choose', 'number', 'invite'];
+const ALL_STEPS: ShownStep[] = ['choose', 'number', 'company', 'invite'];
 
 export default function OnboardingModal({
   onClose,
@@ -90,6 +92,8 @@ export default function OnboardingModal({
    */
   const [editedChosen, setEditedChosen] = useState<string[] | null>(null);
   const [editedPhone, setEditedPhone] = useState<string | null>(null);
+  const [editedDomain, setEditedDomain] = useState<string | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
   const [editedEmails, setEditedEmails] = useState<string | null>(null);
 
   const alive = useRef(true);
@@ -119,6 +123,7 @@ export default function OnboardingModal({
   const saved = (state?.selections ?? {}) as Record<string, unknown>;
   const chosen = editedChosen ?? (Array.isArray(saved.choose) ? (saved.choose as string[]) : []);
   const phone = editedPhone ?? (typeof saved.number === 'string' ? saved.number : '');
+  const domain = editedDomain ?? (typeof saved.company === 'string' ? saved.company : '');
   const emails = editedEmails ?? (Array.isArray(saved.invite) ? (saved.invite as string[]).join(', ') : '');
 
   function applyState(next: OnboardingState) {
@@ -131,6 +136,7 @@ export default function OnboardingModal({
   function valueFor(s: ShownStep): unknown {
     if (s === 'choose') return chosen.length ? chosen : undefined;
     if (s === 'number') return phone.trim() || undefined;
+    if (s === 'company') return domain.trim() || undefined;
     const list = parseEmails(emails);
     return list.length ? list : undefined;
   }
@@ -147,6 +153,10 @@ export default function OnboardingModal({
     setBusy(true);
     try {
       const value = valueFor(step);
+      // Fire org enrichment fire-and-forget when user submits the company step.
+      if (step === 'company' && typeof value === 'string' && value) {
+        enrichOrg(value).catch(() => {});
+      }
       // Blank means skip — see note 2 at the top.
       const next = value === undefined
         ? await skipOnboardingStep(step)
@@ -276,6 +286,45 @@ export default function OnboardingModal({
                         outline: 'none',
                       }}
                     />
+                  )}
+
+                  {step === 'company' && (
+                    <div>
+                      <input
+                        value={domain}
+                        onChange={(e) => { setEditedDomain(e.target.value); setLogoFailed(false); }}
+                        type="text"
+                        inputMode="url"
+                        autoComplete="organization"
+                        placeholder="acme.com"
+                        style={{
+                          width: '100%', maxWidth: 420, padding: '14px 20px', fontSize: 14,
+                          borderRadius: 999, border: `1px solid ${line}`, background: card, color: fg,
+                          outline: 'none', boxSizing: 'border-box',
+                        }}
+                      />
+                      {domain.trim().length >= 4 && domain.includes('.') && (
+                        <div style={{
+                          marginTop: 16, display: 'flex', alignItems: 'center', gap: 12,
+                          padding: '12px 16px', borderRadius: 16,
+                          border: `1px solid ${line}`, background: card,
+                          maxWidth: 420,
+                        }}>
+                          {!logoFailed ? (
+                            <img
+                              key={domain.trim()}
+                              src={`https://logo.clearbit.com/${domain.trim()}`}
+                              alt=""
+                              onError={() => setLogoFailed(true)}
+                              style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'contain', flexShrink: 0 }}
+                            />
+                          ) : (
+                            <Icon name="globe" size={20} style={{ color: muted, flexShrink: 0 }} />
+                          )}
+                          <span style={{ fontSize: 13, color: muted }}>{domain.trim()}</span>
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {step === 'invite' && (canInvite ? (
