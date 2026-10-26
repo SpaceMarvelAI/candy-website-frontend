@@ -14,6 +14,7 @@
 interface _WorkspaceClaims {
   subscription_workspace_id?: string; workspace_id?: string; org_id?: string;
   org_name?: string; workspace_name?: string;
+  workspace_type?: string;
 }
 
 function _decodeClaims(token: string | null | undefined): _WorkspaceClaims | null {
@@ -38,4 +39,13 @@ export function decodeWorkspaceIdFromToken(token: string | null | undefined): st
 export function decodeWorkspaceNameFromToken(token: string | null | undefined): string | null {
   const claims = _decodeClaims(token);
   return claims?.org_name || claims?.workspace_name || null;
+}
+
+/** 'personal' or 'business' — from workspace_type in the JWT claims.
+ *  Used to decide whether inviting teammates is allowed (personal workspaces return 403). */
+export function decodeWorkspaceTypeFromToken(token: string | null | undefined): 'personal' | 'business' | null {
+  const claims = _decodeClaims(token);
+  const t = claims?.workspace_type;
+  if (t === 'personal' || t === 'business') return t;
+  return null;
 }

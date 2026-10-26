@@ -11,6 +11,8 @@ import AppLayout   from './layouts/AppLayout';
 import { redirectToOIDC, PENDING_PROMPT_TICKET_KEY } from './utils/sso';
 import { consumeSignedOutFlag } from './api/auth';
 import { useApp } from './context/AppContext';
+import { decodeWorkspaceTypeFromToken } from './utils/jwt';
+import { getToken } from './api/client';
 import { RouteErrorBoundary } from './components/ErrorBoundary';
 import { logger } from './utils/logger';
 import {
@@ -246,7 +248,9 @@ export default function App() {
           a single flag (`auto_open`) and two copies would both try to open. It renders null with
           no session and null once the flow is complete, so it costs nothing on a public page or a
           finished account. */}
-      {flagOnboarding !== false && <OnboardingGate />}
+      {flagOnboarding !== false && (
+        <OnboardingGate canInvite={decodeWorkspaceTypeFromToken(getToken()) !== 'personal'} />
+      )}
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* `#/` is a pure redirect — into the app if signed in, else to the IDP */}
