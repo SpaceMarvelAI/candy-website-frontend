@@ -54,6 +54,7 @@ beforeEach(() => {
   vi.mocked(posthog.identify).mockClear();
   vi.mocked(posthog.group).mockClear();
   vi.mocked(posthog.resetGroups).mockClear();
+  vi.mocked(posthog.reset).mockClear();
   vi.mocked(loadStoredUser).mockReturnValue(null);
 });
 
@@ -81,7 +82,10 @@ describe('AppContext — mount rehydrate effect', () => {
 });
 
 describe('AppContext — signedIn()', () => {
-  it('does not itself call posthog (that is the mount effect/SSO exchange\'s job)', () => {
+  it('resets groups and re-identifies immediately (Pass 6 finding: CompanySwitcher calls this directly, with no reload in between)', async () => {
+    const { getToken } = await import('../../../src/api/client');
+    vi.mocked(getToken).mockReturnValue(makeJwt({ subscription_workspace_id: 'ws-2', org_name: 'Acme2' }));
+
     const { result } = renderHook(() => useApp(), { wrapper });
     act(() => {
       result.current.signedIn({
@@ -89,8 +93,21 @@ describe('AppContext — signedIn()', () => {
         company_id: 'co-2', company_name: 'Co2', role: 'viewer',
       });
     });
-    // Documents current behavior — signedIn() itself stays a thin state setter;
-    // the real identity/group work happens in the mount effect on next reload.
+
     expect(result.current.user?.user_id).toBe('u2');
+    expect(posthog.resetGroups).toHaveBeenCalled();
+    expect(posthog.identify).toHaveBeenCalledWith('u2', { email: 'u2@example.com', name: 'U Two' });
+    expect(posthog.group).toHaveBeenCalledWith('company', 'co-2', { name: 'Co2' });
+    expect(posthog.group).toHaveBeenCalledWith('workspace', 'ws-2', { name: 'Acme2' });
+  });
+});
+
+describe('AppContext — candy:auth-expired handler', () => {
+  it('resets PostHog identity, not just app state (Pass 6 finding: a different human signing in afterward on a shared device would otherwise alias into whoever was last identified)', () => {
+    renderHook(() => useApp(), { wrapper });
+    act(() => {
+      window.dispatchEvent(new CustomEvent('candy:auth-expired'));
+    });
+    expect(posthog.reset).toHaveBeenCalled();
   });
 });
