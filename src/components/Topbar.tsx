@@ -1,3 +1,4 @@
+import { useFeatureFlagEnabled } from 'posthog-js/react';
 import { Icon } from '../assets/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import CompanySwitcher from './CompanySwitcher';
@@ -8,8 +9,9 @@ interface TopbarProps {
 }
 
 export default function Topbar({ onMenuOpen }: TopbarProps) {
-  const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
-  const isSmallMobile    = useMediaQuery('(max-width: 640px)');
+  const isMobileOrTablet   = useMediaQuery('(max-width: 1024px)');
+  const isSmallMobile      = useMediaQuery('(max-width: 640px)');
+  const flagCompanySwitching = useFeatureFlagEnabled('company_switching');
 
   return (
     <header
@@ -49,7 +51,7 @@ export default function Topbar({ onMenuOpen }: TopbarProps) {
         </div>
 
         <div style={{ position: 'absolute', right: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-          {!isSmallMobile && <CompanySwitcher />}
+          {!isSmallMobile && flagCompanySwitching !== false && <CompanySwitcher />}
           <button
             className="shell-upgrade-btn"
             onClick={() => { window.location.href = 'https://spacemarvel.ai/dashboard/billing'; }}

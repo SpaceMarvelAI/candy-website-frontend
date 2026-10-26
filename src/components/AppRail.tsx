@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import posthog from 'posthog-js';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useFeatureFlagEnabled } from 'posthog-js/react';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
 import type { AddToast } from '../hooks/useToast';
@@ -42,6 +43,11 @@ function ProfileMenu({
 }) {
   const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
   const [subMenuY, setSubMenuY] = useState(0);
+
+  // Feature flags
+  const flagWorkspaceSwitching = useFeatureFlagEnabled('workspace_switching');
+  const flagProfileSettings    = useFeatureFlagEnabled('profile_settings');
+  const flagAppConnections     = useFeatureFlagEnabled('app_connections');
 
   const menuWidth   = 220;
   const flyoutWidth = 190;
@@ -139,7 +145,7 @@ function ProfileMenu({
         {/* Subscription workspaces, at the very top — the slot Claude uses, and what
             HANDOFF_TO_TEAMS.md specifies. Renders nothing when the user has only one, so a
             single-workspace account sees this menu exactly as before. */}
-        <WorkspaceSwitcher />
+        {flagWorkspaceSwitching !== false && <WorkspaceSwitcher />}
 
         {/* Upgrade plan */}
         <button
@@ -160,8 +166,8 @@ function ProfileMenu({
 
         <div style={{ borderTop: '1px solid var(--shell-menu-border)', margin: '4px 0' }} />
 
-        {menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
-        {menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
+        {flagAppConnections !== false && menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
+        {flagProfileSettings !== false && menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
         {subBtn('Appearance', 'sun',  'appearance')}
         {menuItem('Settings',  () => { addToast('Settings — coming soon', 'info'); onClose(); }, { icon: 'settings' })}
         {subBtn('Help', 'help', 'help')}
@@ -218,6 +224,11 @@ function MoreMenu({ anchorRect, onClose, onPick }: {
   onClose: () => void;
   onPick: (item: { label: string; path: string | null }) => void;
 }) {
+  const flagAppConnections = useFeatureFlagEnabled('app_connections');
+  const visibleItems = MORE_ITEMS.filter(item =>
+    !(item.id === 'connectors' && flagAppConnections === false),
+  );
+
   return createPortal(
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 198 }} onClick={onClose} />
@@ -226,7 +237,7 @@ function MoreMenu({ anchorRect, onClose, onPick }: {
         background: 'var(--shell-menu-bg)', border: '1px solid var(--shell-menu-border)',
         borderRadius: 12, padding: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 200,
       }}>
-        {MORE_ITEMS.map(item => (
+        {visibleItems.map(item => (
           <button
             key={item.id}
             role="menuitem"
