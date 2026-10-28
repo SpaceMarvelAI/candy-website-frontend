@@ -16,7 +16,7 @@
  * 3. Candy does NOT show the shared flow's `connectors` step — its tiles only recorded intent and
  *    never opened a real connection. The dashboard may still list it, so it is filtered out here.
  */
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Icon } from '../assets/icons';
@@ -30,44 +30,54 @@ import {
   getOnboarding,
   saveOnboardingStep,
   skipOnboardingStep,
+  uploadOrgTree,
+  downloadOrgTreeTemplate,
+  type EnrichedOrgProfile,
   type OnboardingState,
   type OnboardingStep,
 } from '../api/onboarding';
 
-/** Screen 04, multi-select. Not validated by the backend — the options differ per product and
- *  change with pricing, so a server-side list would need a deploy every time. */
-const MANAGE_OPTIONS = [
-  'Customer Support Calls', 'Appointment & Scheduling', 'Workflow Automation',
-  'Research & Writing', 'Content & Social Media', 'Prompt & AI Workflows',
-  'Finance & Accounting', 'Reporting & CFO Insights',
-];
-
 /** The shared flow's steps minus `connectors`, which Candy does not show (note 3). */
 type ShownStep = Exclude<OnboardingStep, 'connectors'>;
 
+/** Organisation-profile step dropdowns — fixed option sets, matching the design
+ *  (designs/Company Profile (1).png) exactly. Free-form on the backend (CharField), so picking
+ *  from this list is a UI convenience, not a server-enforced enum. */
+const ORG_SIZE_OPTIONS = ['1-15 Employees', '16-49 Employees', '50-199 Employees', '200-1,999 Employees', '2000+ Employees'];
+const INDUSTRY_OPTIONS = ['AI & DeepTech', 'SaaS', 'Healthcare', 'FinTech', 'E-commerce', 'Other'];
+
 const STEP_COPY: Record<ShownStep, { title: string; sub: string }> = {
-  choose:  { title: 'What would you like to manage?', sub: "We'll take you exactly where you need to go." },
-  number:  { title: "What's your number?", sub: 'So your agents can reach you, and call on your behalf.' },
-  company: { title: 'Tell us about your organisation', sub: "Enter your company domain and we'll find the logo automatically." },
-  invite:  { title: 'Invite people to your workspace', sub: 'Great tools are more fun with witnesses.' },
+  // 'choose' ("What would you like to manage?") was removed as its own step 2026-10-27 — that
+  // use-case selection is now the role/interest chips on OnboardingConnectorModal's review screen,
+  // which runs before this flow entirely. Entry kept so the Record<ShownStep,...> type (which
+  // still includes 'choose' for old selections/skipped_steps data) doesn't need a cast here.
+  choose:       { title: 'What would you like to manage?', sub: "We'll take you exactly where you need to go." },
+  org_gate:     { title: 'Are you setting up for an organisation?', sub: 'Founders can add organisation details — everyone else can jump straight in.' },
+  // 'number' no longer asks for a phone number (removed 2026-10-28 — the new design has no phone
+  // screen, and the personal-profile pre-step, OnboardingConnectorModal, already collects it and
+  // forwards it to the Dashboard directly). This slot is kept as the display stand-in for the
+  // hidden `connectors` step Candy never shows its own screen for (see note 3 at the top) — it's
+  // just a "you're set" pass-through now, not a real question.
+  number:       { title: "You're all set!", sub: 'Finish setting up your Candy workspace.' },
+  organisation: { title: 'Tell us about your organisation', sub: "Enter your organisation's domain and we'll fill in what we can — edit anything." },
+  // No team-invite UI here on purpose: a first-time signup is always on the free plan, and the
+  // Dashboard's invite endpoint 403s anything below a paid Business plan (rbac/invitation_views.py's
+  // B2B_PLANS check) regardless of workspace type — offering it here would be a guaranteed error.
+  // This step is organisation-tree (approval matrix) upload only; invites live in settings, once
+  // the user has actually upgraded.
+  invite:       { title: 'Upload your organisation tree', sub: 'Your approval matrix — who approves what, by role. Optional, download the template to get started.' },
 };
 
-const ALL_STEPS: ShownStep[] = ['choose', 'number', 'company', 'invite'];
+const ALL_STEPS: ShownStep[] = ['org_gate', 'organisation', 'invite', 'number'];
 
 export default function OnboardingModal({
   onClose,
   onFinished,
-  canInvite = true,
   preview = false,
 }: {
   /** The ✕ / backdrop. Dismisses (recoverable) — never completes. */
   onClose: () => void;
   onFinished?: () => void;
-  /**
-   * false when the user is on a PERSONAL subscription workspace — the backend refuses invitations
-   * there (403), so offering an input would only produce an error.
-   */
-  canInvite?: boolean;
   /** Testing only (Help → Onboarding): walk the screens locally, never read or write the server. */
   preview?: boolean;
 }) {
@@ -90,11 +100,17 @@ export default function OnboardingModal({
    * each save and overwrites what the user typed on a step they are not looking at — type a phone
    * number, go Back to change step 1, and the number is silently replaced by an older value.
    */
-  const [editedChosen, setEditedChosen] = useState<string[] | null>(null);
-  const [editedPhone, setEditedPhone] = useState<string | null>(null);
   const [editedDomain, setEditedDomain] = useState<string | null>(null);
+  const [editedOrgName, setEditedOrgName] = useState<string | null>(null);
+  const [editedOrgSize, setEditedOrgSize] = useState<string | null>(null);
+  const [editedIndustry, setEditedIndustry] = useState<string | null>(null);
+  const [editedTags, setEditedTags] = useState<string[] | null>(null);
+  const [tagInput, setTagInput] = useState('');
+  const [enrichResult, setEnrichResult] = useState<EnrichedOrgProfile | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
-  const [editedEmails, setEditedEmails] = useState<string | null>(null);
+  const [orgTreeFile, setOrgTreeFile] = useState<File | null>(null);
+  const [orgTreeError, setOrgTreeError] = useState<string | null>(null);
+  const [editedOrgGate, setEditedOrgGate] = useState<string | null>(null);
 
   const alive = useRef(true);
   useEffect(() => {
@@ -121,10 +137,19 @@ export default function OnboardingModal({
   const progressPct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
 
   const saved = (state?.selections ?? {}) as Record<string, unknown>;
-  const chosen = editedChosen ?? (Array.isArray(saved.choose) ? (saved.choose as string[]) : []);
-  const phone = editedPhone ?? (typeof saved.number === 'string' ? saved.number : '');
-  const domain = editedDomain ?? (typeof saved.company === 'string' ? saved.company : '');
-  const emails = editedEmails ?? (Array.isArray(saved.invite) ? (saved.invite as string[]).join(', ') : '');
+  // `organisation` used to be saved as a bare domain string — kept for old rows; going forward
+  // it's an object carrying the whole organisation-profile form (Name/Size/Industry/Tagline).
+  const savedOrg = saved.organisation;
+  const savedOrgObj = savedOrg && typeof savedOrg === 'object' ? (savedOrg as Record<string, unknown>) : null;
+  const domain = editedDomain ?? (typeof savedOrg === 'string' ? savedOrg : (typeof savedOrgObj?.domain === 'string' ? savedOrgObj.domain : ''));
+  // Preference order: the user's own edit, then a just-fetched enrichment preview (freshest
+  // signal before the first save round-trips), then whatever was already saved.
+  const orgName = editedOrgName ?? enrichResult?.name ?? (typeof savedOrgObj?.name === 'string' ? savedOrgObj.name : '');
+  const orgSize = editedOrgSize ?? enrichResult?.org_size ?? (typeof savedOrgObj?.org_size === 'string' ? savedOrgObj.org_size : '');
+  const industry = editedIndustry ?? enrichResult?.industry ?? (typeof savedOrgObj?.industry === 'string' ? savedOrgObj.industry : '');
+  const taglineFallback = enrichResult?.description ?? (typeof savedOrgObj?.description === 'string' ? savedOrgObj.description : '');
+  const tags = editedTags ?? (taglineFallback ? taglineFallback.split(/\s+/).filter(Boolean) : []);
+  const orgGate = editedOrgGate ?? (typeof saved.org_gate === 'string' ? saved.org_gate : '');
 
   function applyState(next: OnboardingState) {
     setState(next);
@@ -134,11 +159,35 @@ export default function OnboardingModal({
 
   /** What this step would submit, or undefined when it has nothing to say. */
   function valueFor(s: ShownStep): unknown {
-    if (s === 'choose') return chosen.length ? chosen : undefined;
-    if (s === 'number') return phone.trim() || undefined;
-    if (s === 'company') return domain.trim() || undefined;
-    const list = parseEmails(emails);
-    return list.length ? list : undefined;
+    if (s === 'org_gate') return orgGate || undefined;
+    // 'number' is a pass-through screen now (see STEP_COPY's comment) — nothing to save, always
+    // a skip. advance() maps this back to the real underlying step name before sending it.
+    if (s === 'number') return undefined;
+    if (s === 'organisation') {
+      const description = tags.join(' ');
+      if (!domain.trim() && !orgName.trim() && !orgSize.trim() && !industry.trim() && !description.trim()) {
+        return undefined;
+      }
+      return {
+        domain: domain.trim() || undefined,
+        name: orgName.trim() || undefined,
+        org_size: orgSize.trim() || undefined,
+        industry: industry.trim() || undefined,
+        description: description.trim() || undefined,
+      };
+    }
+    // invite: no team-invite answer to save (free-plan signups can't invite — see STEP_COPY's own
+    // comment). The org-tree upload is a side-effect fired separately in advance(), not a value.
+    return undefined;
+  }
+
+  function addTag(val: string) {
+    const trimmed = val.replace(/^#/, '').trim();
+    if (trimmed && !tags.includes(trimmed)) setEditedTags([...tags, trimmed]);
+    setTagInput('');
+  }
+  function removeTag(t: string) {
+    setEditedTags(tags.filter((x) => x !== t));
   }
 
   /** Preview mode: Next / Skip just move to the next screen, Finish closes. */
@@ -147,20 +196,40 @@ export default function OnboardingModal({
     else setViewing(steps[stepIndex + 1]);
   }
 
+  // `step` is the DISPLAY name ('number' stands in for the hidden `connectors` step — see note 3
+  // and STEP_COPY's comment on 'number'). The dashboard only knows real step names: `connectors`
+  // is no longer in `STEPS`'s old slot but IS still a real step today (org_gate, organisation,
+  // invite, connectors), so any save/skip call must use the real name, never the display one —
+  // sending "number" is rejected as invalid_step now that the dashboard dropped that step entirely.
+  const realStep = step === 'number' ? (state?.current_step ?? 'connectors') : step;
+
   async function advance() {
     if (preview) { previewNext(); return; }
     setError(null);
     setBusy(true);
     try {
       const value = valueFor(step);
-      // Fire org enrichment fire-and-forget when user submits the company step.
-      if (step === 'company' && typeof value === 'string' && value) {
-        enrichOrg(value).catch(() => {});
+      // Fire org enrichment alongside the step save — fire-and-forget, never blocks advance.
+      // Built straight from state, not cast from `value`: the enrich endpoint's `name_override`
+      // is a distinct field from the step value's own `name` key (see api/onboarding.ts's enrichOrg).
+      if (step === 'organisation' && value && typeof value === 'object') {
+        enrichOrg({
+          domain: domain.trim(),
+          name_override: orgName.trim() || undefined,
+          org_size: orgSize.trim() || undefined,
+          industry: industry.trim() || undefined,
+          description: tags.join(' ').trim() || undefined,
+        }).then((r) => { if (r) setEnrichResult(r); }).catch(() => {});
+      }
+      // Org chart upload: best-effort, fire-and-forget, through our own backend's /org-tree route
+      // (forwards to the Dashboard there — no local-file-storage equivalent for standalone mode).
+      if (step === 'invite' && orgTreeFile) {
+        uploadOrgTree(orgTreeFile);
       }
       // Blank means skip — see note 2 at the top.
       const next = value === undefined
-        ? await skipOnboardingStep(step)
-        : await saveOnboardingStep(step, value);
+        ? await skipOnboardingStep(realStep)
+        : await saveOnboardingStep(realStep, value);
       applyState(next);
       if (isLast) {
         applyState(await completeOnboarding());
@@ -177,7 +246,7 @@ export default function OnboardingModal({
     if (preview) { previewNext(); return; }
     setError(null);
     setBusy(true);
-    try { applyState(await skipOnboardingStep(step)); }
+    try { applyState(await skipOnboardingStep(realStep)); }
     catch (e) { setError(errorMessage(e)); }
     setBusy(false);
   }
@@ -196,17 +265,8 @@ export default function OnboardingModal({
   const muted = isDark ? '#a1a1aa' : '#71717a';
   const card = isDark ? 'rgba(24,24,27,0.7)' : '#fafafa';
 
-  const pill = (on: boolean): React.CSSProperties => ({
-    padding: '10px 20px', fontSize: 14, borderRadius: 999, cursor: 'pointer',
-    border: `1px solid ${on ? fg : line}`,
-    background: on ? fg : 'transparent',
-    color: on ? bg : muted,
-    transition: 'all .12s ease',
-  });
-
   return createPortal(
     <div
-      onClick={close}
       role="dialog"
       aria-modal="true"
       aria-label="Set up your workspace"
@@ -254,61 +314,95 @@ export default function OnboardingModal({
                 <p style={{ marginTop: 8, fontSize: 14, color: muted }}>{STEP_COPY[step].sub}</p>
 
                 <div style={{ marginTop: 32 }}>
-                  {step === 'choose' && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                      {MANAGE_OPTIONS.map((o) => {
-                        const on = chosen.includes(o);
-                        return (
+                  {step === 'org_gate' && (
+                    <div style={{ maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {([
+                        { value: 'personal', label: 'Candy Workspace', blurb: 'Your workspace is ready' },
+                        { value: 'organisation', label: 'Set Up Your Organisation', blurb: 'Set up your organisation details' },
+                      ] as const).map((o, i) => (
+                        <Fragment key={o.value}>
+                          {i === 1 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0' }}>
+                              <div style={{ height: 1, flex: 1, background: line }} />
+                              <span style={{ fontSize: 12, color: muted }}>or</span>
+                              <div style={{ height: 1, flex: 1, background: line }} />
+                            </div>
+                          )}
                           <button
-                            key={o}
-                            aria-pressed={on}
-                            onClick={() => setEditedChosen(on ? chosen.filter((x) => x !== o) : [...chosen, o])}
-                            style={pill(on)}
+                            type="button"
+                            aria-pressed={orgGate === o.value}
+                            onClick={() => setEditedOrgGate(o.value)}
+                            style={{
+                              width: '100%', textAlign: 'left', padding: '14px 20px', borderRadius: 16,
+                              border: `1px solid ${line}`, background: orgGate === o.value ? card : 'transparent',
+                              cursor: 'pointer',
+                            }}
                           >
-                            {o}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                                border: `1px solid ${orgGate === o.value ? fg : line}`,
+                              }}>
+                                {orgGate === o.value && (
+                                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: fg }} />
+                                )}
+                              </span>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 500, color: fg }}>{o.label}</div>
+                                <div style={{ fontSize: 12, color: muted }}>{o.blurb}</div>
+                              </div>
+                            </div>
                           </button>
-                        );
-                      })}
+                        </Fragment>
+                      ))}
                     </div>
                   )}
 
-                  {step === 'number' && (
-                    <input
-                      value={phone}
-                      onChange={(e) => setEditedPhone(e.target.value)}
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      placeholder="+91 98765 43210"
-                      style={{
-                        width: '100%', maxWidth: 420, padding: '14px 20px', fontSize: 14,
-                        borderRadius: 999, border: `1px solid ${line}`, background: card, color: fg,
-                        outline: 'none',
-                      }}
-                    />
-                  )}
 
-                  {step === 'company' && (
-                    <div>
-                      <input
-                        value={domain}
-                        onChange={(e) => { setEditedDomain(e.target.value); setLogoFailed(false); }}
-                        type="text"
-                        inputMode="url"
-                        autoComplete="organization"
-                        placeholder="acme.com"
-                        style={{
-                          width: '100%', maxWidth: 420, padding: '14px 20px', fontSize: 14,
-                          borderRadius: 999, border: `1px solid ${line}`, background: card, color: fg,
-                          outline: 'none', boxSizing: 'border-box',
-                        }}
-                      />
+                  {step === 'organisation' && (
+                    <div style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {/* Name + Domain — matches the design (Company Profile.png) exactly, just
+                          "Organisation" throughout instead of "Company". */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: muted }}>Organisation Name</label>
+                          <input
+                            value={orgName}
+                            onChange={(e) => setEditedOrgName(e.target.value)}
+                            type="text"
+                            autoComplete="organization"
+                            placeholder="Acme Inc."
+                            style={{
+                              width: '100%', padding: '10px 16px', fontSize: 14, borderRadius: 12,
+                              border: `1px solid ${line}`, background: card, color: fg, outline: 'none', boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: muted }}>Organisation Domain / Website</label>
+                          <input
+                            value={domain}
+                            onChange={(e) => { setEditedDomain(e.target.value); setLogoFailed(false); setEnrichResult(null); }}
+                            onBlur={() => { if (domain.trim()) enrichOrg({ domain: domain.trim() }).then((r) => { if (r) setEnrichResult(r); }).catch(() => {}); }}
+                            type="text"
+                            inputMode="url"
+                            autoComplete="url"
+                            placeholder="https://acme.com/"
+                            style={{
+                              width: '100%', padding: '10px 16px', fontSize: 14, borderRadius: 12,
+                              border: `1px solid ${line}`, background: card, color: fg, outline: 'none', boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Clearbit logo — shown live as user types; no API key, no backend needed */}
                       {domain.trim().length >= 4 && domain.includes('.') && (
                         <div style={{
-                          marginTop: 16, display: 'flex', alignItems: 'center', gap: 12,
-                          padding: '12px 16px', borderRadius: 16,
+                          display: 'flex', alignItems: 'center', gap: 12,
+                          padding: '10px 16px', borderRadius: 16,
                           border: `1px solid ${line}`, background: card,
-                          maxWidth: 420,
                         }}>
                           {!logoFailed ? (
                             <img
@@ -324,42 +418,131 @@ export default function OnboardingModal({
                           <span style={{ fontSize: 13, color: muted }}>{domain.trim()}</span>
                         </div>
                       )}
+
+                      {/* Size + Industry — editable dropdowns, pre-filled from enrichment when
+                          available but always user-overridable, matching the design. */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: muted }}>Organisation Size</label>
+                          <select
+                            value={orgSize}
+                            onChange={(e) => setEditedOrgSize(e.target.value)}
+                            style={{
+                              width: '100%', padding: '10px 16px', fontSize: 14, borderRadius: 12,
+                              border: `1px solid ${line}`, background: card, color: fg, outline: 'none', boxSizing: 'border-box',
+                            }}
+                          >
+                            <option value="">Select size…</option>
+                            {ORG_SIZE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: muted }}>Industry / Sector</label>
+                          <select
+                            value={industry}
+                            onChange={(e) => setEditedIndustry(e.target.value)}
+                            style={{
+                              width: '100%', padding: '10px 16px', fontSize: 14, borderRadius: 12,
+                              border: `1px solid ${line}`, background: card, color: fg, outline: 'none', boxSizing: 'border-box',
+                            }}
+                          >
+                            <option value="">Select industry…</option>
+                            {INDUSTRY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Tagline — tag chips, matching the design's #AI Product #candy style. */}
+                      <div>
+                        <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: muted }}>Organisation Tagline</label>
+                        <div style={{
+                          padding: '8px 12px', borderRadius: 12, border: `1px solid ${line}`, background: card,
+                          display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+                        }}>
+                          {tags.map((t) => (
+                            <span key={t} style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', fontSize: 12,
+                              borderRadius: 999, background: isDark ? '#27272a' : '#e4e4e7', color: fg,
+                            }}>
+                              #{t}
+                              <button
+                                type="button" onClick={() => removeTag(t)} aria-label={`Remove ${t}`}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 0 }}
+                              >
+                                <Icon name="x" size={10} />
+                              </button>
+                            </span>
+                          ))}
+                          <input
+                            value={tagInput}
+                            onChange={(e) => setTagInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagInput); } }}
+                            placeholder={tags.length ? '' : 'Add a tag and press Enter…'}
+                            style={{
+                              flex: 1, minWidth: 100, background: 'transparent', border: 'none', outline: 'none',
+                              fontSize: 12, color: fg,
+                            }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
 
-                  {step === 'invite' && (canInvite ? (
-                    <>
-                      <input
-                        value={emails}
-                        onChange={(e) => setEditedEmails(e.target.value)}
-                        placeholder="Enter Email addresses (or paste multiple)"
-                        style={{
-                          width: '100%', padding: '14px 20px', fontSize: 14, borderRadius: 999,
-                          border: `1px solid ${line}`, background: card, color: fg, outline: 'none',
-                        }}
-                      />
-                      <div style={{
-                        marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 8,
-                        padding: '8px 12px', borderRadius: 8, fontSize: 12,
-                        background: 'rgba(6,78,59,0.35)', color: '#6ee7b7',
-                        border: '1px solid rgba(6,95,70,0.6)',
-                      }}>
-                        <Icon name="bulb" size={14} />
-                        Don&apos;t do it alone — invite your team to get started 200% faster.
+                  {step === 'invite' && (
+                    <div style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {/* No team-invite UI here on purpose — see STEP_COPY's own comment: a
+                          first-time signup is always on the free plan, and the Dashboard's invite
+                          endpoint 403s below a paid Business plan regardless of workspace type. */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 12, color: muted }}>Organisation Tree (Approval Matrix)</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const blob = await downloadOrgTreeTemplate();
+                            if (!blob) return; // standalone mode or request failed — best-effort
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'organisation-tree-template.xlsx';
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500,
+                            background: 'none', border: 'none', cursor: 'pointer', color: '#a78bfa',
+                          }}
+                        >
+                          <Icon name="export" size={14} />
+                          Download template
+                        </button>
                       </div>
-                    </>
-                  ) : (
-                    // The backend returns 403 here on a personal workspace, so an input would
-                    // only produce an error.
-                    <div style={{
-                      maxWidth: 420, fontSize: 14, color: muted, padding: '14px 16px',
-                      borderRadius: 12, border: `1px solid ${line}`, background: card,
-                    }}>
-                      Inviting people needs a <strong style={{ color: fg }}>team workspace</strong>.
-                      You&apos;re on a personal one — create a team workspace from Billing, then invite
-                      from there.
+                      <label
+                        style={{
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                          gap: 6, padding: '32px 16px', borderRadius: 16, border: `1px dashed ${line}`,
+                          background: card, cursor: 'pointer', textAlign: 'center',
+                        }}
+                      >
+                        <Icon name="upload" size={20} style={{ color: muted }} />
+                        <span style={{ fontSize: 14, color: fg }}>
+                          {orgTreeFile ? orgTreeFile.name : (<><span style={{ textDecoration: 'underline' }}>Click to upload</span> or drag and drop</>)}
+                        </span>
+                        <span style={{ fontSize: 12, color: muted }}>CSV or XLSX · max 12MB · download the template above to fill in</span>
+                        <input
+                          type="file"
+                          accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0] ?? null;
+                            if (f && f.size > 12 * 1024 * 1024) { setOrgTreeError('File too large — max 12MB.'); return; }
+                            setOrgTreeError(null);
+                            setOrgTreeFile(f);
+                          }}
+                        />
+                      </label>
+                      {orgTreeError && <p style={{ margin: 0, fontSize: 12, color: '#f87171' }}>{orgTreeError}</p>}
                     </div>
-                  ))}
+                  )}
                 </div>
               </>
             )}
@@ -384,7 +567,15 @@ export default function OnboardingModal({
 
           <div style={{ marginTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <button
-              onClick={() => setViewing(steps[Math.max(0, stepIndex - 1)])}
+              onClick={() => {
+                // Step back past any SKIPPED step too, not just one array position — landing on
+                // a step the user never actually saw (e.g. organisation/invite, auto-skipped by
+                // org_gate="personal") is confusing, not a real "go back and review" target.
+                const skipped = new Set(state?.skipped_steps ?? []);
+                let i = stepIndex - 1;
+                while (i > 0 && skipped.has(steps[i])) i--;
+                setViewing(steps[Math.max(0, i)]);
+              }}
               disabled={stepIndex === 0 || busy}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px',
@@ -423,8 +614,4 @@ export default function OnboardingModal({
     </div>,
     document.body,
   );
-}
-
-function parseEmails(raw: string): string[] {
-  return raw.split(/[\s,;]+/).map((s) => s.trim()).filter((s) => s.includes('@'));
 }

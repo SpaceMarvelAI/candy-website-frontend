@@ -60,7 +60,7 @@ describe('Modal progress bar', () => {
     vi.mocked(api.getOnboarding).mockResolvedValue(serverState());
     const { container } = render(<OnboardingModal onClose={() => {}} />);
 
-    await waitFor(() => expect(screen.getByText("What's your number?")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("You're all set!")).toBeTruthy());
     expect(container.ownerDocument.querySelector('div[style*="width: 33%"]')).toBeTruthy();
     expect(container.ownerDocument.querySelector('div[style*="width: 50%"]')).toBeNull();
   });
@@ -70,7 +70,7 @@ describe('Modal progress bar', () => {
     render(<OnboardingModal onClose={() => {}} />);
 
     // A server parked on `connectors` is shown the next visible screen.
-    await waitFor(() => expect(screen.getByText("What's your number?")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("You're all set!")).toBeTruthy());
     expect(screen.queryByText('Connect your tools, unlock your workflow')).toBeNull();
   });
 });
