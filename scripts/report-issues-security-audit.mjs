@@ -12,12 +12,15 @@
  * aren't readable with this key — GetBucketCors/GetPublicAccessBlock/ListUserPolicies
  * all 403, confirmed by hand) and fails loudly if it can reach beyond report-issues/*.
  *
- * KNOWN FINDING (as of this script's authoring): the key is over-scoped — it can
- * read/write the ENTIRE spacemarvel-content-scrum bucket (Finixy's blog, SpaceMarvel's
- * blog, changelogs, pricing, personal-b2c), not just report-issues/*. That's a real
- * defacement/data-leak risk now that the key is public. Re-run this after tightening
- * the IAM policy (scope it to Resource: arn:aws:s3:::spacemarvel-content-scrum/report-issues/*)
- * to confirm the fix — every "should be DENIED" check below should then flip to PASS.
+ * STATUS (last verified 2026-10-08): the IAM policy has been tightened — every
+ * "should be DENIED" check now PASSes (confirmed by running this script). The key
+ * is correctly scoped to report-issues/* only; it can no longer touch Finixy's blog,
+ * SpaceMarvel's blog, changelogs, pricing or personal-b2c. The remaining risk is that
+ * this is still a long-lived credential shipped inside the public Vite bundle (anyone
+ * can extract it via devtools/view-source) — scoping limits the blast radius but
+ * doesn't remove the exposure. See SECURITY.md "Known accepted risks" for the
+ * tracked plan to replace this with a backend-issued credential. Re-run this
+ * script after any IAM policy change to confirm scoping hasn't regressed.
  *
  * Run: npm run audit:bucket-security
  */

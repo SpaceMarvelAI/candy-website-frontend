@@ -1,0 +1,111 @@
+{
+  "_readme": "Managed by scripts/set_status.py. Each key under 'overrides' is a control ID.",
+  "overrides": {
+    "RS-CRY-06": {
+      "status": "waived",
+      "note": "Verified: .env is gitignored (.gitignore line 2) and confirmed untracked via 'git ls-files .env' (empty) and 'git log --all -- .env' (no history). File is not committed to this repo. Real risk is CRY-11 (same secret shipped to the browser bundle regardless of git status).",
+      "by": "hello@spacemarvel.ai",
+      "expires": "2026-12-31",
+      "date": "2026-10-08"
+    },
+    "RS-IAC-01": {
+      "status": "not_applicable",
+      "note": "This repo is a Vite/React frontend only (candy-website-frontend). No password storage, hashing, or auth backend logic exists here — login/credential handling lives in a separate backend service (VITE_API_BASE_URL points to https://api.candy.cx, outside this repo). Confirmed via grep: zero matches for bcrypt/argon2/scrypt/pbkdf2 in src/.",
+      "date": "2026-10-08"
+    },
+    "RS-DCH-01": {
+      "status": "not_applicable",
+      "evidence": "src/components/agent/EmbedModal.tsx:146",
+      "note": "Verified: this line is inside a Python code sample shown to CUSTOMERS in the Embed modal (a copy-paste integration snippet for THEIR backend), not code this app executes or logs through. Candy's own logger (src/utils/logger.ts) has an explicit REDACT_KEYS allowlist that masks 'webhook_secret' and similar keys before anything reaches the console.",
+      "date": "2026-10-08"
+    },
+    "RS-SEA-08": {
+      "status": "implemented",
+      "evidence": "src/utils/logger.ts:33-56",
+      "note": "Verified: debug/verbose logging requires an explicit VITE_DEBUG=true build flag or a hostname allowlist (localhost/dev.candy.cx) — production (app.candy.cx) defaults to warn/error only, with a documented fix already in place for a prior bypass (localStorage override no longer works in prod, see code comment at logger.ts ~line 44). The flagged match was just an explanatory comment, not an active debug switch.",
+      "date": "2026-10-08"
+    },
+    "RS-WEB-01": {
+      "status": "partial",
+      "evidence": "index.html CSP + referrer-policy meta tags added",
+      "note": "Added CSP (mirrored from the already-live CloudFront policy, CLOUDFRONT_SECURITY_HEADERS.md) and Referrer-Policy via <meta> tags in index.html — works in every environment including prod, which currently has no CloudFront policy attached. X-Frame-Options, HSTS, X-Content-Type-Options and Permissions-Policy cannot be set via meta tag (browser-enforced HTTP-header-only); those still require attaching the existing CloudFront response-headers policy (664d73ce-680d-423c-aa96-52543b3e13bf) to the prod distribution E2Q1JGL4YRTTQE — already tracked as action #1 (P0) in CLOUDFRONT_SECURITY_HEADERS.md, an AWS console action outside this repo.",
+      "date": "2026-10-08"
+    },
+    "RS-CRY-01": {
+      "status": "waived",
+      "note": "Already a documented, tracked, accepted risk — see SECURITY.md 'Known accepted risks': 'Report Issue attachments are written to S3 directly from the browser... Being replaced with a backend endpoint.' Not re-fixing here: it's an in-progress cross-cutting change (would need a new Candy-Agents backend endpoint to issue presigned URLs, replacing client-embedded creds) that risks breaking the Report Issue feature if done without coordinating with that in-progress work. Real mitigating action needed: rotate the exposed key (see .env's VITE_REPORT_ISSUES_ACCESS_KEY_ID) and scope its IAM policy to PutObject/GetObject on report-issues/* only — both are AWS-console actions outside this repo's reach.",
+      "by": "hello@spacemarvel.ai",
+      "expires": "2026-12-31",
+      "date": "2026-10-08"
+    },
+    "RS-CRY-11": {
+      "status": "waived",
+      "note": "Same root cause and same tracked acceptance as RS-CRY-01 (SECURITY.md 'Known accepted risks'). The secret ships in the bundle because Vite inlines every VITE_-prefixed var at build time; no in-repo code change removes it while the direct-to-S3 upload architecture stands. Fix requires a backend-issued presigned URL (or proxy upload) — a cross-repo architecture change, not attempted here without sign-off.",
+      "by": "hello@spacemarvel.ai",
+      "expires": "2026-12-31",
+      "date": "2026-10-08"
+    },
+    "RS-AI-05": {
+      "status": "not_applicable",
+      "note": "This frontend never calls an LLM provider directly — no openai/anthropic/model-API references anywhere in src/ (checked via grep). All agent/AI traffic proxies through Candy's own backend (api.candy.cx, repo Candy-Agents). Prompt/PII minimization before reaching the actual model provider is a Candy-Agents-repo concern, out of scope for this frontend.",
+      "date": "2026-10-08"
+    },
+    "RS-DCH-05": {
+      "status": "implemented",
+      "evidence": "tests/mocks/fixtures.ts",
+      "note": "Checked all test fixtures: only synthetic data present (admin@acme.com, 'Acme Corp', 'Test Agent') — no real names, emails or IDs anywhere in tests/mocks/fixtures.ts.",
+      "date": "2026-10-08"
+    },
+    "RS-IAC-07": {
+      "status": "not_applicable",
+      "note": "No password-reset or invitation token generation/validation code exists in this frontend repo (grepped for reset/invite token logic — none found). Invitations and resets are issued and verified entirely by the backend (Candy-Agents); this repo only consumes the resulting session.",
+      "date": "2026-10-08"
+    },
+    "RS-IAC-10": {
+      "status": "not_applicable",
+      "note": "No separate /admin route or console exists in this repo (confirmed via grep — zero matches). Role-based access (owner/admin/member/builder/viewer) is enforced server-side per API contract (src/utils/crmAccess.ts); the same UI renders for every role with actions hidden/disabled client-side only. There is no distinct privileged interface in this frontend to additionally protect.",
+      "date": "2026-10-08"
+    },
+    "RS-SEA-07": {
+      "status": "not_applicable",
+      "note": "This is a browser SPA with no server-side code. Every fetch() target across src/ (sso.ts, client.ts, composio.ts, stt.ts, tts.ts, recordings.ts, connections.ts, etc.) is a fixed, developer-configured host — none take a user-supplied URL as the fetch target. testConnection() (src/api/connections.ts:104) sends only a connection ID; the actual outbound probe happens server-side in Candy-Agents, which is the real SSRF boundary and out of this repo's scope.",
+      "date": "2026-10-08"
+    },
+    "RS-WEB-07": {
+      "status": "implemented",
+      "evidence": "src/utils/sso.ts:89-99, src/components/AppRail.tsx:320-325",
+      "note": "No open-redirect pattern found. The only token-bearing redirects (redirectWithSso in sso.ts, SSOCallbackPage in pages/sso/index.tsx) target build-time-configured env URLs (VITE_META_APP_URL/VITE_FINIXY_APP_URL, read in AppRail.tsx's fixed sidebar items) — never a user-supplied query parameter like ?next= or ?returnUrl=. The OAuth connect redirect (NodeEditDrawer.tsx:626) uses a URL returned by Candy's own backend, not client input.",
+      "date": "2026-10-08"
+    },
+    "RS-VPM-09": {
+      "status": "partial",
+      "evidence": "../SECURITY_AUDIT_FRONTEND.md",
+      "note": "An internal, structured security assessment exists one directory up (SECURITY_AUDIT_FRONTEND.md) — dated 2026-08-17, re-audited 2026-08-21, evidence-based with file:line citations, scored 33% (grade F). That is NOT an independent third-party penetration test, so marking partial rather than implemented. Given the F grade and the report's own 'stop-the-line' language around the embedded AWS key and missing prod headers, a third-party pentest before any public go-live is still genuinely warranted.",
+      "date": "2026-10-08"
+    },
+    "RS-TPM-01": {
+      "status": "partial",
+      "evidence": "security/policies/vendor-register.md",
+      "note": "Populated the vendor register with real vendors/data flows derived from the code (AWS S3, PostHog, Google Fonts, SpaceMarvel/MetaSpace sibling APIs). Left Contract/DPA, Security evidence and Last-review columns blank — those need a legal/ops check I can't do from the repo. Template marker intentionally left in place until a human fills those in.",
+      "date": "2026-10-08"
+    },
+    "RS-PRI-04": {
+      "status": "partial",
+      "evidence": "src/main.tsx:25-66",
+      "note": "PostHog is well-configured to minimize PII capture: person_profiles 'identified_only', session-replay maskAllInputs, and a before_send hook that strips access/refresh/sso tokens from captured URLs. BUT: no consent banner/opt-in gate exists anywhere in src/ — PostHog initializes unconditionally whenever the key is set. That may not satisfy GDPR/ePrivacy consent requirements for EU visitors depending on legal classification. Did not build a consent banner myself — that's a real UI/legal feature, not a drop-in security fix.",
+      "date": "2026-10-08"
+    },
+    "RS-TPM-04": {
+      "status": "implemented",
+      "evidence": "package.json",
+      "note": "5 production deps, 13 dev deps, all first-party/extremely high-profile packages (@aws-sdk, react/react-dom/react-router-dom, posthog-js; vite/vitest/playwright/testing-library/typescript in dev). No obscure names, no typosquat risk.",
+      "date": "2026-10-08"
+    },
+    "RS-VPM-10": {
+      "status": "implemented",
+      "evidence": "SECURITY.md 'What to expect' table",
+      "note": "SECURITY.md already documents severity-based SLAs: acknowledgement 3 business days, initial assessment 5 business days, fix/mitigation for high/critical within 30 days.",
+      "date": "2026-10-08"
+    }
+  }
+}
