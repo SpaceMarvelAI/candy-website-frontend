@@ -7,6 +7,8 @@
  * the backend, best-effort — this client has no part in that, it only talks to Candy's own API.
  */
 import { api } from './client';
+import { clampLimit, clampOffset, type PageParams } from './crm';
+import type { Page } from './crmTypes';
 
 export interface UserProfile {
   id: string;
@@ -76,4 +78,22 @@ export async function uploadLinkedInZip(file: File): Promise<LinkedInZipData> {
   form.append('file', file);
   const res = await api<{ status: string; data: LinkedInZipData }>('/v1/profile/linkedin-zip', { method: 'POST', body: form });
   return res.data;
+}
+
+/** One row from the caller's own LinkedIn connections, as persisted from their last
+ *  uploadLinkedInZip() call (empty, not an error, if they've never uploaded one). */
+export interface LinkedInConnection {
+  id: string;
+  name: string;
+  email: string | null;
+  headline: string | null;
+  organization: string | null;
+  profile_url: string;
+  connected_on: string | null;
+}
+
+export async function listLinkedInConnections(p: PageParams = {}): Promise<Page<LinkedInConnection>> {
+  const limit = clampLimit(p.limit ?? 25);
+  const offset = clampOffset(p.offset ?? 0);
+  return api<Page<LinkedInConnection>>(`/v1/profile/linkedin-connections?limit=${limit}&offset=${offset}`);
 }

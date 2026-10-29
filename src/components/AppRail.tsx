@@ -14,6 +14,7 @@ import { redirectWithSso, setSsoIntent } from '../utils/sso';
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
 const ProfileModal = lazy(() => import('./ProfileModal'));
+const LinkedInConnectionsModal = lazy(() => import('./LinkedInConnectionsModal'));
 const OnboardingModal = lazy(() => import('./OnboardingModal'));
 
 // Shared shell dimensions — Topbar, Sidebar and flows/index.tsx lay out against these.
@@ -29,7 +30,7 @@ const SHOW_ONBOARDING_ITEM = typeof window !== 'undefined' &&
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
   anchorRect, onClose, onSignOut, signingOut, navigate, addToast,
-  theme, setTheme, onReportIssue, onProfile, onOnboarding,
+  theme, setTheme, onReportIssue, onProfile, onOnboarding, onLinkedInConnections,
 }: {
   anchorRect: DOMRect;
   onClose: () => void; onSignOut: () => void; signingOut: boolean;
@@ -38,6 +39,7 @@ function ProfileMenu({
   onReportIssue: () => void;
   onProfile: () => void;
   onOnboarding: () => void;
+  onLinkedInConnections: () => void;
 }) {
   const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
   const [subMenuY, setSubMenuY] = useState(0);
@@ -166,6 +168,7 @@ function ProfileMenu({
 
         {flagAppConnections !== false && menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
         {flagProfileSettings !== false && menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
+        {flagProfileSettings !== false && menuItem('LinkedIn Connections', () => { onLinkedInConnections(); onClose(); }, { icon: 'team' })}
         {subBtn('Appearance', 'sun',  'appearance')}
         {menuItem('Settings',  () => { addToast('Settings — coming soon', 'info'); onClose(); }, { icon: 'settings' })}
         {subBtn('Help', 'help', 'help')}
@@ -288,6 +291,7 @@ export default function AppRail() {
   const [reportIssuesOpen, setReportIssuesOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [linkedInConnectionsOpen, setLinkedInConnectionsOpen] = useState(false);
   // Overrides AppContext's cached name/avatar right after a save in ProfileModal, so the
   // rail reflects the edit immediately instead of waiting for the next login.
   const [profileOverride, setProfileOverride] = useState<{ name: string | null; avatarUrl: string | null } | null>(null);
@@ -433,6 +437,7 @@ export default function AppRail() {
           onReportIssue={() => setReportIssuesOpen(true)}
           onProfile={() => setProfileEditOpen(true)}
           onOnboarding={() => setOnboardingOpen(true)}
+          onLinkedInConnections={() => setLinkedInConnectionsOpen(true)}
         />
       )}
 
@@ -457,6 +462,12 @@ export default function AppRail() {
               setAvatarLoadFailed(false);
             }}
           />
+        </Suspense>
+      )}
+
+      {linkedInConnectionsOpen && (
+        <Suspense fallback={null}>
+          <LinkedInConnectionsModal onClose={() => setLinkedInConnectionsOpen(false)} />
         </Suspense>
       )}
     </>
