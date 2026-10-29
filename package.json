@@ -31,7 +31,7 @@
     "react-router-dom": "^7.18.1"
   },
   "overrides": {
-    "dompurify": "^3.4.16",
+    "dompurify": "^3.4.17",
     "source-map-js": "^1.2.2"
   },
   "devDependencies": {

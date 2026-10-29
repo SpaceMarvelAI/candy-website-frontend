@@ -21,10 +21,11 @@ import { Icon } from '../assets/icons';
 import { useTheme } from '../hooks/useTheme';
 import { getToken } from '../api/client';
 import { getOnboarding, type OnboardingState } from '../api/onboarding';
+import OnboardingConnectorModal from './OnboardingConnectorModal';
 import OnboardingModal from './OnboardingModal';
 import { visibleProgress } from '../utils/onboardingProgress';
 
-export default function OnboardingGate({ canInvite = true }: { canInvite?: boolean }) {
+export default function OnboardingGate() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -33,6 +34,13 @@ export default function OnboardingGate({ canInvite = true }: { canInvite?: boole
   /** Hides the widget for this page view only — not persisted. The server already knows the flow
    *  was dismissed; this is just "stop nudging me right now". */
   const [hidden, setHidden] = useState(false);
+  // Tracks whether the GitHub-profile pre-step should show on this open. STATE, not a ref mutated
+  // during render — a ref mutated in the render body reads differently across React StrictMode's
+  // dev-only double-invoke of the render call (first call sees it false and returns the connector
+  // step; the second call then sees the ref already flipped true and returns OnboardingModal
+  // instead, which is the call React actually uses), so the connector pre-step could never appear
+  // in local dev at all.
+  const [connectorShown, setConnectorShown] = useState(false);
 
   useEffect(() => {
     // No session yet (login screen, logged out) — onboarding is not the concern then, and asking
@@ -44,7 +52,7 @@ export default function OnboardingGate({ canInvite = true }: { canInvite?: boole
       .then((s) => {
         if (!alive) return;
         setState(s);
-        if (s.auto_open) setOpen(true);
+        if (s.auto_open) { setOpen(true); setConnectorShown(true); }
       })
       // Deliberately silent: a user who cannot reach onboarding has a bigger problem, and this is
       // a nudge, not a feature they asked for. Never block the app on it.
@@ -55,13 +63,18 @@ export default function OnboardingGate({ canInvite = true }: { canInvite?: boole
   if (!state || state.completed) return null;
 
   if (open) {
-    return (
-      <OnboardingModal
-        canInvite={canInvite}
-        onClose={() => setOpen(false)}
-        onFinished={() => getOnboarding().then(setState).catch(() => {})}
-      />
-    );
+    const sharedProps = {
+      onClose: () => { setOpen(false); setConnectorShown(false); },
+      onFinished: () => { setConnectorShown(false); getOnboarding().then(setState).catch(() => {}); },
+    };
+
+    // Show the GitHub-profile pre-step on first open. onClose/onFinished above clear
+    // connectorShown either way, so a later widget re-open goes straight to the standard flow.
+    if (connectorShown) {
+      return <OnboardingConnectorModal {...sharedProps} />;
+    }
+
+    return <OnboardingModal {...sharedProps} />;
   }
 
   if (hidden) return null;

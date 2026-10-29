@@ -115,6 +115,13 @@ type Opts = {
   auth?: boolean;        // default true
   signal?: AbortSignal;
   timeoutMs?: number;    // default DEFAULT_TIMEOUT_MS; ignored when `signal` is supplied
+  /**
+   * Opt-in for endpoints that carry PHI (the CRM). Logs then contain only method, path
+   * (query string stripped), status and duration — never the request body, the response
+   * body, an error body, the full URL or a raw network error. Errors are also logged
+   * through PostHog's console capture, so this is not just a dev-console nicety.
+   */
+  sensitive?: boolean;
 };
 
 // A hung backend must not hang the UI forever. 60s is deliberately generous so
@@ -147,7 +154,7 @@ function sessionStillValid(token: string): Promise<boolean> {
 
 /** `_retried` is internal: set on the single retry after a 401, so it can never loop. */
 export async function api<T = any>(path: string, opts: Opts = {}, _retried = false): Promise<T> {
-  const { method = 'GET', body, headers = {}, auth = true, signal, timeoutMs = DEFAULT_TIMEOUT_MS } = opts;
+  const { method = 'GET', body, headers = {}, auth = true, signal, timeoutMs = DEFAULT_TIMEOUT_MS, sensitive = false } = opts;
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
 
   const finalHeaders: Record<string, string> = { ...headers };
@@ -159,15 +166,21 @@ export async function api<T = any>(path: string, opts: Opts = {}, _retried = fal
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
 
   // ── Log outgoing request ──────────────────────────────────────────────────
-  const label = `${method} ${path}`;
-  logger.api('req', label, {
-    url,
-    method,
-    payload:  isForm ? '[FormData]' : truncateForLog(body ?? null),
-    // Redact the token value but confirm whether auth is attached.
-    headers:  { ...finalHeaders, Authorization: finalHeaders.Authorization ? '[Bearer ****]' : undefined },
-    hasToken: !!getToken(),
-  });
+  const label = `${method} ${sensitive ? path.split('?')[0] : path}`;
+  // In sensitive mode the logged `url` is the bare path: no host, no query string.
+  const logUrl = sensitive ? path.split('?')[0] : url;
+  if (sensitive) {
+    logger.api('req', label, { method, sensitive: true });
+  } else {
+    logger.api('req', label, {
+      url,
+      method,
+      payload:  isForm ? '[FormData]' : truncateForLog(body ?? null),
+      // Redact the token value but confirm whether auth is attached.
+      headers:  { ...finalHeaders, Authorization: finalHeaders.Authorization ? '[Bearer ****]' : undefined },
+      hasToken: !!getToken(),
+    });
+  }
 
   // A caller-supplied signal takes over cancellation completely; otherwise we
   // arm our own so the promise can never hang indefinitely.
@@ -189,22 +202,33 @@ export async function api<T = any>(path: string, opts: Opts = {}, _retried = fal
     if (timedOut) {
       // 408 keeps timeouts distinguishable from an offline backend (status 0).
       logger.api('err', label, {
-        url, method, status: 408,
+        url: logUrl, method, status: 408,
         message:  `Timed out after ${timeoutMs} ms`,
         duration: `${duration.toFixed(1)} ms`,
       });
       throw new ApiError(408, `Request timed out after ${timeoutMs} ms — the server did not respond.`);
     }
+    // The CALLER cancelled this request (unmount, a filter changed, React StrictMode's double-invoked
+    // effect). That is expected, not an API failure — logging it as an error would also send it to
+    // PostHog (console-error capture). Same ApiError as before, so callers see no difference.
+    // Only a genuine AbortError counts: a caller-side AbortSignal.timeout() rejects with a TimeoutError,
+    // which is a real failure and still falls through to the error log below.
+    if (signal?.aborted && e?.name === 'AbortError') {
+      logger.debug('[api] request cancelled by caller', { label });
+      throw new ApiError(0, e?.message || 'Request cancelled');
+    }
     // Network-level failure (CORS block, backend offline, DNS failure, etc.)
-    logger.api('err', label, {
-      url,
-      method,
-      status:   0,
-      message:  e?.message || 'Network error',
-      duration: `${duration.toFixed(1)} ms`,
-      error:    e,
-      stack:    e?.stack,
-    });
+    logger.api('err', label, sensitive
+      ? { url: logUrl, method, status: 0, message: 'Network error', duration: `${duration.toFixed(1)} ms` }
+      : {
+        url,
+        method,
+        status:   0,
+        message:  e?.message || 'Network error',
+        duration: `${duration.toFixed(1)} ms`,
+        error:    e,
+        stack:    e?.stack,
+      });
     throw new ApiError(0, e?.message || 'Network error — is the backend running on ' + API_BASE + '?');
   } finally {
     if (timer) clearTimeout(timer);
@@ -215,7 +239,7 @@ export async function api<T = any>(path: string, opts: Opts = {}, _retried = fal
 
   // 204 / empty body — log and return.
   if (res.status === 204) {
-    logger.api('res', label, { url, method, status: 204, duration: `${duration.toFixed(1)} ms`, data: null });
+    logger.api('res', label, { url: logUrl, method, status: 204, duration: `${duration.toFixed(1)} ms`, data: null });
     return undefined as unknown as T;
   }
 
@@ -231,12 +255,12 @@ export async function api<T = any>(path: string, opts: Opts = {}, _retried = fal
       // landed). Its 401 is about the OLD token — retry once with the new one instead of
       // wiping the session that just started. This was the "sign-in doesn't happen" loop.
       if (!_retried && getToken() !== tok) {
-        logger.info('[api] 401 for a replaced token — retrying with the current session', { url });
+        logger.info('[api] 401 for a replaced token — retrying with the current session', { url: logUrl });
         return api<T>(path, opts, true);
       }
       // Current token, but the 401 may be an upstream (dashboard) failure — see sessionStillValid.
       if (tok && getToken() === tok && await sessionStillValid(tok)) {
-        logger.warn('[api] 401 from endpoint, but session is still valid — keeping user signed in', { url });
+        logger.warn('[api] 401 from endpoint, but session is still valid — keeping user signed in', { url: logUrl });
         throw new ApiError(401, parsed);
       }
     }
@@ -245,7 +269,7 @@ export async function api<T = any>(path: string, opts: Opts = {}, _retried = fal
     // the user and bounce back to the auth page — otherwise every following call returns
     // nothing and the UI looks broken. Only when the dead token is still the current one.
     if (res.status === 401 && auth && getToken() === tok) {
-      logger.warn('[api] 401 received — clearing token and dispatching candy:auth-expired', { url });
+      logger.warn('[api] 401 received — clearing token and dispatching candy:auth-expired', { url: logUrl });
       try {
         // sessionStorage is where the live session lives; clear localStorage too
         // so a legacy copy can't be picked up by anything still reading it.
@@ -260,26 +284,30 @@ export async function api<T = any>(path: string, opts: Opts = {}, _retried = fal
     }
 
     const errorDetail = typeof parsed === 'string' ? parsed : (parsed?.detail ?? `HTTP ${res.status}`);
-    logger.api('err', label, {
-      url,
-      method,
-      status:   res.status,
-      message:  typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail),
-      duration: `${duration.toFixed(1)} ms`,
-      data:     truncateForLog(parsed),
-    });
+    logger.api('err', label, sensitive
+      ? { url: logUrl, method, status: res.status, duration: `${duration.toFixed(1)} ms` }
+      : {
+        url,
+        method,
+        status:   res.status,
+        message:  typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail),
+        duration: `${duration.toFixed(1)} ms`,
+        data:     truncateForLog(parsed),
+      });
 
     throw new ApiError(res.status, parsed);
   }
 
   // ── Log successful response ───────────────────────────────────────────────
-  logger.api('res', label, {
-    url,
-    method,
-    status:   res.status,
-    duration: `${duration.toFixed(1)} ms`,
-    data:     truncateForLog(parsed),
-  });
+  logger.api('res', label, sensitive
+    ? { url: logUrl, method, status: res.status, duration: `${duration.toFixed(1)} ms` }
+    : {
+      url,
+      method,
+      status:   res.status,
+      duration: `${duration.toFixed(1)} ms`,
+      data:     truncateForLog(parsed),
+    });
 
   return parsed as T;
 }

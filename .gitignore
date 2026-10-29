@@ -20,6 +20,20 @@ playwright/.cache
 # audit doc (local only)
 FRONTEND_AUDIT.md
 
+# scf-security-audit generated output (local only — REPORT.md/checklists cite
+# file:line evidence, and .state/results.json can carry raw matched secret
+# text; only policies/ and .state/manual-overrides.json are meant to be committed)
+security/README.md
+security/PROFILE.md
+security/REPORT.md
+security/REMEDIATION.md
+security/MANUAL-REVIEW.md
+security/NOT-APPLICABLE.md
+security/checklists/
+security/.state/results.json
+security/.state/history.json
+security/.state/profile.json
+
 # logs
 npm-debug.log*
 yarn-debug.log*

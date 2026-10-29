@@ -14,9 +14,9 @@
  * them rather than flattening them to 502 — so `invalid_step`, `value_required` and
  * `already_completed` can be branched on here exactly as MetaSpace does.
  */
-import { api } from './client';
+import { api, API_BASE, getToken } from './client';
 
-export type OnboardingStep = 'choose' | 'connectors' | 'number' | 'invite';
+export type OnboardingStep = 'choose' | 'org_gate' | 'connectors' | 'number' | 'organisation' | 'invite';
 
 export interface OnboardingState {
   current_step: OnboardingStep | null;
@@ -75,4 +75,116 @@ export async function dismissOnboarding(): Promise<OnboardingState> {
 export async function completeOnboarding(): Promise<OnboardingState> {
   const res = await api<Envelope>('/v1/onboarding', { method: 'POST', body: { action: 'complete' } });
   return res.data;
+}
+
+export interface OnboardingGithubProfile {
+  connected: boolean;
+  login?: string | null;
+  avatar_url?: string | null;
+  company?: string | null;
+  location?: string | null;
+  top_languages?: string[];
+  public_repos?: number | null;
+  followers?: number | null;
+}
+
+interface ProfileEnvelope {
+  status: string;
+  data: {
+    full_name?: string | null;
+    avatar_url?: string | null;
+    github?: OnboardingGithubProfile | null;
+  };
+}
+
+/** The dashboard's full profile — avatar/name plus the GitHub-connected enrichment
+ *  (company/location/top_languages), for the onboarding pre-step that shows whatever was pulled
+ *  from GitHub at login. */
+export async function getOnboardingProfile(): Promise<ProfileEnvelope['data']> {
+  const res = await api<ProfileEnvelope>('/v1/onboarding/profile');
+  return res.data;
+}
+
+/** The organisation profile collected during the onboarding `organisation` step — for the
+ *  Organisation section of the Profile panel. */
+export interface OrganisationProfile {
+  name: string | null;
+  industry: string | null;
+  org_size: string | null;
+  website: string | null;
+  description: string | null;
+  logo_url: string | null;
+  org_tree_url: string | null;
+}
+interface OrgProfileEnvelope { status: string; data: OrganisationProfile | null }
+
+/** Null when this user has no current workspace (a personal-workspace user). */
+export async function getOrganisationProfile(): Promise<OrganisationProfile | null> {
+  try {
+    const res = await api<OrgProfileEnvelope>('/v1/onboarding/organisation');
+    return res.data;
+  } catch {
+    return null;
+  }
+}
+
+export interface EnrichedOrgProfile {
+  id: string;
+  name: string;
+  industry?: string | null;
+  org_size?: string | null;
+  website?: string | null;
+  description?: string | null;
+  logo_url?: string | null;
+  enriched: Record<string, unknown>;
+}
+
+/** Best-effort org enrichment from a domain, with optional explicit overrides (name_override/
+ *  org_size/industry/description) from the organisation-profile form — the user confirming or
+ *  editing a dropdown, not passive PDL inference. These always win over whatever PDL finds.
+ *  Never throws, callers fire-and-forget this. */
+export async function enrichOrg(params: {
+  domain: string;
+  name_override?: string;
+  org_size?: string;
+  industry?: string;
+  description?: string;
+}): Promise<EnrichedOrgProfile | null> {
+  try {
+    const res = await api<{ status: string; data: EnrichedOrgProfile }>('/v1/onboarding/enrich', {
+      method: 'POST',
+      body: params,
+    });
+    return res.data;
+  } catch {
+    return null;
+  }
+}
+
+/** Upload the organisation-tree (approval matrix) file for the `invite` onboarding step — through
+ *  our own backend, which forwards it to the Dashboard (there's no local-file-storage equivalent
+ *  for standalone mode, same as this feature always worked even before the CSV/Excel switch).
+ *  Best-effort, never throws — callers should not block advancing on this failing. */
+export async function uploadOrgTree(file: File): Promise<void> {
+  try {
+    const form = new FormData();
+    form.append('org_tree', file);
+    await api('/v1/onboarding/org-tree', { method: 'POST', body: form });
+  } catch { /* best-effort */ }
+}
+
+/** Fetch the downloadable organisation-tree .xlsx template, through our own backend (not
+ *  dashboard-direct from the browser) — same reasoning as every other onboarding call. Returns
+ *  null in standalone mode or on any failure; caller decides what to show. */
+export async function downloadOrgTreeTemplate(): Promise<Blob | null> {
+  try {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/v1/onboarding/org-tree/template`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return null;
+    return await res.blob();
+  } catch {
+    return null;
+  }
 }
