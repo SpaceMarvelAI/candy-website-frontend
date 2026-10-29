@@ -63,9 +63,9 @@ const STEP_COPY: Record<ShownStep, { title: string; sub: string }> = {
   // No team-invite UI here on purpose: a first-time signup is always on the free plan, and the
   // Dashboard's invite endpoint 403s anything below a paid Business plan (rbac/invitation_views.py's
   // B2B_PLANS check) regardless of workspace type — offering it here would be a guaranteed error.
-  // This step is organisation-tree (approval matrix) upload only; invites live in settings, once
-  // the user has actually upgraded.
-  invite:       { title: 'Upload your organisation tree', sub: 'Your approval matrix — who approves what, by role. Optional, download the template to get started.' },
+  // This step is organisation-tree (org chart — who reports to who) upload only; invites live in
+  // settings, once the user has actually upgraded.
+  invite:       { title: 'Upload your organisation tree', sub: 'Your org chart — who reports to who. Optional, download the template to get started.' },
 };
 
 const ALL_STEPS: ShownStep[] = ['org_gate', 'organisation', 'invite', 'number'];
@@ -494,7 +494,7 @@ export default function OnboardingModal({
                           first-time signup is always on the free plan, and the Dashboard's invite
                           endpoint 403s below a paid Business plan regardless of workspace type. */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 12, color: muted }}>Organisation Tree (Approval Matrix)</span>
+                        <span style={{ fontSize: 12, color: muted }}>Organisation Tree (Org Chart)</span>
                         <button
                           type="button"
                           onClick={async () => {
