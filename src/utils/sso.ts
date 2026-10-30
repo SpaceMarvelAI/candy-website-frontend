@@ -76,18 +76,25 @@ async function generateSsoToken(bearer: string, appUrl: string): Promise<string 
  * Open Metaspace/Finixy already signed in: mint a one-time SSO token and navigate to
  * `appUrl?sso_token=…&access_token=<bearer used>` — the shape both apps read on arrival.
  *
- * Uses Candy's own session token directly. It authenticates this call the same way it
- * always has in staging/prod (same signing key, same user ids the dashboard recognizes)
- * — a separate `dashboard_token` round-trip through the OIDC callback is not needed for
- * this. (An earlier version tried a stored `dashboard_token` first and fell back to
- * Candy's token on rejection — dropped after confirming live in dev that `dashboard_token`
- * was landing as null even right after a successful login, so the "correct" path was
- * silently never firing and every call already depended on this fallback anyway.)
- * Resolves false when there's no session or the dashboard rejects it, so the caller can
- * fall back to the SpaceMarvel login.
+ * MUST authenticate with the dashboard's OWN token (`dashboard_token`, a real OAuth2
+ * access token minted during the OIDC login round-trip), not Candy's own session JWT.
+ * The dashboard's /api/rbac/auth/sso/generate/ only accepts its own HS256 JWT or a real
+ * OAuth2 access token (WorkOSJWTAuthentication / OAuth2Authentication) — Candy signs its
+ * session token with Candy's own SECRET_KEY, a different secret, so the dashboard can
+ * never verify it. Confirmed live (401 Unauthorized) 2026-10-30: this call had been
+ * silently broken since whenever it started using Candy's token, for every caller, in
+ * every environment — "jump to another product while already logged in" always fell
+ * through to a full re-login that (via this same broken call) dead-ended back in Candy
+ * instead of reaching the target app. See docs/user-profiling-onboarding edge case #10.
+ *
+ * Falls back to Candy's own token only if no dashboard_token is stored yet (e.g. a user
+ * who signed in with email/password and never went through the dashboard's OIDC flow) —
+ * that attempt will still 401, but it's no worse than today and keeps this from silently
+ * refusing to even try. Resolves false when there's no usable bearer or the dashboard
+ * rejects it, so the caller can fall back to the SpaceMarvel login.
  */
 export async function redirectWithSso(appUrl: string): Promise<boolean> {
-  const bearer = getToken();
+  const bearer = (() => { try { return localStorage.getItem('dashboard_token'); } catch { return null; } })() || getToken();
   if (!bearer) return false;
   const token = await generateSsoToken(bearer, appUrl);
   if (!token) return false;
