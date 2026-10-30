@@ -19,6 +19,7 @@ import posthog from 'posthog-js';
 
 import { Icon } from '../assets/icons';
 import { useTheme } from '../hooks/useTheme';
+import { useApp } from '../context/AppContext';
 import { getToken } from '../api/client';
 import { getOnboarding, type OnboardingState } from '../api/onboarding';
 import OnboardingConnectorModal from './OnboardingConnectorModal';
@@ -28,6 +29,12 @@ import { visibleProgress } from '../utils/onboardingProgress';
 export default function OnboardingGate() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  // AppContext's SSO token exchange (a fresh LinkedIn/OIDC login) is asynchronous --
+  // setToken() only runs once that network round trip finishes. A mount-once effect with
+  // an empty dependency array checks getToken() before that exchange completes, finds
+  // nothing, and never asks again. Depending on `user` here re-runs the check the moment
+  // sign-in actually finishes, instead of only at the first (too-early) render.
+  const { user } = useApp();
 
   const [state, setState] = useState<OnboardingState | null>(null);
   const [open, setOpen] = useState(false);
@@ -58,7 +65,7 @@ export default function OnboardingGate() {
       // a nudge, not a feature they asked for. Never block the app on it.
       .catch(() => {});
     return () => { alive = false; };
-  }, []);
+  }, [user]);
 
   if (!state || state.completed) return null;
 
