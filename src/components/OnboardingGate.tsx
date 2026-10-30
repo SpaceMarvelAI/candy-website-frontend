@@ -67,6 +67,21 @@ export default function OnboardingGate() {
     return () => { alive = false; };
   }, [user]);
 
+  // Cross-product sync only updates the OTHER product's database, never an already-open tab's
+  // React state here -- without this, finishing onboarding in another product (another tab)
+  // leaves this tab showing stale "Finish setup" status until a manual reload. Re-check quietly
+  // on refocus; deliberately does NOT force the pop-up open again (that's the initial-load
+  // effect's job only) -- just keeps the background state/widget text accurate.
+  useEffect(() => {
+    if (!getToken()) return;
+    function onVisible() {
+      if (document.visibilityState !== 'visible') return;
+      getOnboarding().then(setState).catch(() => {});
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user]);
+
   if (!state || state.completed) return null;
 
   if (open) {
