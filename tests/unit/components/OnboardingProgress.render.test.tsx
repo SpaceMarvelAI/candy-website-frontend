@@ -13,6 +13,13 @@ vi.mock('../../../src/api/client', async (orig) => ({
   ...(await orig<typeof import('../../../src/api/client')>()),
   getToken: () => 'test-token',
 }));
+// OnboardingGate re-checks onboarding once AppContext's `user` is set (fixes a race where a
+// fresh SSO login's async token exchange hadn't finished when the gate's effect first ran) --
+// mocked here the same lightweight way as getToken above, rather than mounting the real
+// AppProvider and its own SSO/API side effects into what is otherwise a plain render test.
+vi.mock('../../../src/context/AppContext', () => ({
+  useApp: () => ({ user: { user_id: 'u1', email: 'a@b.com', role: 'admin', company_id: 'c1', company_name: 'Acme', full_name: null } }),
+}));
 
 import * as api from '../../../src/api/onboarding';
 import OnboardingGate from '../../../src/components/OnboardingGate';
