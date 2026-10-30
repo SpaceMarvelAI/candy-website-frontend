@@ -18,6 +18,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import posthog from 'posthog-js';
 
 import { Icon } from '../assets/icons';
 import { useTheme } from '../hooks/useTheme';
@@ -148,12 +149,18 @@ export default function OnboardingModal({
     try {
       const value = valueFor(step);
       // Blank means skip — see note 2 at the top.
-      const next = value === undefined
-        ? await skipOnboardingStep(step)
-        : await saveOnboardingStep(step, value);
-      applyState(next);
+      if (value === undefined) {
+        const next = await skipOnboardingStep(step);
+        posthog.capture('onboarding_step_skipped', { step, step_index: stepIndex });
+        applyState(next);
+      } else {
+        const next = await saveOnboardingStep(step, value);
+        posthog.capture('onboarding_step_completed', { step, step_index: stepIndex });
+        applyState(next);
+      }
       if (isLast) {
         applyState(await completeOnboarding());
+        posthog.capture('onboarding_completed', {});
         onFinished?.();
         onClose();
       }
@@ -167,7 +174,10 @@ export default function OnboardingModal({
     if (preview) { previewNext(); return; }
     setError(null);
     setBusy(true);
-    try { applyState(await skipOnboardingStep(step)); }
+    try {
+      applyState(await skipOnboardingStep(step));
+      posthog.capture('onboarding_step_skipped', { step, step_index: stepIndex });
+    }
     catch (e) { setError(errorMessage(e)); }
     setBusy(false);
   }
