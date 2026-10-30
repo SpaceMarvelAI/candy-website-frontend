@@ -1,14 +1,12 @@
 import type { OnboardingState, OnboardingStep } from '../api/onboarding';
 
 /**
- * Steps the shared onboarding flow contains but Candy never shows (see the note at the top of
- * OnboardingModal: the `connectors` tiles only recorded intent and never opened a connection).
- *
- * The flow row lives on the Dashboard and is shared with MetaSpace and Finixy, which DO show this
- * step — so the server's `steps_total` is 4 and must stay 4 for them. Candy is the only product
- * that hides it, so Candy is the one that has to reconcile the count before displaying it.
+ * Steps the shared onboarding flow contains but Candy does not show. Empty as of 2026-10-30 —
+ * Candy now shows `connectors` too, same as Metaspace and Finixy (see the note at the top of
+ * OnboardingModal). Kept as a real list (not deleted) since `visibleProgress` below is written
+ * generically against it, in case a future step needs hiding the same way.
  */
-export const HIDDEN_STEPS: readonly OnboardingStep[] = ['connectors'];
+export const HIDDEN_STEPS: readonly OnboardingStep[] = [];
 
 export interface OnboardingProgress { done: number; total: number }
 

@@ -13,8 +13,14 @@
  *    anyone who closes it on step 1 never sees the rest again.
  * 2. An empty step is submitted as a SKIP, not as an answer. The backend refuses a null value on
  *    purpose (400 value_required), and leaving a step blank genuinely is skipping it.
- * 3. Candy does NOT show the shared flow's `connectors` step — its tiles only recorded intent and
- *    never opened a real connection. The dashboard may still list it, so it is filtered out here.
+ * 3. Candy now shows the shared flow's `connectors` step too (2026-10-30) — same 6 apps as
+ *    Metaspace's and Finixy's onboarding (Gmail, LinkedIn, Instagram, Jira, Slack, Facebook),
+ *    each a real, standalone Composio toolkit. Previously this step was hidden entirely (its
+ *    tiles only recorded intent and never opened a real connection) — see
+ *    docs/user-profiling-onboarding/candy-onboarding-edge-cases-2026-10-30.md #12 for the full
+ *    history, including a known pre-existing issue left alone on purpose: `../api/composio`
+ *    proxies every call through Metaspace's backend rather than Candy's own (which has the
+ *    identical routes) — not fixed here, flagged for later.
  */
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -36,9 +42,24 @@ import {
   type OnboardingState,
   type OnboardingStep,
 } from '../api/onboarding';
+import { connectComposioApp, getAppAuthInfo, getComposioConnections, connectedAppId, isActiveConnection, redirectUrl, type ComposioConnection } from '../api/composio';
 
-/** The shared flow's steps minus `connectors`, which Candy does not show (note 3). */
-type ShownStep = Exclude<OnboardingStep, 'connectors'>;
+/** All steps the shared flow can send, including `number` — a legacy display name a very old
+ *  onboarding row's `current_step`/`skipped_steps` can still carry (the phone-number step it
+ *  stood for was removed 2026-10-28). Never reachable from a fresh flow going forward; kept only
+ *  so old data doesn't need a cast. */
+type ShownStep = OnboardingStep;
+
+/** Same list as ChatPlatform-frontend-new's and Finixy_workflow's own copies — keep in sync if
+ *  it changes (see docs/user-profiling-onboarding/candy-onboarding-edge-cases-2026-10-30.md #12). */
+const CONNECTORS: { app: string; name: string; blurb: string; icon: string }[] = [
+  { app: 'gmail',     name: 'Google',    blurb: 'Add your Gmail, Calendar, and Contacts.', icon: 'https://logos.composio.dev/api/gmail' },
+  { app: 'linkedin',  name: 'LinkedIn',  blurb: 'Add your LinkedIn connections.',           icon: 'https://logos.composio.dev/api/linkedin' },
+  { app: 'instagram', name: 'Instagram', blurb: 'Schedule and manage your posts.',          icon: 'https://logos.composio.dev/api/instagram' },
+  { app: 'jira',      name: 'Jira',      blurb: 'Add your tickets and project boards.',     icon: 'https://logos.composio.dev/api/jira' },
+  { app: 'slack',     name: 'Slack',     blurb: 'Send and receive messages in Slack.',      icon: 'https://logos.composio.dev/api/slack' },
+  { app: 'facebook',  name: 'Facebook',  blurb: 'Schedule and manage your posts.',          icon: 'https://logos.composio.dev/api/facebook' },
+];
 
 /** Organisation-profile step dropdowns — fixed option sets, matching the design
  *  (designs/Company Profile (1).png) exactly. Free-form on the backend (CharField), so picking
@@ -55,11 +76,12 @@ const STEP_COPY: Record<ShownStep, { title: string; sub: string }> = {
   org_gate:     { title: 'Are you setting up for an organisation?', sub: 'Founders can add organisation details — everyone else can jump straight in.' },
   // 'number' no longer asks for a phone number (removed 2026-10-28 — the new design has no phone
   // screen, and the personal-profile pre-step, OnboardingConnectorModal, already collects it and
-  // forwards it to the Dashboard directly). This slot is kept as the display stand-in for the
-  // hidden `connectors` step Candy never shows its own screen for (see note 3 at the top) — it's
-  // just a "you're set" pass-through now, not a real question.
+  // forwards it to the Dashboard directly). Never reachable from a fresh flow now that
+  // `connectors` has its own real screen (note 3) — kept only for a very old row whose
+  // current_step/skipped_steps still literally says "number".
   number:       { title: "You're all set!", sub: 'Finish setting up your Candy workspace.' },
   organisation: { title: 'Tell us about your organisation', sub: "Enter your organisation's domain and we'll fill in what we can — edit anything." },
+  connectors:   { title: 'Connect your tools, unlock your workflow', sub: 'Start with a few. You can add more anytime.' },
   // No team-invite UI here on purpose: a first-time signup is always on the free plan, and the
   // Dashboard's invite endpoint 403s anything below a paid Business plan (rbac/invitation_views.py's
   // B2B_PLANS check) regardless of workspace type — offering it here would be a guaranteed error.
@@ -68,7 +90,7 @@ const STEP_COPY: Record<ShownStep, { title: string; sub: string }> = {
   invite:       { title: 'Upload your organisation tree', sub: 'Your org chart — who reports to who. Optional, download the template to get started.' },
 };
 
-const ALL_STEPS: ShownStep[] = ['org_gate', 'organisation', 'invite', 'number'];
+const ALL_STEPS: ShownStep[] = ['org_gate', 'organisation', 'invite', 'connectors'];
 
 export default function OnboardingModal({
   onClose,
@@ -111,6 +133,8 @@ export default function OnboardingModal({
   const [orgTreeFile, setOrgTreeFile] = useState<File | null>(null);
   const [orgTreeError, setOrgTreeError] = useState<string | null>(null);
   const [editedOrgGate, setEditedOrgGate] = useState<string | null>(null);
+  const [connections, setConnections] = useState<ComposioConnection[]>([]);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   const alive = useRef(true);
   useEffect(() => {
@@ -123,24 +147,30 @@ export default function OnboardingModal({
     return () => { alive.current = false; };
   }, [preview]);
 
-  // Map 'connectors' to its frontend display name 'number' rather than filtering it out --
-  // `step` below uses 'number', and an entry missing from `steps` entirely makes
-  // `steps.indexOf('number')` return -1, which `Math.max(0, ...)` then silently clamps to 0.
-  // That broke two things at once on the final screen: Back read as "step 0" (wrongly
-  // disabled) and `isLast` read as false (wrongly not-last), so `advance()` never called
-  // `completeOnboarding()` -- onboarding could never be marked complete once org_gate (and
-  // its organisation/invite cascade) were skipped. Confirmed live: completed_at stayed NULL
-  // forever after clicking "Next" on "You're all set!".
-  const steps = (state?.steps ?? ALL_STEPS).map((s): ShownStep => (s === 'connectors' ? 'number' : s));
-  // ponytail: a server parked on `connectors` is shown `number`; if the dashboard then refuses
-  // `number` out of order, skip `connectors` server-side here instead.
-  const serverStep = state?.current_step === 'connectors' ? 'number' : state?.current_step;
+  // `connectors` is a real, shown step now (note 3) — no display-name remapping needed. A fixed
+  // index still matters here for the same reason it did before this change: `steps.indexOf(step)`
+  // must find a real match, or `Math.max(0, -1)` silently clamps to 0 and breaks Back/isLast on
+  // the final screen (see git history on this file for the live incident that taught us that).
+  const steps = (state?.steps ?? ALL_STEPS) as ShownStep[];
+  const serverStep = state?.current_step;
   const step: ShownStep = viewing ?? serverStep ?? steps[steps.length - 1];
   const stepIndex = Math.max(0, steps.indexOf(step));
   const isLast = stepIndex === steps.length - 1;
 
-  // Progress over the screens the user can see — the server's own total also counts the hidden
-  // `connectors` step (see utils/onboardingProgress). Preview mode has no server state: 0%.
+  const refetchConnections = () => {
+    getComposioConnections().then(setConnections).catch(() => {});
+  };
+  // Fetch once the connectors screen is actually reached — not on mount — same reasoning as the
+  // rest of this component's data being fetched lazily per step, and avoids an unnecessary call
+  // (through the Metaspace proxy, see note 3) for a user who never reaches this screen at all.
+  useEffect(() => {
+    if (!preview && step === 'connectors') refetchConnections();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, preview]);
+
+  // Progress over the screens the user can see — `connectors` is no longer hidden (note 3), so
+  // this now equals the server's own total for every product (see utils/onboardingProgress).
+  // Preview mode has no server state: 0%.
   const progress = state ? visibleProgress(state) : { done: 0, total: steps.length };
   const progressPct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
 
@@ -168,9 +198,10 @@ export default function OnboardingModal({
   /** What this step would submit, or undefined when it has nothing to say. */
   function valueFor(s: ShownStep): unknown {
     if (s === 'org_gate') return orgGate || undefined;
-    // 'number' is a pass-through screen now (see STEP_COPY's comment) — nothing to save, always
-    // a skip. advance() maps this back to the real underlying step name before sending it.
-    if (s === 'number') return undefined;
+    // connectors (and the legacy 'number' name it can arrive as — see STEP_COPY's comment) has
+    // nothing to save as a step "value": connection state lives in Composio's own records, not
+    // in the onboarding row. Advancing past this screen is always a skip.
+    if (s === 'connectors' || s === 'number') return undefined;
     if (s === 'organisation') {
       const description = tags.join(' ');
       if (!domain.trim() && !orgName.trim() && !orgSize.trim() && !industry.trim() && !description.trim()) {
@@ -204,12 +235,10 @@ export default function OnboardingModal({
     else setViewing(steps[stepIndex + 1]);
   }
 
-  // `step` is the DISPLAY name ('number' stands in for the hidden `connectors` step — see note 3
-  // and STEP_COPY's comment on 'number'). The dashboard only knows real step names: `connectors`
-  // is no longer in `STEPS`'s old slot but IS still a real step today (org_gate, organisation,
-  // invite, connectors), so any save/skip call must use the real name, never the display one —
-  // sending "number" is rejected as invalid_step now that the dashboard dropped that step entirely.
-  const realStep = step === 'number' ? (state?.current_step ?? 'connectors') : step;
+  // 'number' is a legacy display name only a very old row can still carry (STEP_COPY's comment on
+  // it) — never reachable from a fresh flow, but if it ever is, the dashboard rejects it as
+  // invalid_step (it dropped that step entirely), so translate it to the real current name here.
+  const realStep = step === 'number' ? 'connectors' : step;
 
   async function advance() {
     if (preview) { previewNext(); return; }
@@ -551,6 +580,26 @@ export default function OnboardingModal({
                       {orgTreeError && <p style={{ margin: 0, fontSize: 12, color: '#f87171' }}>{orgTreeError}</p>}
                     </div>
                   )}
+
+                  {step === 'connectors' && (
+                    <div style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {CONNECTORS.map((c) => (
+                        <ConnectorRow
+                          key={c.app}
+                          c={c}
+                          connected={connections.some((conn) => connectedAppId(conn) === c.app && isActiveConnection(conn))}
+                          isDark={isDark}
+                          line={line}
+                          card={card}
+                          fg={fg}
+                          muted={muted}
+                          onConnected={refetchConnections}
+                          onError={setConnectError}
+                        />
+                      ))}
+                      {connectError && <p style={{ margin: 0, fontSize: 12, color: '#f87171' }}>{connectError}</p>}
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -621,5 +670,100 @@ export default function OnboardingModal({
       </div>
     </div>,
     document.body,
+  );
+}
+
+/** One connector tile — same shape/behavior as ChatPlatform-frontend-new's ConnectorRow. */
+function ConnectorRow({
+  c, connected, isDark, line, card, fg, muted, onConnected, onError,
+}: {
+  c: { app: string; name: string; blurb: string; icon: string };
+  connected: boolean;
+  isDark: boolean; line: string; card: string; fg: string; muted: string;
+  onConnected: () => void;
+  onError: (m: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [iconFailed, setIconFailed] = useState(false);
+
+  async function connect() {
+    setBusy(true);
+    try {
+      // Ask what kind of auth it needs first: an OAuth app hands back a redirect URL, an
+      // api_key app connects on the spot. Guessing wrong leaves the user staring at nothing.
+      const info = await getAppAuthInfo(c.app).catch(() => null);
+      const res = await connectComposioApp(c.app);
+      const url = redirectUrl(res);
+      if (url) {
+        const w = window.open(url, 'composio-connect', 'width=520,height=680');
+        if (!w) {
+          onError('Your browser blocked the connect window. Allow pop-ups and try again.');
+          setBusy(false);
+          return;
+        }
+        // Composio's hosted OAuth page gives no postMessage callback — the popup closing is the
+        // only signal we get that the user finished (or abandoned) it. Refetching right after
+        // window.open() (before the user has done anything in the popup) always finds the
+        // connection not-yet-made — see ChatPlatform-frontend-new's identical fix, same day.
+        const poll = setInterval(() => {
+          if (w.closed) {
+            clearInterval(poll);
+            onConnected();
+            setBusy(false);
+          }
+        }, 500);
+        return;
+      }
+      if (info?.auth_type && info.auth_type !== 'no_auth' && info.auth_type !== 'api_key') {
+        onError(`${c.name} needs details we can't collect here — use the Connectors panel.`);
+      }
+      onConnected();
+    } catch {
+      onError(`Could not connect ${c.name}.`);
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
+      borderRadius: 16, border: `1px solid ${line}`, background: card,
+    }}>
+      {!iconFailed ? (
+        <img
+          src={c.icon}
+          alt=""
+          onError={() => setIconFailed(true)}
+          style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'contain', flexShrink: 0, background: isDark ? '#27272a' : '#fff' }}
+        />
+      ) : (
+        <Icon name="globe" size={20} style={{ color: muted, flexShrink: 0 }} />
+      )}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 14, fontWeight: 500, color: fg }}>{c.name}</div>
+        <div style={{ fontSize: 12, color: muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.blurb}</div>
+      </div>
+      {connected ? (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', fontSize: 12,
+          borderRadius: 10, background: 'rgba(16,185,129,0.12)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)',
+        }}>
+          <Icon name="check" size={12} /> Connected
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={connect}
+          disabled={busy}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 12,
+            fontWeight: 500, borderRadius: 10, border: 'none', cursor: busy ? 'not-allowed' : 'pointer',
+            background: '#7c3aed', color: '#fff', opacity: busy ? 0.6 : 1,
+          }}
+        >
+          {busy ? 'Connecting…' : 'Connect'}
+        </button>
+      )}
+    </div>
   );
 }

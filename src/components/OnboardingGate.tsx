@@ -101,8 +101,9 @@ export default function OnboardingGate() {
 
   if (hidden) return null;
 
-  // The server counts the `connectors` step Candy never shows, so its steps_total is 4 while the
-  // pop-up has 3 screens. Show the count of what the user can actually see.
+  // visibleProgress now just mirrors the server's own total — `connectors` is shown here too
+  // (2026-10-30), same as Metaspace and Finixy. Kept as its own helper rather than reading
+  // state.steps_done/steps_total directly, in case a future step needs hiding the same way.
   const { done, total } = visibleProgress(state);
 
   const bg = isDark ? 'rgba(24,24,27,0.92)' : 'rgba(255,255,255,0.96)';
