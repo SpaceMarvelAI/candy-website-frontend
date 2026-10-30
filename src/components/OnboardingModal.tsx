@@ -123,7 +123,15 @@ export default function OnboardingModal({
     return () => { alive.current = false; };
   }, [preview]);
 
-  const steps = (state?.steps ?? ALL_STEPS).filter((s): s is ShownStep => s !== 'connectors');
+  // Map 'connectors' to its frontend display name 'number' rather than filtering it out --
+  // `step` below uses 'number', and an entry missing from `steps` entirely makes
+  // `steps.indexOf('number')` return -1, which `Math.max(0, ...)` then silently clamps to 0.
+  // That broke two things at once on the final screen: Back read as "step 0" (wrongly
+  // disabled) and `isLast` read as false (wrongly not-last), so `advance()` never called
+  // `completeOnboarding()` -- onboarding could never be marked complete once org_gate (and
+  // its organisation/invite cascade) were skipped. Confirmed live: completed_at stayed NULL
+  // forever after clicking "Next" on "You're all set!".
+  const steps = (state?.steps ?? ALL_STEPS).map((s): ShownStep => (s === 'connectors' ? 'number' : s));
   // ponytail: a server parked on `connectors` is shown `number`; if the dashboard then refuses
   // `number` out of order, skip `connectors` server-side here instead.
   const serverStep = state?.current_step === 'connectors' ? 'number' : state?.current_step;
