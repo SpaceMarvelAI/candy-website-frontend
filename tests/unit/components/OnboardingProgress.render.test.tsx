@@ -3,7 +3,7 @@
  * visible "Finish setup" pill and the modal's progress bar must reflect Candy's 3 screens.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
 vi.mock('../../../src/api/onboarding', () => ({
   getOnboarding: vi.fn(), saveOnboardingStep: vi.fn(), skipOnboardingStep: vi.fn(),
@@ -12,6 +12,13 @@ vi.mock('../../../src/api/onboarding', () => ({
 vi.mock('../../../src/api/client', async (orig) => ({
   ...(await orig<typeof import('../../../src/api/client')>()),
   getToken: () => 'test-token',
+}));
+// OnboardingGate re-checks onboarding once AppContext's `user` is set (fixes a race where a
+// fresh SSO login's async token exchange hadn't finished when the gate's effect first ran) --
+// mocked here the same lightweight way as getToken above, rather than mounting the real
+// AppProvider and its own SSO/API side effects into what is otherwise a plain render test.
+vi.mock('../../../src/context/AppContext', () => ({
+  useApp: () => ({ user: { user_id: 'u1', email: 'a@b.com', role: 'admin', company_id: 'c1', company_name: 'Acme', full_name: null } }),
 }));
 
 import * as api from '../../../src/api/onboarding';
@@ -60,7 +67,7 @@ describe('Modal progress bar', () => {
     vi.mocked(api.getOnboarding).mockResolvedValue(serverState());
     const { container } = render(<OnboardingModal onClose={() => {}} />);
 
-    await waitFor(() => expect(screen.getByText("What's your number?")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("You're all set!")).toBeTruthy());
     expect(container.ownerDocument.querySelector('div[style*="width: 33%"]')).toBeTruthy();
     expect(container.ownerDocument.querySelector('div[style*="width: 50%"]')).toBeNull();
   });
@@ -70,7 +77,43 @@ describe('Modal progress bar', () => {
     render(<OnboardingModal onClose={() => {}} />);
 
     // A server parked on `connectors` is shown the next visible screen.
-    await waitFor(() => expect(screen.getByText("What's your number?")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("You're all set!")).toBeTruthy());
     expect(screen.queryByText('Connect your tools, unlock your workflow')).toBeNull();
+  });
+});
+
+describe('Final screen reached via a skipped org_gate cascade', () => {
+  // Regression: 'connectors' was filtered OUT of the local `steps` array instead of being
+  // mapped to its display name 'number', so steps.indexOf('number') was -1 -- clamped to 0 by
+  // Math.max, making Back wrongly read as "step 0" and isLast wrongly read as false. The
+  // second part meant advance() never called completeOnboarding() on this screen at all.
+  const skippedToEnd = (over: Partial<api.OnboardingState> = {}) => serverState({
+    current_step: 'connectors',
+    steps: ['org_gate', 'organisation', 'invite', 'connectors'],
+    skipped_steps: ['org_gate', 'organisation', 'invite'],
+    selections: {},
+    steps_done: 0,
+    ...over,
+  });
+
+  it('does not disable Back -- there are earlier (skipped) steps to return to', async () => {
+    vi.mocked(api.getOnboarding).mockResolvedValue(skippedToEnd());
+    render(<OnboardingModal onClose={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText("You're all set!")).toBeTruthy());
+    expect(screen.getByText('Back').closest('button')).not.toBeDisabled();
+  });
+
+  it('shows "Finish" (isLast true) and calls completeOnboarding on click', async () => {
+    vi.mocked(api.getOnboarding).mockResolvedValue(skippedToEnd());
+    vi.mocked(api.skipOnboardingStep).mockResolvedValue(skippedToEnd());
+    vi.mocked(api.completeOnboarding).mockResolvedValue(skippedToEnd({ completed: true, completed_at: '2026-10-30T00:00:00Z', auto_open: false }));
+    const onFinished = vi.fn();
+    render(<OnboardingModal onClose={() => {}} onFinished={onFinished} />);
+
+    await waitFor(() => expect(screen.getByText('Finish')).toBeTruthy());
+    fireEvent.click(screen.getByText('Finish'));
+
+    await waitFor(() => expect(api.completeOnboarding).toHaveBeenCalled());
   });
 });

@@ -12,7 +12,7 @@ html, :host {
   font-feature-settings: normal;
   font-variation-settings: normal;
   -webkit-tap-highlight-color: transparent;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Zalando Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
   line-height: 1.5;
 }
 body { margin: 0; line-height: inherit; }

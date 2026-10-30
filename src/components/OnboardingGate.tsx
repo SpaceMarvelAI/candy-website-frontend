@@ -19,20 +19,35 @@ import posthog from 'posthog-js';
 
 import { Icon } from '../assets/icons';
 import { useTheme } from '../hooks/useTheme';
+import { useApp } from '../context/AppContext';
 import { getToken } from '../api/client';
 import { getOnboarding, type OnboardingState } from '../api/onboarding';
+import OnboardingConnectorModal from './OnboardingConnectorModal';
 import OnboardingModal from './OnboardingModal';
 import { visibleProgress } from '../utils/onboardingProgress';
 
-export default function OnboardingGate({ canInvite = true }: { canInvite?: boolean }) {
+export default function OnboardingGate() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  // AppContext's SSO token exchange (a fresh LinkedIn/OIDC login) is asynchronous --
+  // setToken() only runs once that network round trip finishes. A mount-once effect with
+  // an empty dependency array checks getToken() before that exchange completes, finds
+  // nothing, and never asks again. Depending on `user` here re-runs the check the moment
+  // sign-in actually finishes, instead of only at the first (too-early) render.
+  const { user } = useApp();
 
   const [state, setState] = useState<OnboardingState | null>(null);
   const [open, setOpen] = useState(false);
   /** Hides the widget for this page view only — not persisted. The server already knows the flow
    *  was dismissed; this is just "stop nudging me right now". */
   const [hidden, setHidden] = useState(false);
+  // Tracks whether the GitHub-profile pre-step should show on this open. STATE, not a ref mutated
+  // during render — a ref mutated in the render body reads differently across React StrictMode's
+  // dev-only double-invoke of the render call (first call sees it false and returns the connector
+  // step; the second call then sees the ref already flipped true and returns OnboardingModal
+  // instead, which is the call React actually uses), so the connector pre-step could never appear
+  // in local dev at all.
+  const [connectorShown, setConnectorShown] = useState(false);
 
   useEffect(() => {
     // No session yet (login screen, logged out) — onboarding is not the concern then, and asking
@@ -44,24 +59,44 @@ export default function OnboardingGate({ canInvite = true }: { canInvite?: boole
       .then((s) => {
         if (!alive) return;
         setState(s);
-        if (s.auto_open) setOpen(true);
+        if (s.auto_open) { setOpen(true); setConnectorShown(true); }
       })
       // Deliberately silent: a user who cannot reach onboarding has a bigger problem, and this is
       // a nudge, not a feature they asked for. Never block the app on it.
       .catch(() => {});
     return () => { alive = false; };
-  }, []);
+  }, [user]);
+
+  // Cross-product sync only updates the OTHER product's database, never an already-open tab's
+  // React state here -- without this, finishing onboarding in another product (another tab)
+  // leaves this tab showing stale "Finish setup" status until a manual reload. Re-check quietly
+  // on refocus; deliberately does NOT force the pop-up open again (that's the initial-load
+  // effect's job only) -- just keeps the background state/widget text accurate.
+  useEffect(() => {
+    if (!getToken()) return;
+    function onVisible() {
+      if (document.visibilityState !== 'visible') return;
+      getOnboarding().then(setState).catch(() => {});
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user]);
 
   if (!state || state.completed) return null;
 
   if (open) {
-    return (
-      <OnboardingModal
-        canInvite={canInvite}
-        onClose={() => setOpen(false)}
-        onFinished={() => getOnboarding().then(setState).catch(() => {})}
-      />
-    );
+    const sharedProps = {
+      onClose: () => { setOpen(false); setConnectorShown(false); },
+      onFinished: () => { setConnectorShown(false); getOnboarding().then(setState).catch(() => {}); },
+    };
+
+    // Show the GitHub-profile pre-step on first open. onClose/onFinished above clear
+    // connectorShown either way, so a later widget re-open goes straight to the standard flow.
+    if (connectorShown) {
+      return <OnboardingConnectorModal {...sharedProps} />;
+    }
+
+    return <OnboardingModal {...sharedProps} />;
   }
 
   if (hidden) return null;
