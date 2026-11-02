@@ -24,6 +24,7 @@
  */
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import posthog from 'posthog-js';
 
 import { Icon } from '../assets/icons';
 import { useTheme } from '../hooks/useTheme';
@@ -150,7 +151,8 @@ export default function OnboardingModal({
   // `connectors` is a real, shown step now (note 3) — no display-name remapping needed. A fixed
   // index still matters here for the same reason it did before this change: `steps.indexOf(step)`
   // must find a real match, or `Math.max(0, -1)` silently clamps to 0 and breaks Back/isLast on
-  // the final screen (see git history on this file for the live incident that taught us that).
+  // the final screen (see git history on this file for the live incident that taught us that,
+  // when 'connectors' was still remapped to 'number' and hidden).
   const steps = (state?.steps ?? ALL_STEPS) as ShownStep[];
   const serverStep = state?.current_step;
   const step: ShownStep = viewing ?? serverStep ?? steps[steps.length - 1];
@@ -264,12 +266,18 @@ export default function OnboardingModal({
         uploadOrgTree(orgTreeFile);
       }
       // Blank means skip — see note 2 at the top.
-      const next = value === undefined
-        ? await skipOnboardingStep(realStep)
-        : await saveOnboardingStep(realStep, value);
-      applyState(next);
+      if (value === undefined) {
+        const next = await skipOnboardingStep(realStep);
+        posthog.capture('onboarding_step_skipped', { step, step_index: stepIndex });
+        applyState(next);
+      } else {
+        const next = await saveOnboardingStep(realStep, value);
+        posthog.capture('onboarding_step_completed', { step, step_index: stepIndex });
+        applyState(next);
+      }
       if (isLast) {
         applyState(await completeOnboarding());
+        posthog.capture('onboarding_completed', {});
         onFinished?.();
         onClose();
       }
@@ -283,7 +291,10 @@ export default function OnboardingModal({
     if (preview) { previewNext(); return; }
     setError(null);
     setBusy(true);
-    try { applyState(await skipOnboardingStep(realStep)); }
+    try {
+      applyState(await skipOnboardingStep(realStep));
+      posthog.capture('onboarding_step_skipped', { step, step_index: stepIndex });
+    }
     catch (e) { setError(errorMessage(e)); }
     setBusy(false);
   }

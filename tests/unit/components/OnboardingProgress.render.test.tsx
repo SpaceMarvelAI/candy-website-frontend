@@ -133,3 +133,39 @@ describe('Final screen reached via a skipped org_gate cascade', () => {
     await waitFor(() => expect(api.completeOnboarding).toHaveBeenCalled());
   });
 });
+
+describe('Final screen reached via a skipped org_gate cascade', () => {
+  // Regression: 'connectors' was filtered OUT of the local `steps` array instead of being
+  // mapped to its display name 'number', so steps.indexOf('number') was -1 -- clamped to 0 by
+  // Math.max, making Back wrongly read as "step 0" and isLast wrongly read as false. The
+  // second part meant advance() never called completeOnboarding() on this screen at all.
+  const skippedToEnd = (over: Partial<api.OnboardingState> = {}) => serverState({
+    current_step: 'connectors',
+    steps: ['org_gate', 'organisation', 'invite', 'connectors'],
+    skipped_steps: ['org_gate', 'organisation', 'invite'],
+    selections: {},
+    steps_done: 0,
+    ...over,
+  });
+
+  it('does not disable Back -- there are earlier (skipped) steps to return to', async () => {
+    vi.mocked(api.getOnboarding).mockResolvedValue(skippedToEnd());
+    render(<OnboardingModal onClose={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText("You're all set!")).toBeTruthy());
+    expect(screen.getByText('Back').closest('button')).not.toBeDisabled();
+  });
+
+  it('shows "Finish" (isLast true) and calls completeOnboarding on click', async () => {
+    vi.mocked(api.getOnboarding).mockResolvedValue(skippedToEnd());
+    vi.mocked(api.skipOnboardingStep).mockResolvedValue(skippedToEnd());
+    vi.mocked(api.completeOnboarding).mockResolvedValue(skippedToEnd({ completed: true, completed_at: '2026-10-30T00:00:00Z', auto_open: false }));
+    const onFinished = vi.fn();
+    render(<OnboardingModal onClose={() => {}} onFinished={onFinished} />);
+
+    await waitFor(() => expect(screen.getByText('Finish')).toBeTruthy());
+    fireEvent.click(screen.getByText('Finish'));
+
+    await waitFor(() => expect(api.completeOnboarding).toHaveBeenCalled());
+  });
+});
