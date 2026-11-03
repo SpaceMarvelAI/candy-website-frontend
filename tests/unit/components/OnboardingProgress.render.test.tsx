@@ -139,6 +139,9 @@ describe('Final screen reached via a skipped org_gate cascade', () => {
   // mapped to its display name 'number', so steps.indexOf('number') was -1 -- clamped to 0 by
   // Math.max, making Back wrongly read as "step 0" and isLast wrongly read as false. The
   // second part meant advance() never called completeOnboarding() on this screen at all.
+  // 'connectors' is now a real, shown step in its own right (no remapping to 'number'/"You're
+  // all set!" -- see OnboardingModal's module docstring) so the regression check below looks
+  // for the connectors screen's own heading instead.
   const skippedToEnd = (over: Partial<api.OnboardingState> = {}) => serverState({
     current_step: 'connectors',
     steps: ['org_gate', 'organisation', 'invite', 'connectors'],
@@ -152,7 +155,7 @@ describe('Final screen reached via a skipped org_gate cascade', () => {
     vi.mocked(api.getOnboarding).mockResolvedValue(skippedToEnd());
     render(<OnboardingModal onClose={() => {}} />);
 
-    await waitFor(() => expect(screen.getByText("You're all set!")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Connect your tools, unlock your workflow')).toBeTruthy());
     expect(screen.getByText('Back').closest('button')).not.toBeDisabled();
   });
 
