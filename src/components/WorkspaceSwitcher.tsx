@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../assets/icons';
 import { getToken, setToken } from '../api/client';
 import { errorMessage } from '../utils/apiError';
-import { me, storeUser } from '../api/auth';
+import { me, storeUser, loadStoredUser } from '../api/auth';
 import { listMyWorkspaces, switchWorkspace, type MyWorkspace } from '../api/workspaces';
 import { decodeWorkspaceIdFromToken } from '../utils/jwt';
 
@@ -80,8 +80,16 @@ export default function WorkspaceSwitcher({
         const freshUser = await me();
         storeUser(freshUser);
       } catch (e) {
-        // Non-fatal: worst case the stale name flashes briefly until the next natural refetch.
-        // Never block the switch itself on this.
+        // Isolation audit Pass 6 finding: this used to just swallow the failure and reload with
+        // the PRE-switch company_id still cached — not merely a cosmetic "stale name flashes"
+        // (as the comment this replaces assumed), since AppContext's mount effect reads this
+        // same cached value straight into posthog.group('company', ...) on the reload that
+        // follows, tagging every event under the OLD company crossed with the NEW workspace.
+        // Clear the company fields instead of leaving a wrong one — an absent company group is
+        // recoverable (CompanySwitcher/next natural refetch fixes it); a wrong one silently
+        // misattributes data until then. Never block the switch itself on this.
+        const stale = loadStoredUser();
+        if (stale) storeUser({ ...stale, company_id: '', company_name: '' });
       }
       window.location.reload();
     } catch (e) {

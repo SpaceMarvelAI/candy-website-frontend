@@ -7,7 +7,9 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from '../assets/icons';
 import { getProfile, updateProfile, deleteAvatar, type UserProfile } from '../api/profile';
+import { getOnboardingProfile, getOrganisationProfile, type OrganisationProfile } from '../api/onboarding';
 import { errorMessage } from '../utils/apiError';
+import LinkedInZipImport from './LinkedInZipImport';
 
 interface Props {
   onClose: () => void;
@@ -19,7 +21,7 @@ interface Props {
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png'];
 
-type FieldKey = 'name' | 'phone' | 'address' | 'bio';
+type FieldKey = 'name' | 'phone' | 'address' | 'bio' | 'employer';
 type FieldStatus = 'idle' | 'saving' | 'error';
 
 const inputStyle: React.CSSProperties = {
@@ -86,15 +88,17 @@ export default function ProfileModal({ onClose, onSaved }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
 
-  const [saved, setSaved] = useState<Record<FieldKey, string>>({ name: '', phone: '', address: '', bio: '' });
-  const [draft, setDraft] = useState<Record<FieldKey, string>>({ name: '', phone: '', address: '', bio: '' });
-  const [fieldStatus, setFieldStatus] = useState<Record<FieldKey, FieldStatus>>({ name: 'idle', phone: 'idle', address: 'idle', bio: 'idle' });
-  const [fieldError, setFieldError]   = useState<Record<FieldKey, string>>({ name: '', phone: '', address: '', bio: '' });
+  const [saved, setSaved] = useState<Record<FieldKey, string>>({ name: '', phone: '', address: '', bio: '', employer: '' });
+  const [draft, setDraft] = useState<Record<FieldKey, string>>({ name: '', phone: '', address: '', bio: '', employer: '' });
+  const [fieldStatus, setFieldStatus] = useState<Record<FieldKey, FieldStatus>>({ name: 'idle', phone: 'idle', address: 'idle', bio: 'idle', employer: 'idle' });
+  const [fieldError, setFieldError]   = useState<Record<FieldKey, string>>({ name: '', phone: '', address: '', bio: '', employer: '' });
 
   const [email, setEmail]     = useState('');
   const [avatarUrl, setAvatarUrl]         = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [removingAvatar, setRemovingAvatar] = useState(false);
+  const [topLanguages, setTopLanguages] = useState<string[]>([]);
+  const [org, setOrg] = useState<OrganisationProfile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -105,6 +109,7 @@ export default function ProfileModal({ onClose, onSaved }: Props) {
         if (cancelled) return;
         const fields: Record<FieldKey, string> = {
           name: profile.name ?? '', phone: profile.phone ?? '', address: profile.address ?? '', bio: profile.bio ?? '',
+          employer: profile.employer ?? '',
         };
         setSaved(fields);
         setDraft(fields);
@@ -116,6 +121,13 @@ export default function ProfileModal({ onClose, onSaved }: Props) {
         if (!cancelled) setLoading(false);
       }
     })();
+    // GitHub's detected tech-stack isn't part of Candy's own profile — it lives on the
+    // dashboard's onboarding profile. Best-effort: a self-hosted deployment or a non-GitHub
+    // user just won't show this section.
+    getOnboardingProfile()
+      .then((p) => { if (!cancelled) setTopLanguages(p.github?.top_languages ?? []); })
+      .catch(() => {});
+    getOrganisationProfile().then((data) => { if (!cancelled) setOrg(data); });
     return () => { cancelled = true; };
   }, []);
 
@@ -276,6 +288,71 @@ export default function ProfileModal({ onClose, onSaved }: Props) {
               status={fieldStatus.address} error={fieldError.address} onChange={onFieldChange} onSave={saveField} />
             <FieldRow field="bio" label="Bio" value={draft.bio} dirty={draft.bio !== saved.bio}
               status={fieldStatus.bio} error={fieldError.bio} multiline onChange={onFieldChange} onSave={saveField} />
+            <FieldRow field="employer" label="Employer" value={draft.employer} dirty={draft.employer !== saved.employer}
+              status={fieldStatus.employer} error={fieldError.employer} onChange={onFieldChange} onSave={saveField} />
+
+            {topLanguages.length > 0 && (
+              <div>
+                <label style={labelStyle}>Tech Stack</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {topLanguages.map((lang) => (
+                    <span
+                      key={lang}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', padding: '5px 10px', fontSize: 11,
+                        borderRadius: 999, border: '1px solid var(--purple)', background: 'rgba(124,58,237,0.12)', color: 'var(--text-1)',
+                      }}
+                    >
+                      {lang}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-4)', marginTop: 4 }}>Detected from your GitHub repos</div>
+              </div>
+            )}
+
+            {(() => {
+              // org.name is auto-set by the Dashboard for EVERY workspace, including a bare
+              // personal one with no organisation ever filled in — not proof of a real org.
+              const hasRealOrg = !!(org && (org.industry || org.org_size || org.description || org.website || org.logo_url || org.org_tree_url));
+              return (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
+                  <label style={labelStyle}>Organisation</label>
+                  {!hasRealOrg ? (
+                    <div style={{ fontSize: 11.5, color: 'var(--text-4)' }}>No organisation set up.</div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                        {org!.logo_url && (
+                          // eslint-disable-next-line jsx-a11y/alt-text
+                          <img src={org!.logo_url} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                        )}
+                        <div>
+                          {org!.name && <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{org!.name}</div>}
+                          {org!.website && <div style={{ fontSize: 11, color: 'var(--text-4)' }}>{org!.website}</div>}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-4)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {org!.industry && <div>Industry: <span style={{ color: 'var(--text-1)' }}>{org!.industry}</span></div>}
+                        {org!.org_size && <div>Size: <span style={{ color: 'var(--text-1)' }}>{org!.org_size}</span></div>}
+                        {org!.description && <div>Tagline: <span style={{ color: 'var(--text-1)' }}>{org!.description}</span></div>}
+                        {org!.org_tree_url && <div>Org tree: <span style={{ color: 'var(--text-1)' }}>Uploaded</span></div>}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
+            <LinkedInZipImport
+              onImported={(data) => {
+                // Pre-fills the draft, same as typing it in — still needs each field's own Save
+                // click. Never overwrites a field the user already typed something into.
+                if (data.name && !draft.name) onFieldChange('name', data.name);
+                if (data.bio && !draft.bio) onFieldChange('bio', data.bio);
+                if (data.company && !draft.employer) onFieldChange('employer', data.company);
+              }}
+            />
 
             {error && <div style={{ fontSize: 12, color: '#f87171' }}>{error}</div>}
           </div>

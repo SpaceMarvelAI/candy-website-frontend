@@ -4,14 +4,14 @@ import {
 } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import posthog from 'posthog-js';
-import { loadStoredUser, fullLogout, ssoCallback, me, storeUser, type AuthUser } from '../api/auth';
+import { loadStoredUser, fullLogout, ssoCallback, exchangeDashboardToken, me, storeUser, type AuthUser } from '../api/auth';
 import { getToken, setToken } from '../api/client';
 import { addToast, type AddToast } from '../hooks/useToast';
 import { logger } from '../utils/logger';
 import { errorMessage } from '../utils/apiError';
 import { PENDING_PROMPT_TICKET_KEY, takeSsoIntent, redirectWithSso, takeReturnRoute } from '../utils/sso';
 import { claimPromptTicket, type ClaimedPrompt } from '../api/prompts';
-import { decodeWorkspaceIdFromToken } from '../utils/jwt';
+import { decodeWorkspaceIdFromToken, decodeWorkspaceNameFromToken } from '../utils/jwt';
 
 // Bidirectional mapping between legacy view names and URL paths.
 // All existing showView('dashboard') calls keep working unchanged.
@@ -123,6 +123,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signedIn = useCallback((u: AuthUser) => {
     logger.info('[AppContext] signedIn', { userId: u.user_id, email: u.email, role: u.role, company: u.company_name });
     setUser(u);
+    // Isolation audit Pass 6 finding: this function had ZERO PostHog calls, yet
+    // CompanySwitcher.tsx calls it directly after a company switch — relying only on the hard
+    // reload that follows to fix identity via the mount effect below. Between the switch and
+    // that reload, any event (and the reload's own analytics) still carried the PRE-switch
+    // company. Same resetGroups()-then-recompute shape as the mount effect / SSO exchange below.
+    posthog.identify(u.user_id, { email: u.email, name: u.full_name });
+    posthog.resetGroups();
+    if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
+    const workspaceId = decodeWorkspaceIdFromToken(getToken());
+    const workspaceName = decodeWorkspaceNameFromToken(getToken());
+    if (workspaceId) posthog.group('workspace', workspaceId, workspaceName ? { name: workspaceName } : undefined);
     // If there's a pending prompt ticket, don't navigate — let PromptTicketHandler handle it
     const pendingTicket = sessionStorage.getItem(PENDING_PROMPT_TICKET_KEY);
     if (!pendingTicket) {
@@ -188,9 +199,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     function onAuthExpired() {
       logger.warn('[AppContext] candy:auth-expired event received — clearing user state');
       setUser(null);
+      // Isolation audit Pass 6 finding: this cleared app state but never told PostHog the
+      // session ended — a DIFFERENT human signing in afterward (shared device) would otherwise
+      // have their events/identify merged under whoever was last `identify()`'d here. Neither
+      // this handler's own mount-effect re-run (user is now null) nor the client.ts 401 path
+      // below ever called this before.
+      posthog.reset();
     }
     window.addEventListener('candy:auth-expired', onAuthExpired);
     return () => window.removeEventListener('candy:auth-expired', onAuthExpired);
+  }, []);
+
+  // Real bug fixed 2026-10-07 (same root cause as ChatPlatform-frontend-new's
+  // SSOAuthContext commit ebfd4df): `initialUser` above is seeded straight from
+  // sessionStorage on every mount, but posthog.identify()/group() only ever ran
+  // from the SSO-exchange effect further down — which only fires on a fresh
+  // login, never on a plain reload of an already-signed-in tab. Since most real
+  // sessions are reloads of an existing session, not fresh logins, this meant
+  // most real events carried no PostHog identity/group at all. Re-establish it
+  // here too, once, for whatever user was already in sessionStorage at mount.
+  useEffect(() => {
+    if (!initialUser) return;
+    posthog.identify(initialUser.user_id, { email: initialUser.email, name: initialUser.full_name });
+    // resetGroups() first (isolation audit critical #2) — posthog-js has no selective
+    // single-group unset (only this blanket clear), and this mount effect is also what
+    // WorkspaceSwitcher.tsx relies on after its hard reload (it has no posthog call of its
+    // own) — without this, a stale group from before the switch/reload could otherwise
+    // persist underneath whatever gets re-set below.
+    posthog.resetGroups();
+    if (initialUser.company_id) {
+      posthog.group('company', initialUser.company_id, { name: initialUser.company_name });
+    }
+    const workspaceId = decodeWorkspaceIdFromToken(getToken());
+    const workspaceName = decodeWorkspaceNameFromToken(getToken());
+    if (workspaceId) posthog.group('workspace', workspaceId, workspaceName ? { name: workspaceName } : undefined);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Intercept ?sso_token= / ?access_token= on ANY page (SpaceMarvel may redirect to /dashboard).
@@ -281,15 +324,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
      * endpoint verifies with SPACEMARVEL_SECRET_KEY — so it only accepts that token where the
      * backend's two secrets happen to match. If the exchange refuses it, use the token as-is,
      * verified by /v1/auth/me. On failure, put the previous session back untouched.
+     *
+     * A plain cross-app hop (Metaspace/Finixy → Candy, no `via=oidc`) has no Candy token to
+     * fall back to that way — its `access_token` is the ORIGIN app's dashboard OAuth token,
+     * not a Candy one. But that token is still live, so if the one-time `sso_token` above
+     * fails, exchange the dashboard token instead of just giving up and showing a login
+     * screen for a session the user was already in on the app they came from.
      */
+    const viaOidc = params.get('via') === 'oidc';
     const exchange = () => ssoCallback(token).catch(async (err) => {
-      if (params.get('via') !== 'oidc' || !accessToken) throw err;
-      logger.warn('[AppContext] SSO exchange refused the OIDC token — using it directly', { err });
-      setToken(accessToken);
+      if (!accessToken) throw err;
+
+      if (viaOidc) {
+        logger.warn('[AppContext] SSO exchange refused the OIDC token — using it directly', { err });
+        setToken(accessToken);
+        try {
+          const u = await me();
+          storeUser(u);
+          return { user: u };
+        } catch {
+          setToken(priorToken);
+          throw err;
+        }
+      }
+
+      logger.warn('[AppContext] one-time SSO ticket failed — trying the dashboard access token', { err });
       try {
-        const u = await me();
-        storeUser(u);
-        return { user: u };
+        return await exchangeDashboardToken(accessToken);
       } catch {
         setToken(priorToken);
         throw err;
@@ -301,6 +362,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         logger.info('[AppContext] SSO exchange succeeded', { userId: u.user_id, email: u.email });
         setUser(u);
         posthog.identify(u.user_id, { email: u.email, name: u.full_name });
+        // resetGroups() first (isolation audit critical #2) — a `preserve-on-fail, success
+        // without reset` identify here used to alias whichever user was previously signed in
+        // on this browser into the new one; posthog-js has no selective single-group unset,
+        // only this blanket clear.
+        posthog.resetGroups();
         if (u.company_id) posthog.group('company', u.company_id, { name: u.company_name });
         // company = ClientCompany (a sub-tenant), workspace = SubscriptionWorkspace (the real
         // billing entity) — same split as every backend this session. The workspace id lives
@@ -308,7 +374,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // already stored the current token via setToken()/ssoCallback, so getToken() here
         // reads the just-validated one, same decode WorkspaceSwitcher.tsx already uses.
         const workspaceId = decodeWorkspaceIdFromToken(getToken());
-        if (workspaceId) posthog.group('workspace', workspaceId);
+        const workspaceName = decodeWorkspaceNameFromToken(getToken());
+        if (workspaceId) posthog.group('workspace', workspaceId, workspaceName ? { name: workspaceName } : undefined);
 
         // Back from the login the rail sent them to (Home/Finixy clicked with no valid dashboard
         // token): carry on to that app instead of stopping in Candy. The #/sso/callback page that

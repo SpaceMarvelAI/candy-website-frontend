@@ -4,7 +4,7 @@ import posthog from 'posthog-js';
 import { ssoCallback } from '../../api/auth';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
-import { decodeWorkspaceIdFromToken } from '../../utils/jwt';
+import { decodeWorkspaceIdFromToken, decodeWorkspaceNameFromToken } from '../../utils/jwt';
 
 type Status = 'loading' | 'error';
 
@@ -54,13 +54,20 @@ export default function SSOCallbackPage() {
         if (dashboardToken) localStorage.setItem('dashboard_token', dashboardToken);
 
         posthog.identify(user.user_id, { email: user.email, name: user.full_name });
+        // resetGroups() first (isolation audit critical #2) — the localStorage.clear() above
+        // wipes posthog-js's own persisted state, but not whatever it already holds in memory
+        // from this page's own load (groups survive a storage wipe; only the SDK's own API
+        // clears them). Without this, a previous user's company/workspace group on this
+        // browser could still be aliased into the new identify() above.
+        posthog.resetGroups();
         if (user.company_id) posthog.group('company', user.company_id, { name: user.company_name });
         // company = ClientCompany (a sub-tenant), workspace = SubscriptionWorkspace (the real
         // billing entity) — same split as every backend this session. The workspace id is only
         // in candyToken's JWT claims (never on the `user` API response), same decode
         // WorkspaceSwitcher.tsx already uses to show the active workspace.
         const workspaceId = decodeWorkspaceIdFromToken(candyToken);
-        if (workspaceId) posthog.group('workspace', workspaceId);
+        const workspaceName = decodeWorkspaceNameFromToken(candyToken);
+        if (workspaceId) posthog.group('workspace', workspaceId, workspaceName ? { name: workspaceName } : undefined);
 
         // If the user was trying to reach Metaspace/Finixy before being sent
         // to login, generate an SSO token for that app and redirect there.

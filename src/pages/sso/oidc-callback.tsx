@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import posthog from 'posthog-js';
 import { setToken } from '../../api/client';
 import { storeUser, type AuthUser } from '../../api/auth';
 import { useApp } from '../../context/AppContext';
+import { decodeWorkspaceIdFromToken, decodeWorkspaceNameFromToken } from '../../utils/jwt';
 import Icon from '../../assets/icons';
 
 type Status = 'loading' | 'error';
@@ -50,6 +52,16 @@ export default function OIDCCallbackPage() {
 
     setToken(accessToken);
     storeUser(user);
+    // Isolation audit critical #2: this fallback path (rarely reached — see this file's
+    // own docstring) previously had zero posthog calls at all, same gap as
+    // AppContext.signedIn(). resetGroups() first, same reasoning as every other identify
+    // site this session: posthog-js has no selective single-group unset.
+    posthog.identify(user.user_id, { email: user.email, name: user.full_name });
+    posthog.resetGroups();
+    if (user.company_id) posthog.group('company', user.company_id, { name: user.company_name });
+    const workspaceId = decodeWorkspaceIdFromToken(accessToken);
+    const workspaceName = decodeWorkspaceNameFromToken(accessToken);
+    if (workspaceId) posthog.group('workspace', workspaceId, workspaceName ? { name: workspaceName } : undefined);
     signedIn(user);
     navigate('/dashboard');
   // eslint-disable-next-line react-hooks/exhaustive-deps

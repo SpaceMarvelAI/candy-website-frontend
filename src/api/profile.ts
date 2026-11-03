@@ -7,6 +7,8 @@
  * the backend, best-effort — this client has no part in that, it only talks to Candy's own API.
  */
 import { api } from './client';
+import { clampLimit, clampOffset, type PageParams } from './crm';
+import type { Page } from './crmTypes';
 
 export interface UserProfile {
   id: string;
@@ -15,6 +17,10 @@ export interface UserProfile {
   phone: string | null;
   address: string | null;
   bio: string | null;
+  // Free-text employer name (e.g. from a LinkedIn data-export import) — global like bio, synced
+  // with the dashboard. NOT a reference to any real company entity.
+  employer?: string | null;
+  title?: string | null;
   avatar_url: string | null;
 }
 
@@ -33,6 +39,8 @@ export interface UpdateProfileInput {
   phone?: string;
   address?: string;
   bio?: string;
+  employer?: string;
+  title?: string;
   avatarFile?: File | null;
 }
 
@@ -42,6 +50,8 @@ export async function updateProfile(input: UpdateProfileInput): Promise<UserProf
   if (input.phone !== undefined) form.append('phone', input.phone);
   if (input.address !== undefined) form.append('address', input.address);
   if (input.bio !== undefined) form.append('bio', input.bio);
+  if (input.employer !== undefined) form.append('employer', input.employer);
+  if (input.title !== undefined) form.append('title', input.title);
   if (input.avatarFile) form.append('avatar', input.avatarFile);
 
   const res = await api<ProfileResponse>('/v1/profile', { method: 'PATCH', body: form });
@@ -51,4 +61,39 @@ export async function updateProfile(input: UpdateProfileInput): Promise<UserProf
 export async function deleteAvatar(): Promise<UserProfile> {
   const res = await api<ProfileResponse>('/v1/profile/avatar', { method: 'DELETE' });
   return res.data;
+}
+
+/** Whatever a LinkedIn data-export ZIP contained — any key may be absent, never null (see
+ *  docs/user-profiling-onboarding/linkedin-zip-upload.md). Does NOT save anything; the caller
+ *  pre-fills its own form/draft and saves via updateProfile() once the user confirms. */
+export interface LinkedInZipData {
+  name?: string;
+  bio?: string;
+  title?: string;
+  company?: string;
+}
+
+export async function uploadLinkedInZip(file: File): Promise<LinkedInZipData> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await api<{ status: string; data: LinkedInZipData }>('/v1/profile/linkedin-zip', { method: 'POST', body: form });
+  return res.data;
+}
+
+/** One row from the caller's own LinkedIn connections, as persisted from their last
+ *  uploadLinkedInZip() call (empty, not an error, if they've never uploaded one). */
+export interface LinkedInConnection {
+  id: string;
+  name: string;
+  email: string | null;
+  headline: string | null;
+  organization: string | null;
+  profile_url: string;
+  connected_on: string | null;
+}
+
+export async function listLinkedInConnections(p: PageParams = {}): Promise<Page<LinkedInConnection>> {
+  const limit = clampLimit(p.limit ?? 25);
+  const offset = clampOffset(p.offset ?? 0);
+  return api<Page<LinkedInConnection>>(`/v1/profile/linkedin-connections?limit=${limit}&offset=${offset}`);
 }

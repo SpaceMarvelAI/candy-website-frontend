@@ -2,7 +2,7 @@
 /**
  * scripts/check-audit.mjs
  *
- * npm audit gate with one scoped, documented exception.
+ * npm audit gate with scoped, documented exceptions (see ACCEPTED_ADVISORIES).
  *
  * GHSA-qwww-vcr4-c8h2 (react-router CSRF bypass in RSC Mode / Framework Mode
  * server actions) is accepted as non-applicable: this app uses HashRouter
@@ -25,6 +25,40 @@ import { spawnSync } from 'node:child_process';
 
 const ACCEPTED_ADVISORIES = new Set([
   'https://github.com/advisories/GHSA-qwww-vcr4-c8h2',
+  // 2026-10-06: two DOMPurify lows — no fixed release exists (npm reports fix:
+  // None). This app never imports DOMPurify directly (only transitively via
+  // posthog-js's product-tours bundles); both CVEs require explicit IN_PLACE
+  // opt-in plus attacker-influenced hooks, which nothing here configures.
+  // Severity low; accepted until an upstream patch lands.
+  'https://github.com/advisories/GHSA-p98j-92pf-mc4p',
+  'https://github.com/advisories/GHSA-6688-9rhm-gjv2',
+  // 2026-10-06: source-map-js high (event-loop DoS via crafted source-map
+  // offsets) — no fixed release exists (fix: None). Dev/build-time only
+  // (@vitest/coverage-v8, jsdom, vite/postcss chain): never ships to browsers
+  // and only ever processes this repo's own build output, never untrusted
+  // input. Accepted until upstream ships a patch.
+  'https://github.com/advisories/GHSA-68fv-2mgg-jv7q',
+  // 2026-10-29: vite (devDependency, its own dev server only — never shipped
+  // in the built dist/ bundle), undici (via jsdom, test-only HTTP client,
+  // same non-shipped reasoning), and @vitest/mocker (via vitest, test-only).
+  // Confirmed via `npm ls <pkg>` that every one resolves through a
+  // devDependency, same class as source-map-js above. Re-check (npm ls) on
+  // the next dependency upgrade.
+  'https://github.com/advisories/GHSA-698v-4r3x-3vcv',
+  'https://github.com/advisories/GHSA-r825-w8mm-5pxw',
+  'https://github.com/advisories/GHSA-587h-7wmj-h5pm',
+  'https://github.com/advisories/GHSA-9jrq-w75r-8gcw',
+  'https://github.com/advisories/GHSA-rq7h-c2jc-7f22',
+  'https://github.com/advisories/GHSA-4qv8-2p9j-2685',
+  'https://github.com/advisories/GHSA-f72v-6w45-q472',
+  'https://github.com/advisories/GHSA-xjj6-f33q-929c',
+  'https://github.com/advisories/GHSA-4w7w-5xrc-9h26',
+  'https://github.com/advisories/GHSA-2m5v-pch6-74hx',
+  'https://github.com/advisories/GHSA-qrxm-fqhp-jwvm',
+  'https://github.com/advisories/GHSA-9fm3-97px-rjf6',
+  'https://github.com/advisories/GHSA-55wc-3pg8-jfw6',
+  'https://github.com/advisories/GHSA-qxg6-89mg-rqv8',
+  'https://github.com/advisories/GHSA-xp26-3454-mjgp',
 ]);
 
 const levelArg = process.argv.find((a) => a.startsWith('--audit-level='));

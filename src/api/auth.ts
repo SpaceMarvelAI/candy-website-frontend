@@ -202,6 +202,41 @@ export async function fullLogout(): Promise<{ navigated: boolean }> {
   return { navigated: false };
 }
 
+/**
+ * Fallback for an inbound cross-app hop (Metaspace/Finixy → Candy): if the one-time
+ * `sso_token` ssoCallback() above expects fails (expired/already-consumed/backend hiccup —
+ * it's minted seconds before use so this should be rare, but not impossible), the redirect
+ * also carries the ORIGIN app's own dashboard OAuth access token as `access_token`. That's
+ * still a fully valid, currently-active credential even when the one-time ticket isn't, so
+ * exchange IT for a Candy session instead of just giving up and showing the user a login
+ * screen for a session they were already in on the app they came from.
+ *
+ * Backend contract: POST {API_BASE}/v1/auth/sso/oidc/exchange-dashboard-token with
+ * `{ dashboard_access_token }`, returning the same TokenResponse shape as every other
+ * login endpoint here. NOT YET IMPLEMENTED SERVER-SIDE as of 2026-11-03 — tracked for the
+ * backend team; until it ships this just rejects and the caller's existing error path runs.
+ */
+export async function exchangeDashboardToken(dashboardAccessToken: string): Promise<{ user: AuthUser }> {
+  logger.info('[auth] exchangeDashboardToken starting');
+  const tok = await api<TokenResponse>('/v1/auth/sso/oidc/exchange-dashboard-token', {
+    method: 'POST',
+    auth: false,
+    body: { dashboard_access_token: dashboardAccessToken },
+  });
+  setToken(tok.access_token);
+  const user: AuthUser = {
+    user_id:      tok.user_id,
+    email:        tok.email,
+    role:         tok.role,
+    company_id:   tok.company_id,
+    company_name: tok.company_name,
+    full_name:    null,
+  };
+  storeUser(user);
+  logger.info('[auth] exchangeDashboardToken OK', { userId: user.user_id, email: user.email });
+  return { user };
+}
+
 export async function ssoCallback(token: string): Promise<{ user: AuthUser }> {
   logger.info('[auth] ssoCallback starting', { tokenPreview: token.slice(0, 12) + '…' });
   try {
