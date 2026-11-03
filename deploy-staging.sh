@@ -6,7 +6,8 @@
 
 BUCKET_NAME="candy-website-frontend-staging"
 REGION="ap-south-1"
-CF_DISTRIBUTION_ID="E3BS248I02OW2P"
+CF_DISTRIBUTION_ID="E3BS248I02OW2P"          # staging.candy.cx (old domain, kept for compat)
+CF_DISTRIBUTION_ID_NEW="E27WO5RRQ1KOOG"     # candy-staging.spacemarvel.ai (one-domain)
 DIST_FOLDER="dist"
 
 function fail() {
@@ -131,12 +132,16 @@ echo "✓ Upload complete."
 
 # ── Step 11: Invalidate CloudFront cache ──────────────────────────────────────
 echo ""
-echo "Invalidating CloudFront cache (STAGING distribution)..."
+echo "Invalidating CloudFront cache (both STAGING distributions)..."
 aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID --paths "/*" > /dev/null
 if [ $? -ne 0 ]; then
-    fail "CloudFront invalidation failed — check IAM permissions"
+    fail "CloudFront invalidation failed ($CF_DISTRIBUTION_ID) — check IAM permissions"
 fi
-echo "✓ Cache invalidated."
+aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID_NEW --paths "/*" > /dev/null
+if [ $? -ne 0 ]; then
+    fail "CloudFront invalidation failed ($CF_DISTRIBUTION_ID_NEW) — check IAM permissions"
+fi
+echo "✓ Cache invalidated (staging.candy.cx + candy-staging.spacemarvel.ai)."
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
