@@ -35,8 +35,8 @@ S3_COMPONENT = "frontend"
 CLOUDFRONT_REGION = "us-east-1"  # metrics only exist here, not the distribution's own region
 
 ENV_CONFIG = {
-    "dev": {"distribution_id": "EVLANPTONCWM9", "base_url": "https://dev.candy.cx"},
-    "staging": {"distribution_id": "E3BS248I02OW2P", "base_url": "https://staging.candy.cx"},
+    "dev": {"distribution_id": "E1V0ZANKSQP44S", "base_url": "https://candy-dev.spacemarvel.ai"},
+    "staging": {"distribution_id": "E27WO5RRQ1KOOG", "base_url": "https://candy-staging.spacemarvel.ai"},
     "prod": {"distribution_id": "E2Q1JGL4YRTTQE", "base_url": "https://app.candy.cx"},
 }
 
