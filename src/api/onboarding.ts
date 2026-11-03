@@ -161,9 +161,9 @@ export async function enrichOrg(params: {
   }
 }
 
-/** Upload the organisation-tree (approval matrix) file for the `invite` onboarding step — through
- *  our own backend, which forwards it to the Dashboard (there's no local-file-storage equivalent
- *  for standalone mode, same as this feature always worked even before the CSV/Excel switch).
+/** Upload the organisation-tree (org chart) file for the `invite` onboarding step — parsed and
+ *  stored by our own backend first (works with zero Dashboard configured), then pushed on to
+ *  the Dashboard too when combined mode is configured.
  *  Best-effort, never throws — callers should not block advancing on this failing. */
 export async function uploadOrgTree(file: File): Promise<void> {
   try {

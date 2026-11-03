@@ -19,6 +19,7 @@ import posthog from 'posthog-js';
 
 import { Icon } from '../assets/icons';
 import { useTheme } from '../hooks/useTheme';
+import { useApp } from '../context/AppContext';
 import { getToken } from '../api/client';
 import { getOnboarding, type OnboardingState } from '../api/onboarding';
 import OnboardingConnectorModal from './OnboardingConnectorModal';
@@ -28,6 +29,12 @@ import { visibleProgress } from '../utils/onboardingProgress';
 export default function OnboardingGate() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  // AppContext's SSO token exchange (a fresh LinkedIn/OIDC login) is asynchronous --
+  // setToken() only runs once that network round trip finishes. A mount-once effect with
+  // an empty dependency array checks getToken() before that exchange completes, finds
+  // nothing, and never asks again. Depending on `user` here re-runs the check the moment
+  // sign-in actually finishes, instead of only at the first (too-early) render.
+  const { user } = useApp();
 
   const [state, setState] = useState<OnboardingState | null>(null);
   const [open, setOpen] = useState(false);
@@ -58,7 +65,22 @@ export default function OnboardingGate() {
       // a nudge, not a feature they asked for. Never block the app on it.
       .catch(() => {});
     return () => { alive = false; };
-  }, []);
+  }, [user]);
+
+  // Cross-product sync only updates the OTHER product's database, never an already-open tab's
+  // React state here -- without this, finishing onboarding in another product (another tab)
+  // leaves this tab showing stale "Finish setup" status until a manual reload. Re-check quietly
+  // on refocus; deliberately does NOT force the pop-up open again (that's the initial-load
+  // effect's job only) -- just keeps the background state/widget text accurate.
+  useEffect(() => {
+    if (!getToken()) return;
+    function onVisible() {
+      if (document.visibilityState !== 'visible') return;
+      getOnboarding().then(setState).catch(() => {});
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user]);
 
   if (!state || state.completed) return null;
 
@@ -79,8 +101,9 @@ export default function OnboardingGate() {
 
   if (hidden) return null;
 
-  // The server counts the `connectors` step Candy never shows, so its steps_total is 4 while the
-  // pop-up has 3 screens. Show the count of what the user can actually see.
+  // visibleProgress now just mirrors the server's own total — `connectors` is shown here too
+  // (2026-10-30), same as Metaspace and Finixy. Kept as its own helper rather than reading
+  // state.steps_done/steps_total directly, in case a future step needs hiding the same way.
   const { done, total } = visibleProgress(state);
 
   const bg = isDark ? 'rgba(24,24,27,0.92)' : 'rgba(255,255,255,0.96)';
