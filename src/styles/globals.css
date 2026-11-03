@@ -83,6 +83,7 @@ img, video { max-width: 100%; height: auto; }
 :root {
   /* Canvas + backgrounds */
   --bg-0: #000000;                        /* pure black canvas */
+  --agent-shell-bg: #0f0f0f;              /* agent detail screen top bar + content (dark only) */
   --bg-1: #1d1d1f;                        /* section-alt / sidebar */
   --bg-2: #272729;                        /* card surface */
   --bg-3: #28282a;                        /* elevated card */
@@ -342,6 +343,7 @@ button, input, textarea { font-family: inherit; }
    ========================================================= */
 [data-theme="light"] {
   --bg-0: #ffffff;
+  --agent-shell-bg: #ffffff;
   --bg-1: #ffffff;
   --bg-2: #ffffff;
   --bg-3: #fafafc;
@@ -385,7 +387,7 @@ html.theme-transitioning *::after {
   --input-bg-strong: #0a0a0c;
   --surface-soft:    rgba(0, 0, 0, 0.22);
   --hero-bg:         #000000;
-  --card-bg:         #0a0a0c;
+  --card-bg:         #0f0f0f;
   --card-bg-strong:  #060608;
   --sidebar-bg:      #09090b;
   --shadow-deep:     0 20px 40px -10px rgba(0, 0, 0, 0.6);
@@ -575,8 +577,8 @@ html.theme-transitioning *::after {
 /* ── App shell (header + AppRail + Sidebar) ── */
 :root {
   --shell-bg:               #131313;
-  --shell-page:             #000000;
-  --shell-header-bg:        #000000;
+  --shell-page:             #0f0f0f;
+  --shell-header-bg:        #0f0f0f;
   --shell-border:           #27272a;
   --shell-text-1:           #ffffff;
   --shell-text-2:           #d4d4d8;

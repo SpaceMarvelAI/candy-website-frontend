@@ -4,7 +4,7 @@ import {
 } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import posthog from 'posthog-js';
-import { loadStoredUser, fullLogout, ssoCallback, me, storeUser, type AuthUser } from '../api/auth';
+import { loadStoredUser, fullLogout, ssoCallback, exchangeDashboardToken, me, storeUser, type AuthUser } from '../api/auth';
 import { getToken, setToken } from '../api/client';
 import { addToast, type AddToast } from '../hooks/useToast';
 import { logger } from '../utils/logger';
@@ -324,15 +324,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
      * endpoint verifies with SPACEMARVEL_SECRET_KEY — so it only accepts that token where the
      * backend's two secrets happen to match. If the exchange refuses it, use the token as-is,
      * verified by /v1/auth/me. On failure, put the previous session back untouched.
+     *
+     * A plain cross-app hop (Metaspace/Finixy → Candy, no `via=oidc`) has no Candy token to
+     * fall back to that way — its `access_token` is the ORIGIN app's dashboard OAuth token,
+     * not a Candy one. But that token is still live, so if the one-time `sso_token` above
+     * fails, exchange the dashboard token instead of just giving up and showing a login
+     * screen for a session the user was already in on the app they came from.
      */
+    const viaOidc = params.get('via') === 'oidc';
     const exchange = () => ssoCallback(token).catch(async (err) => {
-      if (params.get('via') !== 'oidc' || !accessToken) throw err;
-      logger.warn('[AppContext] SSO exchange refused the OIDC token — using it directly', { err });
-      setToken(accessToken);
+      if (!accessToken) throw err;
+
+      if (viaOidc) {
+        logger.warn('[AppContext] SSO exchange refused the OIDC token — using it directly', { err });
+        setToken(accessToken);
+        try {
+          const u = await me();
+          storeUser(u);
+          return { user: u };
+        } catch {
+          setToken(priorToken);
+          throw err;
+        }
+      }
+
+      logger.warn('[AppContext] one-time SSO ticket failed — trying the dashboard access token', { err });
       try {
-        const u = await me();
-        storeUser(u);
-        return { user: u };
+        return await exchangeDashboardToken(accessToken);
       } catch {
         setToken(priorToken);
         throw err;
