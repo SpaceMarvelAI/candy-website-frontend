@@ -276,7 +276,7 @@ const PRODUCTS: Product[] = [
   { id: 'metaspace', label: 'Home',   img: '/Metaspace.svg',
     ssoTarget: import.meta.env.VITE_META_APP_URL || 'https://spacemarvel.ai' },
   { id: 'finixy',    label: 'Finixy', img: '/FinixyLogo.svg',
-    ssoTarget: import.meta.env.VITE_FINIXY_APP_URL || 'https://app.finixy.ai' },
+    ssoTarget: import.meta.env.VITE_FINIXY_APP_URL || 'https://finixy.spacemarvel.ai' },
   { id: 'candy',     label: 'Candy',  img: '/Candy.svg', path: '/healthcare', current: true },
 ];
 
