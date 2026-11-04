@@ -5,7 +5,8 @@
 
 BUCKET_NAME="candy-website-frontend"
 REGION="ap-south-1"
-CF_DISTRIBUTION_ID="E2Q1JGL4YRTTQE"
+CF_DISTRIBUTION_ID="E2Q1JGL4YRTTQE"           # app.candy.cx (old — keep during transition)
+CF_DISTRIBUTION_ID_NEW="E22IMBW0SWNZ71"        # candy.spacemarvel.ai (new prod domain 2026-11-04)
 DIST_FOLDER="dist"
 
 function fail() {
@@ -136,9 +137,13 @@ echo ""
 echo "Invalidating CloudFront cache..."
 aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID --paths "/*" > /dev/null
 if [ $? -ne 0 ]; then
-    fail "CloudFront invalidation failed — check IAM permissions"
+    fail "CloudFront invalidation failed ($CF_DISTRIBUTION_ID) — check IAM permissions"
 fi
-echo "✓ Cache invalidated."
+aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID_NEW --paths "/*" > /dev/null
+if [ $? -ne 0 ]; then
+    fail "CloudFront invalidation failed ($CF_DISTRIBUTION_ID_NEW) — check IAM permissions"
+fi
+echo "✓ Cache invalidated (app.candy.cx + candy.spacemarvel.ai)."
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
