@@ -22,6 +22,27 @@ function fail() {
     exit 1
 }
 
+# ── One-domain migration guard ────────────────────────────────────────────────
+# CF_DISTRIBUTION_ID_NEW must be filled before running this script.
+# .env.production now points to candy-api.spacemarvel.ai (the new domain).
+# If the new CloudFront distribution does not exist yet, deploying will push a
+# build that calls a non-existent API and break the current candy.cx site.
+# Set CF_DISTRIBUTION_ID_NEW (above) to the new distribution ID, then re-run.
+if [ -z "$CF_DISTRIBUTION_ID_NEW" ]; then
+    echo ""
+    echo "╔══════════════════════════════════════════════════╗"
+    echo "║           DEPLOY BLOCKED ✗                       ║"
+    echo "╠══════════════════════════════════════════════════╣"
+    echo "║  CF_DISTRIBUTION_ID_NEW is not set.              ║"
+    echo "║  Create candy.spacemarvel.ai CloudFront first,   ║"
+    echo "║  then fill CF_DISTRIBUTION_ID_NEW above.         ║"
+    echo "║  See: docs/one-domain/prod-one-domain-           ║"
+    echo "║       migration-plan.md (Step 1)                 ║"
+    echo "╚══════════════════════════════════════════════════╝"
+    echo ""
+    exit 1
+fi
+
 # ── Step 1: Check AWS credentials ─────────────────────────────────────────────
 if ! aws sts get-caller-identity > /dev/null 2>&1; then
     fail "AWS credentials not configured (run: aws configure)"
