@@ -154,15 +154,13 @@ export function takeReturnRoute(): string | null {
 }
 
 export function redirectToSSO(): void {
-  const isLocalhost =
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1';
-  const callbackUrl = encodeURIComponent(
-    isLocalhost
-      ? `${window.location.origin}/sso/callback`
-      : 'https://app.candy.cx/sso/callback'
-  );
-  window.location.href = `https://spacemarvel.com/login?redirect_uri=${callbackUrl}`;
+  // Always derive from the current origin — this was previously hardcoded to
+  // app.candy.cx for every non-localhost host, which silently sent
+  // candy-dev.spacemarvel.ai logins back to production after SSO instead of
+  // back to dev (same bug already fixed in Finixy_workflow's sso.ts).
+  const callbackUrl = encodeURIComponent(`${window.location.origin}/sso/callback`);
+  const loginUrl = import.meta.env.VITE_SM_LOGIN_URL || 'https://dev.spacemarvel.ai';
+  window.location.href = `${loginUrl}/login?redirect_uri=${callbackUrl}`;
 }
 
 /**
