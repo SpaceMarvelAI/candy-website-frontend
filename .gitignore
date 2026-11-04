@@ -51,12 +51,16 @@ pnpm-debug.log*
 *.sln
 *.sw?
 
-# env
+# env — base and local overrides are ignored; named environment files are tracked
+# (same policy as Finixy_workflow: .env.development/.staging/.production stay in git
+# so prod/staging/dev builds are deterministic from the repo, not from local state)
 .env
-.env.*
-.env.production
 .env.local
 .env.*.local
+!.env.development
+!.env.staging
+!.env.test
+!.env.production
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/

@@ -5,7 +5,8 @@
 
 BUCKET_NAME="candy-website-frontend"
 REGION="ap-south-1"
-CF_DISTRIBUTION_ID="E2Q1JGL4YRTTQE"
+CF_DISTRIBUTION_ID="E2Q1JGL4YRTTQE"          # candy.cx (old domain, kept for compat during transition)
+CF_DISTRIBUTION_ID_NEW=""                      # TODO: candy.spacemarvel.ai — fill after creating new CloudFront distribution
 DIST_FOLDER="dist"
 
 function fail() {
@@ -132,20 +133,32 @@ fi
 echo "✓ Upload complete."
 
 # ── Step 11: Invalidate CloudFront cache ──────────────────────────────────────
+# Invalidate both old (candy.cx) and new (candy.spacemarvel.ai) distributions during
+# the transition period — lesson from staging: invalidating only the new one left stale
+# files in the old distribution and caused a session-expired loop on every redeploy.
+# Remove CF_DISTRIBUTION_ID (old) only after the old distribution is decommissioned.
 echo ""
 echo "Invalidating CloudFront cache..."
 aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID --paths "/*" > /dev/null
 if [ $? -ne 0 ]; then
-    fail "CloudFront invalidation failed — check IAM permissions"
+    fail "CloudFront invalidation failed ($CF_DISTRIBUTION_ID) — check IAM permissions"
 fi
-echo "✓ Cache invalidated."
+if [ -n "$CF_DISTRIBUTION_ID_NEW" ]; then
+    aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID_NEW --paths "/*" > /dev/null
+    if [ $? -ne 0 ]; then
+        fail "CloudFront invalidation failed ($CF_DISTRIBUTION_ID_NEW) — check IAM permissions"
+    fi
+    echo "✓ Cache invalidated (candy.cx + candy.spacemarvel.ai)."
+else
+    echo "✓ Cache invalidated (candy.cx only — set CF_DISTRIBUTION_ID_NEW after creating candy.spacemarvel.ai distribution)."
+fi
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════╗"
 echo "║         DEPLOYMENT SUCCESSFUL ✓                  ║"
 echo "╠══════════════════════════════════════════════════╣"
-echo "║  URL   : https://app.candy.cx                    ║"
+echo "║  URL   : https://candy.spacemarvel.ai            ║"
 echo "║  Bucket: s3://candy-website-frontend             ║"
 echo "║  Region: ap-south-1                              ║"
 echo "║  CDN   : CloudFront cache cleared                ║"
