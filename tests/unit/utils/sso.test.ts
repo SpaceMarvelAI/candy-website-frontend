@@ -148,9 +148,9 @@ describe('takeReturnRoute', () => {
 });
 
 describe('redirectWithSso (rail Home/Finixy → other app, already signed in)', () => {
-  beforeEach(() => sessionStorage.clear());
+  beforeEach(() => { sessionStorage.clear(); localStorage.clear(); });
 
-  it('returns false without calling the dashboard when there is no Candy session token', async () => {
+  it('returns false without calling the dashboard when there is no dashboard_token or Candy session token', async () => {
     const f = vi.spyOn(globalThis, 'fetch');
     expect(await redirectWithSso('https://app.finixy.ai')).toBe(false);
     expect(f).not.toHaveBeenCalled();
@@ -162,17 +162,36 @@ describe('redirectWithSso (rail Home/Finixy → other app, already signed in)', 
     expect(await redirectWithSso('https://app.finixy.ai')).toBe(false);
   });
 
-  it('opens the app with ?sso_token=<minted>&access_token=<Candy token>', async () => {
+  // The dashboard's /api/rbac/auth/sso/generate/ only verifies its own HS256 JWT or a real
+  // OAuth2 access token (WorkOSJWTAuthentication / OAuth2Authentication) — Candy's session
+  // token is signed with Candy's own SECRET_KEY and the dashboard can never verify it.
+  // Confirmed live 2026-10-30: sending Candy's token here 401'd every time, in every
+  // environment (edge case #10). dashboard_token — set whenever a dashboard-mediated OIDC
+  // login has happened — is the one the dashboard actually accepts, so it must win when
+  // both are available.
+  it('prefers dashboard_token over Candy\'s own session token when both are present', async () => {
+    const loc = stubLocation('app.candy.cx');
+    localStorage.setItem('dashboard_token', 'dashboard-jwt');
+    sessionStorage.setItem('access_token', 'candy-jwt');
+    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ sso_token: 'one-time' }));
+    expect(await redirectWithSso('https://app.finixy.ai')).toBe(true);
+    const [, init] = f.mock.calls[0];
+    expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer dashboard-jwt' });
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ app_url: 'https://app.finixy.ai' });
+    const url = new URL(loc.href);
+    expect(url.origin).toBe('https://app.finixy.ai');
+    expect(url.searchParams.get('sso_token')).toBe('one-time');
+    expect(url.searchParams.get('access_token')).toBe('dashboard-jwt');
+  });
+
+  it('falls back to Candy\'s own session token when no dashboard_token is stored', async () => {
     const loc = stubLocation('app.candy.cx');
     sessionStorage.setItem('access_token', 'candy-jwt');
     const f = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ sso_token: 'one-time' }));
     expect(await redirectWithSso('https://app.finixy.ai')).toBe(true);
     const [, init] = f.mock.calls[0];
     expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer candy-jwt' });
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ app_url: 'https://app.finixy.ai' });
     const url = new URL(loc.href);
-    expect(url.origin).toBe('https://app.finixy.ai');
-    expect(url.searchParams.get('sso_token')).toBe('one-time');
     expect(url.searchParams.get('access_token')).toBe('candy-jwt');
   });
 });
