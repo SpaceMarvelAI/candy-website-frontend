@@ -333,7 +333,7 @@ export default function AppRail() {
     // No usable dashboard token: SpaceMarvel login, then AppContext finishes the trip to this app.
     setSsoIntent(item.ssoTarget);
     const candyCallback = window.location.origin + '/sso/callback';
-    window.location.href = `${import.meta.env.VITE_SM_LOGIN_URL || 'https://spacemarvel.com'}/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
+    window.location.href = `${import.meta.env.VITE_SM_LOGIN_URL || 'https://spacemarvel.ai'}/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 
   const userName      = profileOverride?.name || user?.full_name || user?.email?.split('@')[0] || 'User';
