@@ -53,10 +53,12 @@ pnpm-debug.log*
 
 # env
 .env
-.env.*
-.env.production
 .env.local
 .env.*.local
+!.env.development
+!.env.staging
+!.env.test
+!.env.production
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/
