@@ -188,6 +188,26 @@ echo "║  Live in ~1-5 mins after cache propagation.      ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 
+# ── Real Lighthouse run against the just-deployed URL — LCP/CLS/INP (proxy)/performance
+# score, fed into the scorecard below. Non-fatal: a failed/skipped run just means the
+# scorecard records null for these fields.
+echo ""
+echo "Running Lighthouse (real headless Chrome, post-deploy)..."
+LCP_MS=""
+CLS=""
+INP_MS=""
+PERF_SCORE=""
+if LH_OUTPUT=$(node scripts/run-lighthouse.mjs "https://candy.spacemarvel.ai" 2>&1); then
+  LCP_MS=$(echo "$LH_OUTPUT" | grep -o 'lcp_ms=[0-9.]*' | cut -d= -f2)
+  CLS=$(echo "$LH_OUTPUT" | grep -o 'cls=[0-9.]*' | cut -d= -f2)
+  INP_MS=$(echo "$LH_OUTPUT" | grep -o 'inp_ms=[0-9.]*' | cut -d= -f2)
+  PERF_SCORE=$(echo "$LH_OUTPUT" | grep -o 'performance_score=[0-9.]*' | cut -d= -f2)
+  echo "Lighthouse: LCP=${LCP_MS}ms CLS=${CLS} INP=${INP_MS}ms score=${PERF_SCORE}"
+else
+  echo "Lighthouse run failed — non-fatal, scorecard will record null for these fields."
+  echo "$LH_OUTPUT"
+fi
+
 # ── Post-deploy: alarms check + deployment scorecard ──────────────────────────
 # Re-run scripts/build_scorecard.py manually 15-30 min later for a metrics-accurate read —
 # same propagation-delay caveat as the staging script.
@@ -211,6 +231,7 @@ GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DEPLOYER=$(aws sts get-caller-identity --query "Arn" --output text 2>/dev/null | awk -F'/' '{print $NF}')
 DEPLOYER="${DEPLOYER:-${USER:-unknown}}"
 python3 scripts/build_scorecard.py prod "$DEPLOY_TAG" "$GIT_SHA" "$DEPLOYER" "$ALARMS_RESULT" --version="$NEXT_VERSION" \
+  --lcp-ms="$LCP_MS" --cls="$CLS" --inp-ms="$INP_MS" --perf-score="$PERF_SCORE" \
   || echo "  (scorecard build failed — non-fatal, the deploy above already succeeded)"
 echo "Report saved to S3: s3://smai-reports/candy/frontend/deployment/prod/$(date -u +%Y)/$DEPLOY_TAG.json (version $NEXT_VERSION)"
 echo "NOTE: metrics above may reflect the OLD version / restart noise, not steady-state traffic. Re-run scripts/build_scorecard.py again in ~30 min for an accurate p95/p99/error-rate read (CloudWatch metrics take 15-20 min to fully propagate, plus traffic needs to settle post-deploy)."
