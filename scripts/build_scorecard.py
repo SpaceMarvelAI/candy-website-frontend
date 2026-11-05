@@ -73,7 +73,7 @@ def get_metric_stat(metric_name, distribution_id, stat, start, end):
     return datapoints[0].get(stat)
 
 
-def build_stages(env, deploy_id, git_sha, deployer):
+def build_stages(env, deploy_id, git_sha, deployer, lcp_ms=None, cls=None, inp_ms=None, perf_score=None):
     cfg = ENV_CONFIG[env]
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(minutes=30)
@@ -102,6 +102,15 @@ def build_stages(env, deploy_id, git_sha, deployer):
             "pool_utilization_pct": None,
             "provider_latency_p95_ms": None,
             "task_boot_time_seconds": None,
+            # Real Lighthouse run against the just-deployed URL, added 2026-11-05 — see
+            # scripts/run-lighthouse.mjs. None fields mean that run failed/was skipped for
+            # this deploy (non-fatal — never fabricated).
+            "lighthouse": {
+                "lcp_ms": lcp_ms,
+                "cls": cls,
+                "inp_ms": inp_ms,
+                "performance_score": {"current": perf_score, "baseline": None, "delta_pct": None},
+            },
         },
         "health_checklist": {
             "ready_all_tasks": _site_responds(cfg["base_url"]),
@@ -139,10 +148,34 @@ def main():
     # scripts compute the next version from the repo's VERSION file but deliberately do NOT
     # commit it themselves (kept as a manual step) — this just records whatever they pass.
     version = "unknown"
+    # Real Lighthouse numbers, added 2026-11-05 — wired in from scripts/run-lighthouse.mjs's
+    # LIGHTHOUSE_RESULT line by each deploy script, post-deploy. None if that run
+    # failed/was skipped for this deploy — never a guessed/fabricated number.
+    lcp_ms = None
+    cls = None
+    inp_ms = None
+    perf_score = None
+
+    def _parse_num(raw):
+        if raw is None or raw == "":
+            return None
+        try:
+            return float(raw) if "." in raw else int(raw)
+        except ValueError:
+            return None
+
     args = []
     for a in sys.argv[1:]:
         if a.startswith("--version="):
             version = a.split("=", 1)[1]
+        elif a.startswith("--lcp-ms="):
+            lcp_ms = _parse_num(a.split("=", 1)[1])
+        elif a.startswith("--cls="):
+            cls = _parse_num(a.split("=", 1)[1])
+        elif a.startswith("--inp-ms="):
+            inp_ms = _parse_num(a.split("=", 1)[1])
+        elif a.startswith("--perf-score="):
+            perf_score = _parse_num(a.split("=", 1)[1])
         else:
             args.append(a)
 
@@ -161,7 +194,7 @@ def main():
     alarms_result = args[4] if len(args) > 4 else "not run"
 
     baseline = get_baseline(env)
-    stages = build_stages(env, deploy_id, git_sha, deployer)
+    stages = build_stages(env, deploy_id, git_sha, deployer, lcp_ms, cls, inp_ms, perf_score)
     stages["health_checklist"]["alarms_ok"] = (
         alarms_result == "pass" if alarms_result in ("pass", "fail") else alarms_result
     )

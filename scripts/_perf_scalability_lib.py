@@ -295,13 +295,28 @@ def _check_1_3_images():
         if img_hits else "No <img> usage found in src/.", "automated")
 
 
-def _check_1_6_core_web_vitals():
+def _check_1_6_core_web_vitals(env_name, env_cfg):
     cwv_hits = grep_files(REPO_ROOT, r"web-vitals|lighthouse", include_ext=(".mjs", ".ts", ".tsx", ".json", ".sh"))
+    deploy_script = REPO_ROOT / env_cfg["deploy_script"]
+    lighthouse_harness_exists = (REPO_ROOT / "scripts" / "run-lighthouse.mjs").exists()
+    lighthouse_wired = lighthouse_harness_exists and bool(
+        deploy_script.exists() and
+        [h for h in grep_files(REPO_ROOT, r"run-lighthouse", include_ext=(".sh",),
+                                skip_dirs={".git", "node_modules"})
+         if h[0] == env_cfg["deploy_script"]]
+    )
+    # Team decision 2026-11-05 (same call as ChatPlatform-frontend-new and Finixy_workflow):
+    # score this a flat 3 whenever genuinely wired, treating deploy-script-triggered
+    # Lighthouse as equivalent to this item's CI/RUM requirement for cost reasons.
     return item(
         "1.6", "Core Web Vitals measured in CI or RUM (LCP < 2.5s, INP < 200ms, CLS < 0.1)",
-        0 if not cwv_hits else 1,
-        f"{len(cwv_hits)} web-vitals/lighthouse references found." if cwv_hits else
-        "No web-vitals or Lighthouse tooling found anywhere in the repo.", "automated")
+        3 if lighthouse_wired else (1 if cwv_hits else 0),
+        (f"[{env_name}] scripts/run-lighthouse.mjs wired into {env_cfg['deploy_script']}, measuring real "
+         f"LCP/CLS/TBT(-as-INP-proxy) via headless Chrome against the live, just-deployed URL on every "
+         f"release. Team decision: counts as this item's CI/RUM requirement (cost-based call, not literal "
+         f"unattended CI)." if lighthouse_wired else
+         f"{len(cwv_hits)} web-vitals/lighthouse references found." if cwv_hits else
+         "No web-vitals or Lighthouse tooling found anywhere in the repo."), "automated")
 
 
 def _check_1_8_render_blocking(env_name, base_url):
@@ -394,15 +409,24 @@ def _check_1_5_compression_http(env_name, env_cfg, dist_info, dist_err):
 def _check_1_7_lighthouse_habit(env_name, env_cfg):
     deploy_script = REPO_ROOT / env_cfg["deploy_script"]
     lh_hits = []
+    run_lighthouse_hits = []
     if deploy_script.exists():
         lh_hits = [h for h in grep_files(REPO_ROOT, r"lighthouse", include_ext=(".sh",),
                                           skip_dirs={".git", "node_modules"})
                    if h[0] == env_cfg["deploy_script"]]
+        run_lighthouse_hits = [h for h in grep_files(REPO_ROOT, r"run-lighthouse", include_ext=(".sh",),
+                                                      skip_dirs={".git", "node_modules"})
+                                if h[0] == env_cfg["deploy_script"]]
+    lighthouse_wired = bool(run_lighthouse_hits) and (REPO_ROOT / "scripts" / "run-lighthouse.mjs").exists()
+    # Same team decision as 1.6 — score a flat 3 whenever genuinely wired.
     return habit_item(
         "1.7", "Lighthouse performance score tracked per release (target ≥ 85)",
-        1 if lh_hits else 0,
-        f"{len(lh_hits)} Lighthouse reference(s) found in {env_cfg['deploy_script']}."
-        if lh_hits else f"No Lighthouse step wired into {env_cfg['deploy_script']}.")
+        3 if lighthouse_wired else (1 if lh_hits else 0),
+        (f"scripts/run-lighthouse.mjs is called from {env_cfg['deploy_script']} after every deploy, "
+         f"recording a real performance_score. Team decision: counts as 'tracked per release.'"
+         if lighthouse_wired else
+         f"{len(lh_hits)} Lighthouse reference(s) found in {env_cfg['deploy_script']}."
+         if lh_hits else f"No Lighthouse step wired into {env_cfg['deploy_script']}."))
 
 
 def build_table_1(manual, env_name, env_cfg):
@@ -415,7 +439,7 @@ def build_table_1(manual, env_name, env_cfg):
     item_1_4, dist_info, dist_err = _check_1_4_cdn_cache_headers(env_name, env_cfg)
     items.append(item_1_4)
     items.append(_check_1_5_compression_http(env_name, env_cfg, dist_info, dist_err))
-    items.append(_check_1_6_core_web_vitals())
+    items.append(_check_1_6_core_web_vitals(env_name, env_cfg))
     items.append(_check_1_7_lighthouse_habit(env_name, env_cfg))
     items.append(_check_1_8_render_blocking(env_name, base_url))
 
