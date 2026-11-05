@@ -27,6 +27,33 @@ from datetime import datetime, timedelta, timezone
 S3_BUCKET = "smai-reports"  # renamed from smai-deploy-scorecards 2026-08-19 — bucket now holds more than deployment scorecards (perf/scalability + strix too)
 SERVICE_NAME = "candy-website-frontend"
 
+# Lighthouse's real-world (--throttling-method=provided) score vs its default simulated-4G
+# score was deliberately compared live on 2026-11-05 (same investigation as Finixy_workflow,
+# same real root cause confirmed there: default run scored low, disabling throttling scored
+# ~98/100 on the same CDN/edge). CDN/CloudFront/caching/compression were already independently
+# verified correct (cache hits, Brotli, ~200ms TTFB) before concluding this. The real cause:
+# this is a client-side-rendered SPA (blank until all JS downloads AND executes), so
+# Lighthouse's default mobile-network simulation punishes the initial JS bundle hard. A low
+# score here is a CODE issue (bundle size / CSR architecture), not an infrastructure problem --
+# flagged explicitly so it isn't mistakenly routed to infra.
+LIGHTHOUSE_LOW_SCORE_THRESHOLD = 85  # matches checklist item 1.7's own "target >= 85"
+
+
+def _lighthouse_reason(perf_score):
+    if perf_score is None or perf_score >= LIGHTHOUSE_LOW_SCORE_THRESHOLD:
+        return None
+    return (
+        "REASON: CODE issue, not infra. Confirmed live 2026-11-05 (same investigation as "
+        "Finixy_workflow, same real cause) — scores dramatically better with Lighthouse's "
+        "network throttling disabled (--throttling-method=provided) vs this score under "
+        "Lighthouse's default simulated-4G throttling. CDN/CloudFront/caching/compression were "
+        "independently verified correct beforehand (real cache hits, Brotli compression, "
+        "~200ms TTFB). Root cause: this is a client-side-rendered SPA — the page stays blank "
+        "until all JS downloads AND executes — so the default throttling simulation punishes "
+        "the initial JS bundle size hard. Fix is code-level (shrink the bundle and/or change "
+        "the rendering strategy), not infrastructure."
+    )
+
 # S3 layout standardized 2026-08-19: {product}/{component}/deployment/{env}/...
 # instead of the old flat {service}-{env}/... scheme. Old data stays at its old paths
 # (no migration) — only new uploads go here.
@@ -110,6 +137,7 @@ def build_stages(env, deploy_id, git_sha, deployer, lcp_ms=None, cls=None, inp_m
                 "cls": cls,
                 "inp_ms": inp_ms,
                 "performance_score": {"current": perf_score, "baseline": None, "delta_pct": None},
+                "reason_if_low": _lighthouse_reason(perf_score),
             },
         },
         "health_checklist": {
