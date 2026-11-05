@@ -11,6 +11,8 @@
  *   3. Build         — vite build
  *   4. Bundle size   — scripts/lib/bundle-size.mjs (reads dist/assets/ after
  *      the build gate)
+ *      Lazy-loading  — scripts/lib/lazy-loading-gate.mjs (reads src/ directly,
+ *      no build dependency; checklist item 1.2's regression floor)
  *   5. Smoke test    — npm run test:smoke   (Playwright, boots the dev server)
  *   6. E2E test      — npm run test:e2e     (Playwright, core user flows)
  *   7. NPM audit     — scripts/check-audit.mjs (one documented exception, see that file)
@@ -23,6 +25,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { checkBundleSize } from './lib/bundle-size.mjs';
+import { checkLazyLoading } from './lib/lazy-loading-gate.mjs';
 import { getPosthogCoverageResults } from './lib/posthog-coverage-checks.mjs';
 
 // ── ANSI helpers ──────────────────────────────────────────────────────────────
@@ -144,6 +147,16 @@ const report = { warnings: [] };
   report.bundle = { pass: bundle.status !== 'fail', status: bundle.status, detail: bundle.detail };
 }
 
+// ── Lazy-loading regression gate (checklist item 1.2) ─────────────────────────────
+// Reads src/ directly (no build dependency) — real React.lazy()/lazy() usage can't
+// silently regress below today's known-good floor (2 files, 38 call sites) without
+// failing this gate. Added 2026-11-05.
+{
+  process.stdout.write(`${c.cyan}▶${c.reset} Lazy-loading floor (src/ — React.lazy/lazy)…\n`);
+  const lazy = checkLazyLoading(process.cwd());
+  report.lazyLoading = { pass: lazy.status === 'pass', detail: lazy.detail };
+}
+
 // ── 5. Smoke test (Playwright) ──────────────────────────────────────────────────
 {
   const r = run('[5/8] Smoke test (npm run test:smoke)', 'npm run test:smoke');
@@ -214,7 +227,8 @@ const report = { warnings: [] };
 // Composite score (0-100): gates are pass/fail signals, coverage is the
 // graded dimension. Each failed hard gate is a heavy penalty.
 const hardFail = !report.types.pass || !report.tests.pass || !report.build.pass || !report.bundle.pass
-  || !report.smoke.pass || !report.e2e.pass || !report.npmAudit.pass || !report.bucketAudit.pass;
+  || !report.lazyLoading.pass || !report.smoke.pass || !report.e2e.pass || !report.npmAudit.pass
+  || !report.bucketAudit.pass;
 let grade, score;
 if (hardFail) {
   grade = { letter: 'F', label: 'Not deployable' };
@@ -247,6 +261,7 @@ console.log(`  2. Test Suite   (vitest)   ${mark(report.tests.pass)}   ${dim(`${
 if (report.tests.failed > 0) console.log(`     ${bad(`${report.tests.failed} test(s) failing`)}`);
 console.log(`  3. Build        (vite)     ${mark(report.build.pass)}   ${dim(report.build.modules + ' modules transformed')}`);
 console.log(`  4. Bundle Size  (dist/)    ${mark(report.bundle.pass)}   ${dim(report.bundle.detail)}`);
+console.log(`     Lazy-Loading (src/)    ${mark(report.lazyLoading.pass)}   ${dim(report.lazyLoading.detail)}`);
 console.log(`  5. Smoke Test   (e2e)      ${mark(report.smoke.pass)}   ${dim(`${report.smoke.passed} passed, ${report.smoke.failed} failed`)}`);
 console.log(`  6. E2E Test     (e2e)      ${mark(report.e2e.pass)}   ${dim(`${report.e2e.passed} passed, ${report.e2e.failed} failed`)}`);
 console.log(`  7. NPM Audit    (deps)     ${mark(report.npmAudit.pass)}   ${dim(report.npmAudit.pass ? '0 vulnerabilities' : `${report.npmAudit.unaccepted} unaccepted high/critical vuln(s)`)}`);
@@ -284,6 +299,7 @@ if (hardFail) {
     !report.tests.pass && 'failing tests',
     !report.build.pass && 'build failure',
     !report.bundle.pass && 'bundle size over budget',
+    !report.lazyLoading.pass && 'lazy-loading usage regressed below the real floor',
     !report.smoke.pass && 'smoke test failure',
     !report.e2e.pass && 'e2e test failure',
     !report.npmAudit.pass && 'npm audit findings',
