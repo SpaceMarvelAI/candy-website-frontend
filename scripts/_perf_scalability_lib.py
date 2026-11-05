@@ -287,11 +287,18 @@ def _check_1_3_images():
     lazy_img_hits = grep_files(REPO_ROOT / "src", r'loading=["\']lazy["\']', include_ext=(".tsx",))
     modern_format_hits = grep_files(REPO_ROOT / "src", r"\.webp\b|\.avif\b|<picture\b", include_ext=(".tsx",))
     files_with_img = len(set(h[0] for h in img_hits))
+    optimized_files = len(set(h[0] for h in lazy_img_hits) | set(h[0] for h in modern_format_hits))
+    ratio = optimized_files / files_with_img if files_with_img else 0
+    # Standardized 2026-11-05 to the same ratio-band formula used by ChatPlatform-frontend-new
+    # and Finixy_workflow's 1.3 (a cross-repo score comparison found 3 different ad-hoc
+    # formulas scoring the same real situation inconsistently — not a real difference between
+    # repos, a tooling inconsistency).
+    score = 3 if ratio >= 0.9 else 2 if ratio >= 0.5 else 1 if ratio > 0 else 0
     return item(
         "1.3", "Images served in WebP/AVIF, correctly sized, lazy-loaded",
-        2 if (lazy_img_hits and modern_format_hits) else (1 if (lazy_img_hits or modern_format_hits) else 0),
-        f"{len(img_hits)} <img> tags across {files_with_img} files; {len(lazy_img_hits)} use "
-        f"loading=\"lazy\"; {len(modern_format_hits)} reference WebP/AVIF/<picture>."
+        score,
+        f"{len(img_hits)} <img> tags across {files_with_img} files; {optimized_files} file(s) use "
+        f"loading=\"lazy\" or reference WebP/AVIF/<picture> — real ratio {optimized_files}/{files_with_img} files."
         if img_hits else "No <img> usage found in src/.", "automated")
 
 
