@@ -3,142 +3,291 @@
 Real check for checklist item 2.4 ("Endpoints are batched/aggregated — no screen
 needs > 3 API calls") — added 2026-11-06.
 
-Real investigation (2026-11-06): this repo is a Vite + react-router-dom app. Real
-routes live in src/App.tsx's <Route path=... element={<X /... /> list, where each
-X is a `const X = lazy(() => import('./pages/...'))` (some via `.then((m) => ({
-default: m.NamedExport }))` for multiple screens grouped in one real file, e.g.
-CrmCasesPage/CrmCaseDetailPage/CrmTasksPage/CrmTaskDetailPage all resolve to the
-same ./pages/crm/WorkPages.tsx file).
+Real investigation (2026-11-06): this repo is a React Router SPA with real
+screens defined as `<Route path="..." element={...}>` in src/App.tsx, each
+wrapped in zero or more layout/guard wrappers (AppRoute, ProtectedRoute,
+RouteErrorBoundary, Suspense, Navigate) around the real screen component
+(e.g. HealthcareDomainPage, CrmHomePage, LiveCallsPage). Real screen files
+live under src/pages/<name>/index.tsx (one folder per screen); most are
+lazy-loaded in App.tsx as `const Name = lazy(() => import('./pages/x'))` —
+resolved here by following that real import path, not assumed from the
+route path alone (a route path like /crm/patients doesn't literally match
+its file's directory name).
 
-Method: parses src/App.tsx for every `const X = lazy(() => import('PATH')...)`
-line, resolves PATH relative to src/ to a real file or directory, then greps
-every .tsx/.ts file under that resolved location (the file itself, or its whole
-directory if PATH points to a directory's index) for real network-call patterns:
-useQuery(, useMutation(, await api./apiClient.*(, fetch(, axios. — counting
-DISTINCT call sites (not .refetch() on an existing query).
+This repo's real backend calls are NOT bare `fetch(`/`axios.` at call
+sites — every domain has its own module under src/api/*.ts (agents.ts,
+healthcare.ts, crm.ts, etc.) exporting real `async function` wrappers
+(confirmed: 86 real `export async function` definitions across src/api/,
+vs. 77 non-async exports which are local helpers like storeUser/
+loadStoredUser, not network calls). Pages call these by name (e.g.
+`listAgents()`, `getAgent(id)`), and CRM pages additionally use a
+repo-specific `useCrmQuery()` hook (src/pages/crm/useCrmQuery.ts) as their
+data-fetching wrapper. The scanner reads the real list of async export
+names from src/api/*.ts at run time rather than hardcoding one — if the
+API surface changes, this check automatically keeps up.
 
-LIMITATIONS (real, not glossed over):
-- Several screens that resolve to the SAME shared file (e.g. the WorkPages.tsx /
-  SchedulingPages.tsx grouped files) share one call count here — this script
-  cannot cleanly separate "CasesPage's own calls" from "TasksPage's own calls"
-  when both live in one file; the reported count is for the WHOLE shared file,
-  which may overstate any one individual screen's real number.
-- Named API functions called directly WITHOUT going through a use*Query/
-  use*Mutation hook (e.g. a plain `await listPatients(...)` outside any query
-  hook) are not counted — only verified this repo's query-hook convention
-  (useCrmQuery), not every possible direct-call convention. A screen showing 0
-  may still make real direct calls this script can't distinguish from a plain
-  function call.
+COUNTING RULE (same as the other 2 products' copies of this script, for the
+same real reason): useQuery()/useMutation()/useCrmQuery() can only be
+called at a component's top level per React's Rules of Hooks, so every one
+in a screen genuinely fires together on mount — summed. Direct calls to a
+src/api/*.ts async function are grouped by their nearest enclosing named
+handler function with the MAX taken (different handlers are alternative
+user actions, not simultaneous); a call found outside any named handler
+(e.g. directly inside a useEffect callback) is treated the same way, as
+its own one-call group in the max — this is a real limitation (such calls
+should arguably be summed as mount-time work instead), noted here rather
+than silently assumed correct.
+
+LIMITS (stated honestly): component-name → file resolution relies on the
+real `lazy(() => import(...))` pattern or a direct `function Name(`/`const
+Name` match — if neither is found, or a name is ambiguous, it's reported
+as unresolved, not assumed clean. Regex/offset heuristic, not a full TSX
+parser; a shared custom hook that itself wraps several calls (other than
+the known useCrmQuery) would be undercounted.
 
 Exit code is always 0 — this never fails the calling script, only reports.
 """
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-APP_TSX = REPO_ROOT / "src" / "App.tsx"
-SRC_DIR = REPO_ROOT / "src"
+SRC = REPO_ROOT / "src"
 
-# Broadened 2026-11-06 after a real sanity check: src/pages/crm/PatientsPage.tsx
-# (a real screen) uses a CUSTOM query hook (useCrmQuery, not TanStack's useQuery)
-# plus named functions imported from ../../api/crm (listPatients, searchPatients)
-# — the original pattern (useQuery/useMutation/await *api.) matched NONE of these
-# and would have falsely reported this repo as universally clean. use\w*Query/
-# use\w*Mutation catches any custom query-hook naming convention generically.
-CALL_PATTERN = re.compile(
-    r"use\w*Query\(|use\w*Mutation\(|await\s+\w*[Aa]pi\w*\.\w+\(|(?<!\.)fetch\(|axios\.\w+\("
+
+def _real_api_function_names():
+    names = set()
+    api_dir = SRC / "api"
+    if not api_dir.exists():
+        return names
+    for f in api_dir.glob("*.ts"):
+        text = f.read_text(errors="ignore")
+        names.update(re.findall(r"^export async function (\w+)\(", text, re.M))
+    return names
+
+
+API_FUNCTION_NAMES = _real_api_function_names()
+HOOK_CALL_RE = re.compile(r"\b(?:useQuery|useMutation|useCrmQuery)\s*\(")
+_api_fn_alt = "|".join(re.escape(n) for n in sorted(API_FUNCTION_NAMES)) or r"(?!x)x"
+NETWORK_CALL_RE = re.compile(
+    r"\bawait\s+\w*[Aa]pi\w*\.\w+\(|\bawait\s+fetch\(|\bfetch\(|\baxios\.\w+\(|"
+    rf"\b(?:{_api_fn_alt})\s*\("
+)
+HANDLER_DEF_RE = re.compile(
+    r"^(\s*)(?:const\s+(\w+)\s*=\s*(?:async\s*)?\(|"
+    r"(?:async\s+)?function\s+(\w+)\s*\()"
 )
 
+KNOWN_WRAPPERS = {
+    "AppRoute", "ProtectedRoute", "RouteErrorBoundary", "Suspense", "Navigate",
+    "Fragment", "React.Fragment",
+}
 
-def count_calls_in_text(text: str) -> int:
-    return len(CALL_PATTERN.findall(text))
 
-
-def resolve_import_path(import_str: str) -> Path | None:
-    """import_str like './pages/live' or './pages/crm/PatientsPage' (relative to
-    src/App.tsx's own directory, i.e. SRC_DIR)."""
-    candidate = (SRC_DIR / import_str.lstrip("./")).resolve()
-    for suffix in (".tsx", ".ts"):
-        p = Path(str(candidate) + suffix)
-        if p.exists():
-            return p
-    # Real bug fixed 2026-11-06: './pages/crm' resolves as a directory import
-    # (index.tsx), but src/pages/crm/ ALSO contains PatientsPage.tsx,
-    # PatientDetailPage.tsx etc. — each already counted as its OWN separate
-    # screen. Returning the whole directory here double-counted every sibling
-    # screen's calls into CrmHomePage's total (28 vs a real ~3-4). Only the
-    # index file's own code belongs to this screen, not its siblings'.
-    index_candidate = candidate / "index.tsx"
-    if index_candidate.exists():
-        return index_candidate
-    if candidate.is_dir():
-        return None  # can't safely resolve to "just this directory's own code"
+def _find_matching(text, open_idx, open_ch, close_ch):
+    depth = 0
+    for j in range(open_idx, len(text)):
+        c = text[j]
+        if c == open_ch:
+            depth += 1
+        elif c == close_ch:
+            depth -= 1
+            if depth == 0:
+                return j
     return None
 
 
-def parse_screen_map():
-    """Returns [(screen_name, resolved_path_or_None)]."""
-    text = APP_TSX.read_text(errors="ignore")
+def find_function_span(text, start_idx):
+    paren_idx = text.find("(", start_idx)
+    if paren_idx == -1:
+        return None
+    close_paren = _find_matching(text, paren_idx, "(", ")")
+    if close_paren is None:
+        return None
+    body_open = text.find("{", close_paren)
+    if body_open == -1:
+        return None
+    return _find_matching(text, body_open, "{", "}")
+
+
+def count_calls_in_span(span_text):
+    hook_count = len(HOOK_CALL_RE.findall(span_text))
+    lines = span_text.splitlines()
+    offsets = []
+    pos = 0
+    for line in lines:
+        offsets.append(pos)
+        pos += len(line) + 1
+
+    handlers = []
+    for idx, line in enumerate(lines):
+        m = HANDLER_DEF_RE.match(line)
+        if m:
+            name = m.group(2) or m.group(3)
+            start_off = offsets[idx]
+            end_off = find_function_span(span_text, start_off)
+            if end_off:
+                handlers.append((name, start_off, end_off))
+
+    handler_counts = {}
+    for name, s, e in handlers:
+        sub = span_text[s:e]
+        handler_counts[name] = len(NETWORK_CALL_RE.findall(sub))
+
+    covered = [False] * len(span_text)
+    for _, s, e in handlers:
+        for i in range(s, min(e, len(span_text))):
+            covered[i] = True
+    unattributed = sum(1 for m in NETWORK_CALL_RE.finditer(span_text) if not covered[m.start()])
+
+    max_handler = max(handler_counts.values()) if handler_counts else 0
+    max_handler = max(max_handler, unattributed)
+    return hook_count, max_handler
+
+
+def get_route_components():
+    app_tsx = SRC / "App.tsx"
+    if not app_tsx.exists():
+        return []
+    text = app_tsx.read_text(errors="ignore")
     screens = []
-    # Matches both `import('./pages/x')` and `import('./pages/x').then((m) => ({ default: m.Y }))`
-    for m in re.finditer(
-        r"const\s+(\w+)\s*=\s*lazy\(\s*\(\)\s*=>\s*import\(\s*'([^']+)'\s*\)(?:\.then\([^)]*\)\s*)?\)",
-        text,
-    ):
-        screen_name, import_str = m.group(1), m.group(2)
-        resolved = resolve_import_path(import_str)
-        screens.append((screen_name, resolved))
+    for m in re.finditer(r'<Route\s+path="([^"]*)"\s+element=\{', text):
+        path = m.group(1)
+        brace_start = text.index("{", m.end() - 1)
+        brace_end = _find_matching(text, brace_start, "{", "}")
+        if brace_end is None:
+            continue
+        block = text[brace_start:brace_end]
+        # Real screen components are JSX elements with NO "=" prop named
+        # "skeleton" immediately preceding them (that's the loading placeholder,
+        # not the real screen) — find every `<Name` that is a direct child tag
+        # (opening tag, not a prop value like `skeleton={<X />}`).
+        # Strip out any `skeleton={...}` sub-blocks entirely first so their inner
+        # component names never get picked up as candidates.
+        cleaned = block
+        out = []
+        i = 0
+        while i < len(cleaned):
+            sm = re.compile(r"skeleton=\{").search(cleaned, i)
+            if not sm:
+                out.append(cleaned[i:])
+                break
+            out.append(cleaned[i:sm.start()])
+            b_open = cleaned.index("{", sm.end() - 1)
+            b_end = _find_matching(cleaned, b_open, "{", "}")
+            i = (b_end + 1) if b_end is not None else len(cleaned)
+        cleaned = "".join(out)
+        names = re.findall(r"<([A-Za-z][\w.]*)", cleaned)
+        real = [n for n in names if n not in KNOWN_WRAPPERS]
+        if not real:
+            continue
+        # The innermost real component (deepest nesting = last opening tag before
+        # any wrapper's self-closing) is the actual screen.
+        screens.append((path, real[-1]))
     return screens
 
 
-def count_for_path(path: Path | None) -> int:
-    if path is None:
-        return 0
-    if path.is_dir():
-        total = 0
-        for f in path.rglob("*"):
-            if f.suffix in (".tsx", ".ts") and f.is_file():
-                try:
-                    total += count_calls_in_text(f.read_text(errors="ignore"))
-                except Exception:
-                    continue
-        return total
-    try:
-        return count_calls_in_text(path.read_text(errors="ignore"))
-    except Exception:
-        return 0
+def _resolve_lazy_import(name, app_text):
+    """Many screens are declared in App.tsx as `const Name = lazy(() =>
+    import('./pages/x'))`. Follow that real import path to the real file, which
+    may be a directory (resolves to index.tsx)."""
+    m = re.search(rf"const\s+{name}\s*=\s*lazy\(\s*\(\)\s*=>\s*import\(['\"]([^'\"]+)['\"]", app_text)
+    if not m:
+        return None
+    rel = m.group(1)
+    if rel.startswith("./"):
+        rel = rel[2:]
+    base = SRC / rel
+    for candidate in (base.with_suffix(".tsx"), base / "index.tsx", base.with_suffix(".ts")):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def resolve_component_file(name, app_text):
+    lazy_file = _resolve_lazy_import(name, app_text)
+    if lazy_file is not None:
+        return lazy_file, [str(lazy_file)]
+
+    out = subprocess.run(
+        ["grep", "-rl", "-E", rf"(export )?(function {name}\(|const {name}\s*[:=])",
+         "--include=*.tsx", "--include=*.ts", str(SRC)],
+        capture_output=True, text=True,
+    )
+    candidates = [l for l in out.stdout.strip().splitlines() if "test" not in l.lower() and ".test." not in l]
+    # App.tsx itself just holds the lazy() declaration, not the real definition —
+    # prefer any other real match over it.
+    non_app = [c for c in candidates if not c.endswith("App.tsx")]
+    if len(non_app) == 1:
+        return Path(non_app[0]), candidates
+    if len(candidates) != 1:
+        return None, candidates
+    return Path(candidates[0]), candidates
+
+
+def count_component(name, filepath):
+    text = filepath.read_text(errors="ignore")
+    m = re.search(rf"(?:export )?(?:function {name}\(|const {name}\s*[:=])", text)
+    if m:
+        end = find_function_span(text, m.start())
+        span = text[m.start():end] if end else text[m.start():]
+        return count_calls_in_span(span)
+    # Resolved via a lazy import to a dedicated page file/directory — the local
+    # name inside that file may differ from the route's alias (e.g. default
+    # export under its own name). One page file is one screen, so the whole
+    # file's content is the honest span to count.
+    return count_calls_in_span(text)
 
 
 def main():
-    print("Real per-screen API call-site count (2026-11-06 investigation).")
-    print("Counts distinct useQuery/useMutation/await *api./fetch/axios call sites "
-          "per real screen (resolved from App.tsx's real <Route> -> lazy-loaded page "
-          "mapping); .refetch() on an existing query is not counted as a new call.\n")
+    print("Real per-screen API call count (2026-11-06 investigation) — "
+          "useQuery/useMutation hooks (always fire together on mount, per React's "
+          "Rules of Hooks) summed; other network calls (axios./fetch(/await "
+          "apiClient.*()) grouped by enclosing handler, max taken (alternative "
+          "user actions, not simultaneous).")
+    print()
 
-    if not APP_TSX.exists():
-        print("src/App.tsx not found — cannot resolve real screens. Leaving this "
-              "item as manual review.")
-        sys.exit(0)
+    app_text = (SRC / "App.tsx").read_text(errors="ignore")
+    screens = get_route_components()
+    seen = set()
+    unresolved = []
+    over = []
+    for path, comp in screens:
+        if comp in seen:
+            continue
+        seen.add(comp)
+        filepath, candidates = resolve_component_file(comp, app_text)
+        if filepath is None:
+            unresolved.append((comp, path, candidates))
+            print(f"? {path} ({comp}): "
+                  f"{'ambiguous — ' + str(len(candidates)) + ' matches' if candidates else 'not found'}")
+            continue
+        result = count_component(comp, filepath)
+        if result is None:
+            unresolved.append((comp, path, [str(filepath)]))
+            print(f"? {path} ({comp}): found file but couldn't locate definition span")
+            continue
+        hooks, max_handler = result
+        total = hooks + max_handler
+        flag = "⚠ " if total > 3 else "  "
+        print(f"{flag}{path} ({comp}): {total} real call(s) (hooks={hooks}, "
+              f"max-per-handler={max_handler}) [{filepath.relative_to(REPO_ROOT)}]")
+        if total > 3:
+            over.append((path, comp, total))
 
-    screens = parse_screen_map()
-    resolved = [(n, p, count_for_path(p)) for n, p in screens if p is not None]
-    unresolved = [n for n, p in screens if p is None]
-
-    flagged = [r for r in resolved if r[2] > 3]
-    for name, path, count in resolved:
-        marker = "⚠" if count > 3 else "✓"
-        print(f"  {marker} {name}: {count} call site(s)")
-    for name in unresolved:
-        print(f"  ? {name}: could not resolve real source file — not counted, not assumed clean")
-
-    print(f"\n{len(flagged)}/{len(resolved)} resolved real screen(s) exceed 3 API call "
-          f"sites ({len(unresolved)} screen(s) could not be resolved to a real file).")
-    if not flagged and not unresolved:
-        print("All real screens checked stay at or under 3 call sites. Not exhaustive — "
-              "see this script's LIMITATIONS docstring.")
-    elif flagged:
-        print("Real gap(s) found above — not exhaustive, see LIMITATIONS docstring.")
+    print()
+    if unresolved:
+        print(f"{len(unresolved)} screen(s) could not be reliably resolved — "
+              f"NOT counted as clean, reported as unknown: "
+              f"{[p for _, p, _ in unresolved]}")
+    if over:
+        print(f"{len(over)} screen(s) genuinely need more than 3 API calls:")
+        for path, comp, total in over:
+            print(f"  {path} ({comp}): {total} calls")
+    elif not unresolved:
+        print("No screens found needing more than 3 real API calls, by this method. "
+              "Not exhaustive — see the LIMITS note in this script's docstring.")
 
     sys.exit(0)
 
