@@ -289,6 +289,12 @@ def main():
         print("No screens found needing more than 3 real API calls, by this method. "
               "Not exhaustive — see the LIMITS note in this script's docstring.")
 
+    resolved_total = len(seen) - len(unresolved)
+    print()
+    print("SUMMARY (machine-parsed by the backend checklist — do not reword):")
+    print(f"  {len(over)}/{resolved_total} resolved real screen(s) exceed 3 API call sites "
+          f"({len(unresolved)} unresolved, not counted as clean)")
+
     sys.exit(0)
 
 
