@@ -68,3 +68,6 @@ graft/
 
 # Claude Code project instructions (local only)
 CLAUDE.md
+
+# Python bytecode cache
+__pycache__/
