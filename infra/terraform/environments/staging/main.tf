@@ -16,23 +16,6 @@ module "candy_website_frontend_staging" {
 
   bucket_name = "candy-website-frontend-staging" # confirmed live
 
-  legacy_distribution = {
-    enabled                    = true # confirmed live
-    aliases                    = ["staging.candy.cx"]
-    cert_arn                   = "arn:aws:acm:us-east-1:348881530370:certificate/4b40db55-643c-4ec8-bb7e-36816cd9ec56" # *.candy.cx (us-east-1)
-    minimum_protocol_version   = "TLSv1.2_2021"
-    default_root_object        = "index.html"
-    origin_id                  = "S3-candy-website-frontend-staging"
-    origin_ssl_protocols       = ["TLSv1", "TLSv1.1", "TLSv1.2"]
-    cache_mode                 = "legacy"                               # confirmed live: min 0 / default 86400 / max 31536000, ForwardedValues, NO CachePolicyId
-    response_headers_policy_id = "664d73ce-680d-423c-aa96-52543b3e13bf" # confirmed live: candy-frontend-security-headers
-    custom_error_responses = [
-      { error_code = 403, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
-      { error_code = 404, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
-    ]
-    comment = "Candy staging frontend"
-  }
-
   one_domain_distribution = {
     enabled                  = true # confirmed live
     aliases                  = ["candy-staging.spacemarvel.ai"]

@@ -104,6 +104,8 @@ locals {
 }
 
 resource "aws_cloudfront_distribution" "legacy" {
+  count = var.legacy_distribution == null ? 0 : 1
+
   enabled             = var.legacy_distribution.enabled
   is_ipv6_enabled     = true
   http_version        = "http2"

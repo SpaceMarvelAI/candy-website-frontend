@@ -7,11 +7,11 @@ output "website_endpoint" {
 }
 
 output "legacy_distribution_id" {
-  value = aws_cloudfront_distribution.legacy.id
+  value = try(aws_cloudfront_distribution.legacy[0].id, null)
 }
 
 output "legacy_distribution_domain_name" {
-  value = aws_cloudfront_distribution.legacy.domain_name
+  value = try(aws_cloudfront_distribution.legacy[0].domain_name, null)
 }
 
 output "one_domain_distribution_id" {

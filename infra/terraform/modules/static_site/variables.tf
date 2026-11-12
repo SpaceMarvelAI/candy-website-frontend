@@ -41,7 +41,12 @@ variable "sse_bucket_key_enabled" {
 # visible in the calling environment instead of hidden in defaults.
 
 variable "legacy_distribution" {
-  description = "Config for the OLD separate-domain distribution. NOT the canonical one — see one_domain_distribution."
+  description = <<-EOT
+    Config for the OLD separate-domain distribution. NOT the canonical one —
+    see one_domain_distribution. Set to null (the default) when the legacy
+    distribution has been decommissioned (staging/dev/candy envs as of
+    2026-11-12; finixy prod + dev still exist, pricing-plan blocked).
+  EOT
   type = object({
     enabled                    = bool
     aliases                    = list(string)
@@ -61,6 +66,7 @@ variable "legacy_distribution" {
     }))
     comment = string
   })
+  default = null
 }
 
 variable "one_domain_distribution" {
