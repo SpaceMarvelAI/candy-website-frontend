@@ -23,6 +23,13 @@ module "candy_website_frontend_prod" {
   bucket_name            = "candy-website-frontend" # confirmed live
   sse_bucket_key_enabled = true                     # confirmed live — the ONLY bucket of the six
 
+  # The disabled legacy distribution carries one live tag (Name=candy-frontend,
+  # confirmed via imported state 2026-11-12); every other distribution and all
+  # six buckets carry none.
+  legacy_tags = {
+    Name = "candy-frontend"
+  }
+
   legacy_distribution = {
     enabled                    = false # confirmed live: disabled since the one-domain cutover
     aliases                    = ["app.candy.cx"]

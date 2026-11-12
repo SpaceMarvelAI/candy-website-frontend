@@ -86,6 +86,18 @@ variable "one_domain_distribution" {
   })
 }
 
+variable "legacy_tags" {
+  description = "Tags for the legacy (old separate-domain) distribution only — live reality is not uniform across distributions; most have NO tags, the disabled candy prod one carries Name=candy-frontend."
+  type        = map(string)
+  default     = {}
+}
+
+variable "one_domain_tags" {
+  description = "Tags for the canonical one-domain distribution only (live: none today)."
+  type        = map(string)
+  default     = {}
+}
+
 variable "cache_policy_id" {
   description = <<-EOT
     AWS managed "CachingOptimized" cache policy (658327ea-f89d-4fab-a63d-7e88639e58f6),

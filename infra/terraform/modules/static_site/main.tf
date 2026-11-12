@@ -111,6 +111,7 @@ resource "aws_cloudfront_distribution" "legacy" {
   comment             = var.legacy_distribution.comment
   default_root_object = var.legacy_distribution.default_root_object != "" ? var.legacy_distribution.default_root_object : null
   web_acl_id          = try(var.legacy_distribution.web_acl_arn, null)
+  tags                = merge(var.tags, var.legacy_tags)
 
   aliases = var.legacy_distribution.aliases
 
@@ -182,8 +183,6 @@ resource "aws_cloudfront_distribution" "legacy" {
       locations        = []
     }
   }
-
-  tags = var.tags
 }
 
 resource "aws_cloudfront_distribution" "one_domain" {
@@ -194,6 +193,7 @@ resource "aws_cloudfront_distribution" "one_domain" {
   comment             = var.one_domain_distribution.comment
   default_root_object = var.one_domain_distribution.default_root_object != "" ? var.one_domain_distribution.default_root_object : null
   web_acl_id          = try(var.one_domain_distribution.web_acl_arn, null)
+  tags                = merge(var.tags, var.one_domain_tags)
 
   aliases = var.one_domain_distribution.aliases
 
@@ -260,6 +260,4 @@ resource "aws_cloudfront_distribution" "one_domain" {
       locations        = []
     }
   }
-
-  tags = var.tags
 }
