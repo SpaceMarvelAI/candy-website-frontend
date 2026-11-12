@@ -5,8 +5,7 @@
 
 BUCKET_NAME="candy-website-frontend"
 REGION="ap-south-1"
-CF_DISTRIBUTION_ID="E2Q1JGL4YRTTQE"          # candy.cx (old domain, kept for compat during transition)
-CF_DISTRIBUTION_ID_NEW=""                      # TODO: candy.spacemarvel.ai — fill after creating new CloudFront distribution
+CF_DISTRIBUTION_ID="E22IMBW0SWNZ71"        # candy.spacemarvel.ai (new prod domain 2026-11-04)
 DIST_FOLDER="dist"
 
 function fail() {
@@ -21,27 +20,6 @@ function fail() {
     echo ""
     exit 1
 }
-
-# ── One-domain migration guard ────────────────────────────────────────────────
-# CF_DISTRIBUTION_ID_NEW must be filled before running this script.
-# .env.production now points to candy-api.spacemarvel.ai (the new domain).
-# If the new CloudFront distribution does not exist yet, deploying will push a
-# build that calls a non-existent API and break the current candy.cx site.
-# Set CF_DISTRIBUTION_ID_NEW (above) to the new distribution ID, then re-run.
-if [ -z "$CF_DISTRIBUTION_ID_NEW" ]; then
-    echo ""
-    echo "╔══════════════════════════════════════════════════╗"
-    echo "║           DEPLOY BLOCKED ✗                       ║"
-    echo "╠══════════════════════════════════════════════════╣"
-    echo "║  CF_DISTRIBUTION_ID_NEW is not set.              ║"
-    echo "║  Create candy.spacemarvel.ai CloudFront first,   ║"
-    echo "║  then fill CF_DISTRIBUTION_ID_NEW above.         ║"
-    echo "║  See: docs/one-domain/prod-one-domain-           ║"
-    echo "║       migration-plan.md (Step 1)                 ║"
-    echo "╚══════════════════════════════════════════════════╝"
-    echo ""
-    exit 1
-fi
 
 # ── Step 1: Check AWS credentials ─────────────────────────────────────────────
 if ! aws sts get-caller-identity > /dev/null 2>&1; then
@@ -154,32 +132,20 @@ fi
 echo "✓ Upload complete."
 
 # ── Step 11: Invalidate CloudFront cache ──────────────────────────────────────
-# Invalidate both old (candy.cx) and new (candy.spacemarvel.ai) distributions during
-# the transition period — lesson from staging: invalidating only the new one left stale
-# files in the old distribution and caused a session-expired loop on every redeploy.
-# Remove CF_DISTRIBUTION_ID (old) only after the old distribution is decommissioned.
 echo ""
 echo "Invalidating CloudFront cache..."
 aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID --paths "/*" > /dev/null
 if [ $? -ne 0 ]; then
     fail "CloudFront invalidation failed ($CF_DISTRIBUTION_ID) — check IAM permissions"
 fi
-if [ -n "$CF_DISTRIBUTION_ID_NEW" ]; then
-    aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID_NEW --paths "/*" > /dev/null
-    if [ $? -ne 0 ]; then
-        fail "CloudFront invalidation failed ($CF_DISTRIBUTION_ID_NEW) — check IAM permissions"
-    fi
-    echo "✓ Cache invalidated (candy.cx + candy.spacemarvel.ai)."
-else
-    echo "✓ Cache invalidated (candy.cx only — set CF_DISTRIBUTION_ID_NEW after creating candy.spacemarvel.ai distribution)."
-fi
+echo "✓ Cache invalidated (candy.spacemarvel.ai)."
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════╗"
 echo "║         DEPLOYMENT SUCCESSFUL ✓                  ║"
 echo "╠══════════════════════════════════════════════════╣"
-echo "║  URL   : https://candy.spacemarvel.ai            ║"
+echo "║  URL   : https://app.candy.cx                    ║"
 echo "║  Bucket: s3://candy-website-frontend             ║"
 echo "║  Region: ap-south-1                              ║"
 echo "║  CDN   : CloudFront cache cleared                ║"

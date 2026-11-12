@@ -3,7 +3,7 @@
 
 $BUCKET_NAME = "candy-website-frontend"
 $REGION = "ap-south-1"
-$CF_DISTRIBUTION_ID = "E2Q1JGL4YRTTQE"
+$CF_DISTRIBUTION_ID = "E22IMBW0SWNZ71"
 $DIST_FOLDER = "dist"
 
 # Check AWS credentials
