@@ -19,6 +19,7 @@ export function nextAvailableName(base: string, taken: { name: string }[]): stri
   return base;
 }
 import Icon from '../../assets/icons';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useApp } from '../../context/AppContext';
 import {
   HEALTHCARE_USE_CASES,
@@ -52,6 +53,7 @@ function DirBadge({ direction }: { direction: Direction }) {
 }
 
 function UseCaseCard({ uc, onCreate, tourId }: { uc: HealthcareUseCase; onCreate: () => void; tourId?: string }) {
+  const isMobile = useMediaQuery('(max-width: 640px)');
   return (
     <div
       onClick={onCreate}
@@ -59,7 +61,7 @@ function UseCaseCard({ uc, onCreate, tourId }: { uc: HealthcareUseCase; onCreate
       style={{
         position: 'relative', background: 'var(--card-bg)',
         border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)',
-        padding: 20, cursor: 'pointer', display: 'flex', flexDirection: 'column',
+        padding: isMobile ? 16 : 20, cursor: 'pointer', display: 'flex', flexDirection: 'column',
         transition: 'transform .18s ease, border-color .15s, box-shadow .18s',
       }}
       onMouseEnter={e => {
@@ -122,6 +124,7 @@ function UseCaseCard({ uc, onCreate, tourId }: { uc: HealthcareUseCase; onCreate
 function CreateModal({
   uc, onClose,
 }: { uc: HealthcareUseCase; onClose: () => void }) {
+  const isMobile = useMediaQuery('(max-width: 640px)');
   const { showView, addToast } = useApp();
   const [name, setName] = useState(`${uc.title} Agent`);
   const [busy, setBusy] = useState(false);
@@ -190,7 +193,7 @@ function CreateModal({
           width: 'min(640px, 100%)', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto',
           background: 'var(--card-bg)',
           border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)',
-          padding: 26, boxShadow: '0 20px 60px rgba(0,0,0,0.35)',
+          padding: isMobile ? 18 : 26, boxShadow: '0 20px 60px rgba(0,0,0,0.35)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
@@ -198,7 +201,7 @@ function CreateModal({
             background: ACCENT_SOFT, border: `1px solid ${ACCENT_BORDER}`, color: ACCENT }}>
             <Icon name={uc.icon} size={19} />
           </div>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 17, fontWeight: 650, color: 'var(--text-1)' }}>{uc.title}</div>
             <DirBadge direction={uc.direction} />
           </div>
@@ -218,7 +221,9 @@ function CreateModal({
             {/* Capped at ~3.5 rows so a long list scrolls instead of stretching the modal. */}
             <div style={{
               display: 'flex', flexDirection: 'column', gap: 6,
-              maxHeight: 232, overflowY: 'auto', padding: 6,
+              // min(…, 30vh): on a short/landscape viewport, a fixed 232px cap left the Cancel/
+              // Create buttons pushed below the fold inside an already-scrolling modal.
+              maxHeight: 'min(232px, 30vh)', overflowY: 'auto', padding: 6,
               borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-2)',
             }}>
               {existing.map(a => (
@@ -283,12 +288,12 @@ function CreateModal({
           number in the next step.
         </p>
 
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: isMobile ? 16 : 10, justifyContent: 'flex-end' }}>
           <button
             onClick={onClose}
             disabled={busy}
             style={{
-              padding: '9px 16px', borderRadius: 'var(--radius)', fontSize: 13.5, fontWeight: 600,
+              padding: isMobile ? '12px 16px' : '9px 16px', borderRadius: 'var(--radius)', fontSize: 13.5, fontWeight: 600,
               background: 'transparent', color: 'var(--text-2)', border: '1px solid var(--border-strong)',
               cursor: busy ? 'default' : 'pointer',
             }}
@@ -297,7 +302,7 @@ function CreateModal({
             onClick={handleCreate}
             disabled={busy}
             style={{
-              padding: '9px 18px', borderRadius: 'var(--radius)', fontSize: 13.5, fontWeight: 650,
+              padding: isMobile ? '12px 18px' : '9px 18px', borderRadius: 'var(--radius)', fontSize: 13.5, fontWeight: 650,
               background: ACCENT, color: '#fff', border: 'none', cursor: busy ? 'default' : 'pointer',
               opacity: busy ? 0.7 : 1,
             }}
@@ -312,12 +317,14 @@ function StatChip({ value, label }: { value: string; label: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <span style={{ fontSize: 22, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>{value}</span>
-      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)' }}>{label}</span>
+      {/* 0.75 measured ~3.44:1 against the #755BE3 hero background — under the 4.5:1 WCAG floor */}
+      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.92)' }}>{label}</span>
     </div>
   );
 }
 
 export default function HealthcareDomain() {
+  const isMobile = useMediaQuery('(max-width: 640px)');
   const [active, setActive] = useState<HealthcareUseCase | null>(null);
   const [dirFilter, setDirFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
   const inbound  = useMemo(() => HEALTHCARE_USE_CASES.filter(u => u.direction !== 'outbound'), []);
@@ -325,16 +332,19 @@ export default function HealthcareDomain() {
 
   const grid: React.CSSProperties = {
     display: 'grid', gap: 16,
-    gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
+    // min(290px, 100%) instead of a bare 290px — on a 320px phone, 16px page
+    // padding each side leaves 288px of content width, 2px under the old fixed
+    // minimum, which forced a sliver of horizontal scroll on the whole page.
+    gridTemplateColumns: 'repeat(auto-fill, minmax(min(290px, 100%), 1fr))',
   };
 
   return (
-    <div style={{ padding: '28px 40px 72px', maxWidth: 1280, margin: '0 auto' }}>
+    <div style={{ padding: isMobile ? '20px 16px 48px' : '28px 40px 72px', maxWidth: 1280, margin: '0 auto' }}>
       {/* Hero */}
       <div style={{
         position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius-xl)',
         background: ACCENT,
-        padding: '34px 36px', marginBottom: 30, color: '#fff',
+        padding: isMobile ? '24px 20px' : '34px 36px', marginBottom: 30, color: '#fff',
         boxShadow: '0 12px 40px rgba(117,91,227,0.28)',
       }}>
         <div style={{ position: 'relative', zIndex: 1, maxWidth: 720 }}>
@@ -343,15 +353,15 @@ export default function HealthcareDomain() {
             marginBottom: 14 }}>
             <Icon name="bulb" size={13} /> Healthcare Domain
           </div>
-          <h1 style={{ fontSize: 30, fontWeight: 720, letterSpacing: '-0.02em', margin: '0 0 10px' }}>
+          <h1 style={{ fontSize: isMobile ? 24 : 30, fontWeight: 720, letterSpacing: '-0.02em', margin: '0 0 10px' }}>
             AI voice agents for clinics &amp; hospitals
           </h1>
-          <p style={{ fontSize: 15, lineHeight: 1.55, color: 'rgba(255,255,255,0.88)', margin: '0 0 22px' }}>
+          <p style={{ fontSize: 15, lineHeight: 1.55, color: 'rgba(255,255,255,0.95)', margin: '0 0 22px' }}>
             Pick a use case below to spin up an agent — it comes pre-loaded with the right
             skills, healthcare guardrails, emergency escalation and medical speech recognition.
             Test it in the demo, assign a number, and go live.
           </p>
-          <div style={{ display: 'flex', gap: 34 }}>
+          <div style={{ display: 'flex', gap: isMobile ? 20 : 34, flexWrap: 'wrap' }}>
             <StatChip value="15" label="Use cases" />
             <StatChip value="10 / 5" label="Inbound / Outbound" />
             <StatChip value="108" label="Emergency-safe" />
@@ -360,7 +370,7 @@ export default function HealthcareDomain() {
       </div>
 
       {/* Inbound */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 12 : 0, alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <SectionHeading icon="chat" title="Inbound & two-way use cases"
           sub="Patients call in — the agent handles the request and collects what the clinic needs." />
         <div style={{ display: 'flex', gap: 3, padding: 3, borderRadius: 8, background: 'var(--bg-3)' }}>
@@ -369,7 +379,7 @@ export default function HealthcareDomain() {
               key={f}
               onClick={() => setDirFilter(f)}
               style={{
-                padding: '6px 13px', borderRadius: 6, fontSize: 12.5, fontWeight: 600,
+                padding: isMobile ? '11px 13px' : '6px 13px', borderRadius: 6, fontSize: 12.5, fontWeight: 600,
                 border: 'none', cursor: 'pointer',
                 background: dirFilter === f ? 'var(--card-bg)' : 'transparent',
                 color: dirFilter === f ? 'var(--text-1)' : 'var(--text-3)',
