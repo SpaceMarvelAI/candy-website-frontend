@@ -31,27 +31,23 @@ module "candy_website_frontend_dev" {
       { error_code = 403, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
       { error_code = 404, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
     ]
-    comment = "Old separate-domain alias for candy-website-frontend-dev"
+    comment = "Candy dev frontend"
   }
 
   one_domain_distribution = {
-    enabled                  = true # confirmed live
-    aliases                  = ["candy-dev.spacemarvel.ai"]
-    cert_arn                 = "arn:aws:acm:us-east-1:348881530370:certificate/5be9014f-6142-43eb-b2ea-d824b0804485" # *.spacemarvel.ai (us-east-1)
-    minimum_protocol_version = "TLSv1.2_2021"
-    default_root_object      = "index.html"
-    origin_id                = "candy-s3-dev"
-    origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
-    cache_mode               = "managed"
-    # no response headers policy attached — confirmed live
+    enabled                    = true # confirmed live
+    aliases                    = ["candy-dev.spacemarvel.ai"]
+    cert_arn                   = "arn:aws:acm:us-east-1:348881530370:certificate/5be9014f-6142-43eb-b2ea-d824b0804485" # *.spacemarvel.ai (us-east-1)
+    minimum_protocol_version   = "TLSv1.2_2021"
+    default_root_object        = "index.html"
+    origin_id                  = "candy-s3-dev"
+    origin_ssl_protocols       = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+    cache_mode                 = "managed"
+    response_headers_policy_id = "664d73ce-680d-423c-aa96-52543b3e13bf" # confirmed live 2026-11-12 (attached after the 2026-09 snapshot)
     custom_error_responses = [
       { error_code = 403, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
       { error_code = 404, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
     ]
-    comment = "Canonical one-domain distribution for candy-website-frontend-dev (candy-dev.spacemarvel.ai)"
-  }
-
-  tags = {
-    Product = "candy-website-frontend"
+    comment = "Candy Frontend - Dev (spacemarvel.ai)"
   }
 }

@@ -38,7 +38,7 @@ module "candy_website_frontend_prod" {
       { error_code = 403, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 10 },
       { error_code = 404, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 300 },
     ]
-    comment = "Old separate-domain alias for candy-website-frontend (disabled after one-domain cutover to candy.spacemarvel.ai, 2026-11-04)"
+    comment = "Frontend for Candy website"
   }
 
   one_domain_distribution = {
@@ -55,10 +55,6 @@ module "candy_website_frontend_prod" {
       { error_code = 403, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
       { error_code = 404, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
     ]
-    comment = "Canonical one-domain distribution for candy-website-frontend (candy.spacemarvel.ai, 2026-11-04)"
-  }
-
-  tags = {
-    Product = "candy-website-frontend"
+    comment = "candy.spacemarvel.ai prod — one-domain migration 2026-11-04"
   }
 }

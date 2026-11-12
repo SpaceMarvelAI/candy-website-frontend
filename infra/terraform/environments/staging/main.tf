@@ -30,7 +30,7 @@ module "candy_website_frontend_staging" {
       { error_code = 403, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
       { error_code = 404, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
     ]
-    comment = "Old separate-domain alias for candy-website-frontend-staging"
+    comment = "Candy staging frontend"
   }
 
   one_domain_distribution = {
@@ -47,10 +47,6 @@ module "candy_website_frontend_staging" {
       { error_code = 403, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
       # NOTE: no 404 entry — confirmed live
     ]
-    comment = "Canonical one-domain distribution for candy-website-frontend-staging (candy-staging.spacemarvel.ai)"
-  }
-
-  tags = {
-    Product = "candy-website-frontend"
+    comment = "candy-staging.spacemarvel.ai (one-domain staging)"
   }
 }
