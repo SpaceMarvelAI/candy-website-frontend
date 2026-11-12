@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useFeatureFlagEnabled } from 'posthog-js/react';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../hooks/useTheme';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import type { AddToast } from '../hooks/useToast';
 import Icon from '../assets/icons';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
@@ -23,6 +24,12 @@ export const RAIL_W   = 64;
 // Rail and sidebar float as borderless rounded panels with this gap on every side.
 export const SHELL_GAP = 4;
 
+// Mobile-only rail sizing — matches Finixy's mobile shell exactly (--rail-width:52px,
+// --rail-avatar-size:26px below the same 767px cut the rest of its product-shell CSS uses).
+// Desktop/tablet (>=768px) keep RAIL_W untouched; only this breakpoint narrows the rail.
+export const RAIL_W_MOBILE = 52;
+export const MOBILE_SHELL_BP = '(max-width: 767px)';
+
 // Help → Onboarding is a testing shortcut: localhost + dev only, hidden on staging and prod.
 const SHOW_ONBOARDING_ITEM = typeof window !== 'undefined' &&
   ['localhost', '127.0.0.1', 'dev.candy.cx'].includes(window.location.hostname);
@@ -31,6 +38,7 @@ const SHOW_ONBOARDING_ITEM = typeof window !== 'undefined' &&
 function ProfileMenu({
   anchorRect, onClose, onSignOut, signingOut, navigate, addToast,
   theme, setTheme, onReportIssue, onProfile, onOnboarding, onLinkedInConnections,
+  railW, isMobile,
 }: {
   anchorRect: DOMRect;
   onClose: () => void; onSignOut: () => void; signingOut: boolean;
@@ -40,6 +48,8 @@ function ProfileMenu({
   onProfile: () => void;
   onOnboarding: () => void;
   onLinkedInConnections: () => void;
+  railW: number;
+  isMobile: boolean;
 }) {
   const [subMenu, setSubMenu] = useState<null | 'appearance' | 'help'>(null);
   const [subMenuY, setSubMenuY] = useState(0);
@@ -51,7 +61,7 @@ function ProfileMenu({
 
   const menuWidth   = 220;
   const flyoutWidth = 190;
-  const left   = RAIL_W + SHELL_GAP * 2 + 4;
+  const left   = railW + SHELL_GAP * 2 + 4;
   const bottom = window.innerHeight - anchorRect.bottom;
   const flyoutLeft = left + menuWidth + 4;
 
@@ -106,19 +116,35 @@ function ProfileMenu({
   // Clamp so the flyout never bleeds below the viewport (5 items ≈ 200px + padding)
   const safeFlyoutTop = Math.min(subMenuY, window.innerHeight - 212 - 12);
 
-  const flyoutStyle: React.CSSProperties = {
-    position: 'fixed',
-    left: flyoutLeft,
-    top: safeFlyoutTop,
-    width: flyoutWidth,
-    background: 'var(--shell-menu-bg)',
-    border: '1px solid var(--shell-menu-border)',
-    borderRadius: 12,
-    padding: '6px',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-    zIndex: 201,
-    animation: 'menuFadeIn 0.12s ease',
-  };
+  // Mobile: the anchored flyout's hardcoded `left: flyoutLeft` (left + 220 + 4) runs well
+  // past a ~390px-wide phone's right edge — same overflow class of bug Finixy's mobile
+  // shell hit on this exact popup. Below 768px it becomes a near-full-width bottom sheet
+  // instead, stacked over the main popup (same fixed left/right/bottom as it, below).
+  const flyoutStyle: React.CSSProperties = isMobile
+    ? {
+        position: 'fixed', left: 12, right: 12, bottom: 12, width: 'auto',
+        maxHeight: 'min(400px, calc(100vh - 100px))', overflowY: 'auto',
+        background: 'var(--shell-menu-bg)',
+        border: '1px solid var(--shell-menu-border)',
+        borderRadius: 12,
+        padding: '6px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+        zIndex: 201,
+        animation: 'menuFadeIn 0.12s ease',
+      }
+    : {
+        position: 'fixed',
+        left: flyoutLeft,
+        top: safeFlyoutTop,
+        width: flyoutWidth,
+        background: 'var(--shell-menu-bg)',
+        border: '1px solid var(--shell-menu-border)',
+        borderRadius: 12,
+        padding: '6px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+        zIndex: 201,
+        animation: 'menuFadeIn 0.12s ease',
+      };
 
   return createPortal(
     <>
@@ -127,20 +153,23 @@ function ProfileMenu({
         @keyframes menuFadeIn{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:translateX(0)}}
       `}</style>
 
-      {/* Backdrop — captures outside clicks without DOM event hacks */}
+      {/* Backdrop — captures outside clicks without DOM event hacks. Dimmed on mobile
+          (the sheet below reads as a proper modal there); invisible click-catcher on desktop. */}
       <div
-        style={{ position: 'fixed', inset: 0, zIndex: 198 }}
+        style={{ position: 'fixed', inset: 0, zIndex: 198, background: isMobile ? 'rgba(0,0,0,0.45)' : 'transparent' }}
         onClick={onClose}
       />
 
       {/* ── Main menu ── */}
       <div style={{
-        position: 'fixed', left, bottom, width: menuWidth,
+        position: 'fixed',
+        ...(isMobile ? { left: 12, right: 12, bottom: 12, width: 'auto' } : { left, bottom, width: menuWidth }),
         background: 'var(--shell-menu-bg)',
         border: '1px solid var(--shell-profile-border)',
         borderRadius: 12, padding: '6px',
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         zIndex: 200, animation: 'menuFadeUp 0.15s ease',
+        ...(isMobile ? { maxHeight: 'min(520px, calc(100vh - 100px))', overflowY: 'auto' } : {}),
       }}>
         {/* Subscription workspaces, at the very top — the slot Claude uses, and what
             HANDOFF_TO_TEAMS.md specifies. Renders nothing when the user has only one, so a
@@ -166,10 +195,10 @@ function ProfileMenu({
 
         <div style={{ borderTop: '1px solid var(--shell-menu-border)', margin: '4px 0' }} />
 
-        {flagAppConnections !== false && menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
+        {flagAppConnections !== false && menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'connectors' })}
         {flagProfileSettings !== false && menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
         {flagProfileSettings !== false && menuItem('LinkedIn Connections', () => { onLinkedInConnections(); onClose(); }, { icon: 'team' })}
-        {subBtn('Appearance', 'sun',  'appearance')}
+        {subBtn('Appearance', 'appearance', 'appearance')}
         {menuItem('Settings',  () => { addToast('Settings — coming soon', 'info'); onClose(); }, { icon: 'settings' })}
         {subBtn('Help', 'help', 'help')}
 
@@ -219,10 +248,11 @@ const MORE_ITEMS = [
   { id: 'connectors',     label: 'Connectors',     icon: 'flow', path: '/connects' },
 ];
 
-function MoreMenu({ anchorRect, onClose, onPick }: {
+function MoreMenu({ anchorRect, onClose, onPick, railW }: {
   anchorRect: DOMRect;
   onClose: () => void;
   onPick: (item: { label: string; path: string | null }) => void;
+  railW: number;
 }) {
   const flagAppConnections = useFeatureFlagEnabled('app_connections');
   const visibleItems = MORE_ITEMS.filter(item =>
@@ -233,7 +263,7 @@ function MoreMenu({ anchorRect, onClose, onPick }: {
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 198 }} onClick={onClose} />
       <div role="menu" style={{
-        position: 'fixed', left: RAIL_W + SHELL_GAP * 2 + 4, top: anchorRect.top, width: 200,
+        position: 'fixed', left: railW + SHELL_GAP * 2 + 4, top: anchorRect.top, width: 200,
         background: 'var(--shell-menu-bg)', border: '1px solid var(--shell-menu-border)',
         borderRadius: 12, padding: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 200,
       }}>
@@ -280,11 +310,22 @@ const PRODUCTS: Product[] = [
   { id: 'candy',     label: 'Candy',  img: '/Candy.svg', path: '/healthcare', current: true },
 ];
 
-export default function AppRail() {
+interface AppRailProps {
+  // Mobile/tablet nav-drawer toggle — lifted to AppLayout so Sidebar's off-canvas
+  // drawer can share it. Moved here (matching Finixy's AppRail) instead of a
+  // hamburger in the header, so the toggle lives in the rail it opens next to.
+  mobileNavOpen?: boolean;
+  onToggleMobileNav?: () => void;
+}
+
+export default function AppRail({ mobileNavOpen = false, onToggleMobileNav }: AppRailProps = {}) {
   const { user, addToast, signOut, signingOut } = useApp();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  // Same cutoff Sidebar.tsx uses for its off-canvas drawer — the toggle must stay
+  // available through tablet widths too, not just the narrower <768px rail-shrink check below.
+  const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
 
   const [moreAnchor, setMoreAnchor] = useState<DOMRect | null>(null);
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
@@ -341,6 +382,17 @@ export default function AppRail() {
   const userAvatarUrl = profileOverride ? profileOverride.avatarUrl : (user?.avatar_url || null);
   const initials      = userName.slice(0, 1).toUpperCase();
 
+  // Mobile-only rail narrowing — see RAIL_W_MOBILE above. Desktop/tablet sizes
+  // (RAIL_W, 56/40/32/24/22/20/12/11px below) are completely untouched.
+  const isMobile   = useMediaQuery(MOBILE_SHELL_BP);
+  const railW      = isMobile ? RAIL_W_MOBILE : RAIL_W;
+  const btnW       = isMobile ? 46 : 56;
+  const iconWrapSz = isMobile ? 32 : 40;
+  const logoSz     = isMobile ? 20 : 24;
+  const moreIconSz = isMobile ? 17 : 20;
+  const avatarSz   = isMobile ? 26 : 32;
+  const labelFontSz = isMobile ? 10 : 11;
+
   const railBtn = (key: string, label: string, glyph: React.ReactNode, onClick: (e: React.MouseEvent<HTMLButtonElement>) => void, opts: { current?: boolean; expanded?: boolean } = {}) => (
     <button
       key={key}
@@ -349,12 +401,12 @@ export default function AppRail() {
       aria-current={opts.current ? 'page' : undefined}
       aria-expanded={opts.expanded}
       style={{
-        width: 56, padding: '6px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+        width: btnW, padding: isMobile ? '5px 0' : '6px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
         border: 'none', borderRadius: 10, cursor: 'pointer',
-        fontSize: 11, fontWeight: opts.current ? 600 : 500, transition: 'background 0.12s',
+        fontSize: labelFontSz, fontWeight: opts.current ? 600 : 500, transition: 'background 0.12s',
       }}
     >
-      <span style={{ position: 'relative', width: 40, height: 40, display: 'grid', placeItems: 'center' }}>
+      <span style={{ position: 'relative', width: iconWrapSz, height: iconWrapSz, display: 'grid', placeItems: 'center' }}>
         {opts.current && (
           <span className="ms-orb" aria-hidden>
             {ORB_BLOBS.map(b => (
@@ -374,21 +426,39 @@ export default function AppRail() {
       <nav
         aria-label="Products"
         style={{
-          position: 'fixed', top: HEADER_H + SHELL_GAP, left: SHELL_GAP, bottom: SHELL_GAP, width: RAIL_W,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-          padding: '12px 0', boxSizing: 'border-box',
+          position: 'fixed', top: HEADER_H + SHELL_GAP, left: SHELL_GAP, bottom: SHELL_GAP, width: railW,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? 5 : 6,
+          padding: isMobile ? '10px 0' : '12px 0', boxSizing: 'border-box',
           background: 'var(--shell-bg)', borderRadius: 4, zIndex: 51,
         }}
       >
+        {isMobileOrTablet && (
+          <button
+            type="button"
+            aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileNavOpen}
+            onClick={onToggleMobileNav}
+            className="shell-rail-btn"
+            style={{
+              width: btnW, height: iconWrapSz, padding: 0, display: 'grid', placeItems: 'center',
+              border: 'none', borderRadius: 10, cursor: 'pointer', transition: 'background 0.12s',
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ color: 'var(--shell-text-2)' }}>
+              <path d="M6.41 6L5 7.41L9.58 12L5 16.59L6.41 18L12.41 12L6.41 6Z" fill="currentColor" />
+              <path d="M13.0037 6L11.5938 7.41L16.1737 12L11.5938 16.59L13.0037 18L19.0037 12L13.0037 6Z" fill="currentColor" />
+            </svg>
+          </button>
+        )}
         {PRODUCTS.map(p => railBtn(
           p.id, p.label,
           p.img
-            ? <img src={p.img} alt="" style={{ width: 24, height: 24, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)' }} />
+            ? <img src={p.img} alt="" style={{ width: logoSz, height: logoSz, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)' }} />
             : <Icon name={p.icon!} size={22} style={{ color: 'var(--shell-text-2)' }} />,
           () => { void openProduct(p); },
           { current: p.current },
         ))}
-        {railBtn('more', 'More', <Icon name="apps" size={20} style={{ color: 'var(--shell-text-2)' }} />,
+        {railBtn('more', 'More', <Icon name="apps" size={moreIconSz} style={{ color: 'var(--shell-text-2)' }} />,
           e => setMoreAnchor(e.currentTarget.getBoundingClientRect()), { expanded: !!moreAnchor })}
 
         <button
@@ -404,12 +474,12 @@ export default function AppRail() {
               src={userAvatarUrl}
               alt=""
               onError={() => setAvatarLoadFailed(true)}
-              style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', display: 'block' }}
+              style={{ width: avatarSz, height: avatarSz, borderRadius: '50%', objectFit: 'cover', display: 'block' }}
             />
           ) : (
             <div style={{
-              width: 32, height: 32, borderRadius: '50%', background: 'var(--shell-avatar)',
-              display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 700, color: '#fff',
+              width: avatarSz, height: avatarSz, borderRadius: '50%', background: 'var(--shell-avatar)',
+              display: 'grid', placeItems: 'center', fontSize: isMobile ? 10 : 12, fontWeight: 700, color: '#fff',
             }}>
               {initials}
             </div>
@@ -418,10 +488,10 @@ export default function AppRail() {
       </nav>
 
       {/* Placeholder — reserves the rail's width in the flex row */}
-      <div style={{ width: RAIL_W + SHELL_GAP, flexShrink: 0 }} />
+      <div style={{ width: railW + SHELL_GAP, flexShrink: 0 }} />
 
       {moreAnchor && (
-        <MoreMenu anchorRect={moreAnchor} onClose={() => setMoreAnchor(null)} onPick={handleNav} />
+        <MoreMenu anchorRect={moreAnchor} onClose={() => setMoreAnchor(null)} onPick={handleNav} railW={railW} />
       )}
 
       {profileAnchor && (
@@ -438,6 +508,8 @@ export default function AppRail() {
           onProfile={() => setProfileEditOpen(true)}
           onOnboarding={() => setOnboardingOpen(true)}
           onLinkedInConnections={() => setLinkedInConnectionsOpen(true)}
+          railW={railW}
+          isMobile={isMobile}
         />
       )}
 

@@ -107,9 +107,11 @@ const iconPaths: Record<string, ReactNode> = {
       <rect x="14" y="4" width="4" height="16" fill="currentColor"/>
     </>
   ),
+  // 3x3 grid of rounded squares, flush to the viewBox edges — matches Finixy's
+  // AppRail "More" glyph (its 18x18 rects at 0/7/14, scaled by 24/18 here).
   apps: (
     <>
-      {[5, 12, 19].flatMap(y => [5, 12, 19].map(x => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.8" fill="currentColor"/>))}
+      {[0, 9.3, 18.7].flatMap(y => [0, 9.3, 18.7].map(x => <rect key={`${x}-${y}`} x={x} y={y} width="5.3" height="5.3" rx="1.3" fill="currentColor"/>))}
     </>
   ),
   crown: (
@@ -304,8 +306,25 @@ const iconPaths: Record<string, ReactNode> = {
   ),
   user: (
     <>
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" strokeWidth="1.75"/>
-      <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+    </>
+  ),
+  // Matches Finixy's profile-popup "Connectors" glyph — distinct from the literal
+  // power-plug `plug` icon used for actual connect/integration actions elsewhere.
+  connectors: (
+    <>
+      <path d="M12 22V12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+      <circle cx="12" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+    </>
+  ),
+  // Matches Finixy's profile-popup "Appearance" glyph — distinct from the literal
+  // `sun`/`moon` icons used for the light/dark toggle elsewhere.
+  appearance: (
+    <>
+      <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.75"/>
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.75" strokeDasharray="2 2"/>
     </>
   ),
   shield: (
