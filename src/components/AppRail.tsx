@@ -296,11 +296,8 @@ interface Product {
   path?: string; ssoTarget?: string; current?: boolean;
 }
 
-const ORB_BLOBS = [
-  { c: '#755BE3', x: '-30%', y: '-18%', delay: '0s'  },
-  { c: '#18DAFC', x: '0%',   y: '32%',  delay: '-8s' },
-  { c: '#4CAF50', x: '30%',  y: '-18%', delay: '-4s' },
-];
+// Exact gradient + spin from Finixy's AppRail.tsx (ORB_GRADIENT / .ms-orb-spin).
+const ORB_GRADIENT = 'conic-gradient(from 0deg, #755BE3, #18DAFC, #4CAF50, #755BE3)';
 
 const PRODUCTS: Product[] = [
   { id: 'metaspace', label: 'Home',   img: '/Metaspace.svg',
@@ -408,12 +405,25 @@ export default function AppRail({ mobileNavOpen = false, onToggleMobileNav }: Ap
     >
       <span style={{ position: 'relative', width: iconWrapSz, height: iconWrapSz, display: 'grid', placeItems: 'center' }}>
         {opts.current && (
-          <span className="ms-orb" aria-hidden>
-            {ORB_BLOBS.map(b => (
-              <span key={b.c} className="ms-orb-blob"
-                style={{ '--c': b.c, '--x': b.x, '--y': b.y, animationDelay: b.delay } as React.CSSProperties} />
-            ))}
-          </span>
+          <>
+            <span
+              aria-hidden
+              className="ms-orb-spin"
+              style={{
+                position: 'absolute', inset: -1.5, borderRadius: '50%',
+                background: ORB_GRADIENT, filter: 'blur(2px)', opacity: 0.6,
+              }}
+            />
+            <span
+              aria-hidden
+              style={{ position: 'absolute', inset: 0, borderRadius: '50%', overflow: 'hidden', filter: 'blur(1px)' }}
+            >
+              <span
+                className="ms-orb-spin"
+                style={{ position: 'absolute', inset: '-60%', background: ORB_GRADIENT, filter: 'blur(6px)' }}
+              />
+            </span>
+          </>
         )}
         <span style={{ position: 'relative', display: 'grid', placeItems: 'center' }}>{glyph}</span>
       </span>

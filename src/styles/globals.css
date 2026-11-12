@@ -642,22 +642,11 @@ html.theme-transitioning *::after {
 
 .shell-profile-btn:hover { background: var(--shell-profile-hover); }
 
-/* Three-colour Metaspace orb behind the active app's rail icon */
-.ms-orb {
-  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
-  filter: blur(3px); background: #48A1BA;
-}
-.ms-orb-blob {
-  position: absolute; inset: 0; border-radius: 50%; filter: blur(4px);
-  background: radial-gradient(circle, var(--c) 0%, var(--c) 45%, transparent 72%);
-  animation: ms-orb-blob 12s ease-in-out infinite;
-}
-@keyframes ms-orb-blob {
-  0%, 100%            { transform: translate(0,0) scale(1.5); opacity: 1; }
-  16.67%, 50%, 83.33% { transform: translate(calc(var(--x)*0.3), calc(var(--y)*0.3)) scale(1); opacity: .7; }
-  33.33%, 66.67%      { transform: translate(var(--x), var(--y)) scale(.55); opacity: .9; }
-}
-@media (prefers-reduced-motion: reduce) { .ms-orb-blob { animation: none; } }
+/* Three-colour orb behind the active app's rail icon — exact gradient + spin
+   ported from Finixy's AppRail.tsx / finixy-ui.css (ORB_GRADIENT / .ms-orb-spin). */
+@keyframes ms-orb-spin { to { transform: rotate(360deg); } }
+.ms-orb-spin { animation: ms-orb-spin 14s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .ms-orb-spin { animation: none; } }
 
 .shell-upgrade-btn {
   display: flex; align-items: center; gap: 6px;
