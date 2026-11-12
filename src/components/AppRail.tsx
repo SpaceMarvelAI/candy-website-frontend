@@ -195,10 +195,10 @@ function ProfileMenu({
 
         <div style={{ borderTop: '1px solid var(--shell-menu-border)', margin: '4px 0' }} />
 
-        {flagAppConnections !== false && menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'plug' })}
+        {flagAppConnections !== false && menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'connectors' })}
         {flagProfileSettings !== false && menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
         {flagProfileSettings !== false && menuItem('LinkedIn Connections', () => { onLinkedInConnections(); onClose(); }, { icon: 'team' })}
-        {subBtn('Appearance', 'sun',  'appearance')}
+        {subBtn('Appearance', 'appearance', 'appearance')}
         {menuItem('Settings',  () => { addToast('Settings — coming soon', 'info'); onClose(); }, { icon: 'settings' })}
         {subBtn('Help', 'help', 'help')}
 
