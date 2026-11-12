@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useTourActive } from '../hooks/useTourActive';
 import Icon from '../assets/icons';
-import { HEADER_H, RAIL_W, SHELL_GAP } from './AppRail';
+import { HEADER_H, RAIL_W, RAIL_W_MOBILE, SHELL_GAP, MOBILE_SHELL_BP } from './AppRail';
 
 // ─────────────────────────────────────────────────────────────────────────────
 const COLLAPSED_W = 56;
@@ -76,6 +76,10 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   // Open/closed state per expandable group (Use Case, CRM).
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ usecase: true, crm: false });
   const isMobileOrTablet = useMediaQuery('(max-width: 1024px)');
+  // Rail only narrows to RAIL_W_MOBILE below 768px (see AppRail.tsx) — tablet (769-1024px)
+  // keeps the full-width desktop rail, so this stays a separate, stricter check.
+  const isMobile = useMediaQuery(MOBILE_SHELL_BP);
+  const effectiveRailW = isMobile ? RAIL_W_MOBILE : RAIL_W;
   const tourActive = useTourActive();
   const [headerHovered, setHeaderHovered] = useState(false);
 
@@ -117,7 +121,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const panelWidth    = isMobileOrTablet ? MOBILE_W : (panelExpanded ? EXPANDED_W : COLLAPSED_W);
 
   const panelTransform = isMobileOrTablet
-    ? (mobileOpen ? 'translateX(0)' : `translateX(-${MOBILE_W + RAIL_W + SHELL_GAP * 2}px)`)
+    ? (mobileOpen ? 'translateX(0)' : `translateX(-${MOBILE_W + effectiveRailW + SHELL_GAP * 2}px)`)
     : 'translateX(0)';
   const panelTransition = isMobileOrTablet
     ? 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -145,7 +149,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       <div
         style={{
           position: 'fixed',
-          top: HEADER_H + SHELL_GAP, left: RAIL_W + SHELL_GAP * 2,
+          top: HEADER_H + SHELL_GAP, left: effectiveRailW + SHELL_GAP * 2,
           height: `calc(100vh - ${HEADER_H + SHELL_GAP * 2}px)`,
           borderRadius: 4,
           width: panelWidth,
