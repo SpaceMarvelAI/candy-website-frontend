@@ -370,7 +370,7 @@ export default function HealthcareDomain() {
       </div>
 
       {/* Inbound */}
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 12 : 0, alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 12 : 0, alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
         <SectionHeading icon="chat" title="Inbound & two-way use cases"
           sub="Patients call in — the agent handles the request and collects what the clinic needs." />
         <div style={{ display: 'flex', gap: 3, padding: 3, borderRadius: 8, background: 'var(--bg-3)' }}>
