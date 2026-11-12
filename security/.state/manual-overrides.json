@@ -26,10 +26,10 @@
       "date": "2026-10-08"
     },
     "RS-WEB-01": {
-      "status": "partial",
-      "evidence": "index.html CSP + referrer-policy meta tags added",
-      "note": "Added CSP (mirrored from the already-live CloudFront policy, CLOUDFRONT_SECURITY_HEADERS.md) and Referrer-Policy via <meta> tags in index.html — works in every environment including prod, which currently has no CloudFront policy attached. X-Frame-Options, HSTS, X-Content-Type-Options and Permissions-Policy cannot be set via meta tag (browser-enforced HTTP-header-only); those still require attaching the existing CloudFront response-headers policy (664d73ce-680d-423c-aa96-52543b3e13bf) to the prod distribution E2Q1JGL4YRTTQE — already tracked as action #1 (P0) in CLOUDFRONT_SECURITY_HEADERS.md, an AWS console action outside this repo.",
-      "date": "2026-10-08"
+      "status": "implemented",
+      "evidence": "index.html meta tags + CloudFront policy 664d73ce attached to E22IMBW0SWNZ71 (verified live 2026-11-12)",
+      "note": "Added CSP (mirrored from the live CloudFront policy, CLOUDFRONT_SECURITY_HEADERS.md) and Referrer-Policy via <meta> tags in index.html. Update 2026-11-12: policy 664d73ce is attached to the current prod distribution E22IMBW0SWNZ71 (candy.spacemarvel.ai) — verified live that all three Candy hosts serve CSP/HSTS/X-Frame-Options/nosniff/Referrer-Policy and Permissions-Policy (microphone=(self)). The E2Q1JGL4YRTTQE distribution this note referenced was deleted 2026-11-12. Header gap closed 2026-11-12.",
+      "date": "2026-11-12"
     },
     "RS-CRY-01": {
       "status": "waived",
