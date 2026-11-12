@@ -17,15 +17,15 @@ module "candy_website_frontend_staging" {
   bucket_name = "candy-website-frontend-staging" # confirmed live
 
   one_domain_distribution = {
-    enabled                  = true # confirmed live
-    aliases                  = ["candy-staging.spacemarvel.ai"]
-    cert_arn                 = "arn:aws:acm:us-east-1:348881530370:certificate/5be9014f-6142-43eb-b2ea-d824b0804485" # *.spacemarvel.ai (us-east-1)
-    minimum_protocol_version = "TLSv1.2_2021"
-    default_root_object      = "index.html"
-    origin_id                = "S3-candy-website-frontend-staging"
-    origin_ssl_protocols     = ["TLSv1.2"] # confirmed live: TLSv1.2-only to the origin
-    cache_mode               = "legacy"    # confirmed live: same legacy TTLs + ForwardedValues
-    # no response headers policy attached — confirmed live (unlike the legacy distribution)
+    enabled                    = true # confirmed live
+    aliases                    = ["candy-staging.spacemarvel.ai"]
+    cert_arn                   = "arn:aws:acm:us-east-1:348881530370:certificate/5be9014f-6142-43eb-b2ea-d824b0804485" # *.spacemarvel.ai (us-east-1)
+    minimum_protocol_version   = "TLSv1.2_2021"
+    default_root_object        = "index.html"
+    origin_id                  = "S3-candy-website-frontend-staging"
+    origin_ssl_protocols       = ["TLSv1.2"]                            # confirmed live: TLSv1.2-only to the origin
+    cache_mode                 = "legacy"                               # confirmed live: same legacy TTLs + ForwardedValues
+    response_headers_policy_id = "664d73ce-680d-423c-aa96-52543b3e13bf" # candy-frontend-security-headers (CSP/HSTS/DENY — same policy live on candy-dev)
     custom_error_responses = [
       { error_code = 403, response_page_path = "/index.html", response_code = "200", error_caching_min_ttl = 0 },
       # NOTE: no 404 entry — confirmed live
