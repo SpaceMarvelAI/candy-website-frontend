@@ -71,3 +71,18 @@ CLAUDE.md
 
 # Python bytecode cache
 __pycache__/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.auto.tfvars
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# .terraform.lock.hcl is deliberately NOT ignored — it pins exact provider
+# versions and should be committed, per Terraform's own guidance.
