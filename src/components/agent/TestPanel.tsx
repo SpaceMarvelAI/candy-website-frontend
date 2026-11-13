@@ -536,10 +536,18 @@ export default function TestPanel({
   primaryLang = 'en',
   supportedLangs = [],
 }: Props) {
-  const { addToast } = useApp();
+  const { addToast, user } = useApp();
   // Flagged High in debug/AUDIT.md — agent-switch races (stale transcript,
   // duplicate session creation) and an unmount/MediaRecorder cleanup race.
   useDebugLifecycle('TestPanel', [agentId]);
+  // "Live actions": by default every tool the agent calls here is a canned mock (so testing can
+  // never create a real booking). An owner/admin can switch it on to run the REAL tools — real
+  // bookings that show up in the CRM. Never persisted: it is off again on reload / agent switch.
+  const canGoLive = user?.role === 'owner' || user?.role === 'admin';
+  const [liveActions, setLiveActions] = useState(false);
+  const liveActionsRef = useRef(false);
+  liveActionsRef.current = canGoLive && liveActions;
+  useEffect(() => { setLiveActions(false); }, [agentId]);
   const [listening, setListening] = useState(false);
   const [input, setInput] = useState('');
   const [transcript, setTranscript] = useState<Msg[]>([
@@ -925,7 +933,7 @@ export default function TestPanel({
         onError: (err) => {
           throw err;
         },
-      }, turnAbort.signal, currentLangCode);
+      }, turnAbort.signal, currentLangCode, liveActionsRef.current);
     } catch (e) {
       // Superseded by a newer turn (or torn down) — not an error to report.
       if (turnAbort.signal.aborted || (e as any)?.name === 'AbortError') return;
@@ -1505,6 +1513,27 @@ export default function TestPanel({
           </h3>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {canGoLive && (
+            <button
+              type="button"
+              onClick={() => setLiveActions(v => !v)}
+              title={liveActions
+                ? 'Live actions ON — the agent runs its real tools: bookings are real and appear in the CRM. Click to go back to simulated results.'
+                : 'Simulated results (default) — nothing is booked. Click to let the agent run its real tools, e.g. create real appointments.'}
+              aria-pressed={liveActions}
+              style={{
+                fontSize: 11, fontWeight: 600,
+                padding: '4px 9px', borderRadius: 7,
+                background: liveActions ? 'var(--amber)' : 'var(--tint-1)',
+                border: `1px solid ${liveActions ? 'var(--amber)' : 'var(--border)'}`,
+                color: liveActions ? '#1a1a1a' : 'var(--text-3)',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              {liveActions ? 'Live actions: ON' : 'Live actions'}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setVoiceOut(v => !v)}

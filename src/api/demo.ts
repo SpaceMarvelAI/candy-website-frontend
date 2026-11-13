@@ -85,6 +85,8 @@ export async function streamDemoTurn(
   cb: StreamCallbacks = {},
   signal?: AbortSignal,
   languageCode: string = 'en',
+  /** Owner/admin opt-in: run the agent's REAL tools (real bookings) instead of the canned mock. */
+  liveActions: boolean = false,
 ): Promise<void> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -97,7 +99,7 @@ export async function streamDemoTurn(
   try {
     res = await fetch(
       `${API_BASE}/v1/agents/${agentId}/demo/${sessionId}/turn/stream`,
-      { method: 'POST', headers, body: JSON.stringify({ utterance, language_code: languageCode }), signal },
+      { method: 'POST', headers, body: JSON.stringify({ utterance, language_code: languageCode, ...(liveActions ? { live_actions: true } : {}) }), signal },
     );
   } catch (e: any) {
     cb.onError?.(e);
