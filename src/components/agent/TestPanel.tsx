@@ -561,6 +561,33 @@ export default function TestPanel({
     try { return localStorage.getItem('candy.tts') !== 'off'; } catch { return true; }
   });
   const [ttsPlaying, setTtsPlaying]   = useState(false);
+  // An utterance the server threw away (noise, low confidence, an STT outage) used to be
+  // invisible: the page just sat there and it looked like the mic or the transcript had died.
+  // Surface it briefly so a drop reads as "say that again". The STT socket handlers are attached
+  // once, so this goes through refs and stable setters, never render-scoped values.
+  const [sttNotice, setSttNotice] = useState('');
+  const sttNoticeTimerRef = useRef<number | null>(null);
+  const lastSttToastRef   = useRef(0);
+  const addToastRef       = useRef(addToast);
+  addToastRef.current     = addToast;
+  function showSttNotice(reason?: string) {
+    const r = String(reason || '');
+    if (r === 'too_short') return;                     // a click or a cough: nothing to say
+    const serviceFault = r === 'over_budget' || r.startsWith('stt_');
+    setSttNotice(serviceFault
+      ? 'Speech recognition is having trouble — try again or type below'
+      : "Didn't catch that — please say it again");
+    if (sttNoticeTimerRef.current) window.clearTimeout(sttNoticeTimerRef.current);
+    sttNoticeTimerRef.current = window.setTimeout(() => setSttNotice(''), 4000);
+    if (serviceFault && Date.now() - lastSttToastRef.current > 15000) {
+      lastSttToastRef.current = Date.now();
+      addToastRef.current(
+        r === 'over_budget'
+          ? 'Speech recognition budget is used up for this workspace.'
+          : 'Speech recognition is having trouble. You can type your message instead.',
+        'error', { skipCapture: true });
+    }
+  }
   // True between the Start-test click and the moment the session is actually
   // recording. getUserMedia can take a second and a half; without this the
   // button stays clickable and a second click builds a whole second pipeline.
@@ -1039,6 +1066,7 @@ export default function TestPanel({
 
       if (evt.type === 'partial' || evt.type === 'final') {
         if (evt.transcript) {
+          setSttNotice('');          // we heard them — clear any "didn't catch that"
           if (evt.type === 'final') {
             currentFinal = (currentFinal + ' ' + evt.transcript).trim();
             setInput(currentFinal);
@@ -1124,8 +1152,11 @@ export default function TestPanel({
         }
 
         sendRef.current(dgText);
+      } else if (evt.type === 'dropped') {
+        showSttNotice(evt.reason);
       } else if (evt.type === 'error') {
         console.warn('[TestPanel] session STT WS error:', evt.message);
+        showSttNotice('stt_error');
       }
     };
 
@@ -1491,6 +1522,8 @@ export default function TestPanel({
       ? 'Your browser does not support audio recording — type below'
       : !testActive
         ? ''
+        : sttNotice
+          ? sttNotice
         : ttsPlaying
           ? 'Agent is speaking — talk over it to interrupt'
           : listening
