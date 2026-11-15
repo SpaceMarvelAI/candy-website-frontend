@@ -66,7 +66,7 @@ export default function AgentShell({
   return (
     <div
       style={{
-        background: 'var(--bg-0)',
+        background: 'var(--agent-shell-bg)',
         position: 'relative',
         zIndex: 1,
         // A `flush` page needs a DEFINITE height, not a minimum: `min-height`
@@ -92,7 +92,7 @@ export default function AgentShell({
           flexWrap: isMobile ? 'wrap' : 'nowrap',
           gap: isMobile ? 0 : 16,
           padding: isMobile ? '10px 14px 0' : '14px 28px',
-          background: 'var(--bg-0)',
+          background: 'var(--agent-shell-bg)',
           borderBottom: 'none',
         }}
       >
