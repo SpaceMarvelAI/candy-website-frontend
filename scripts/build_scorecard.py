@@ -64,7 +64,7 @@ CLOUDFRONT_REGION = "us-east-1"  # metrics only exist here, not the distribution
 ENV_CONFIG = {
     "dev": {"distribution_id": "E1V0ZANKSQP44S", "base_url": "https://candy-dev.spacemarvel.ai"},
     "staging": {"distribution_id": "E27WO5RRQ1KOOG", "base_url": "https://candy-staging.spacemarvel.ai"},
-    "prod": {"distribution_id": "E22IMBW0SWNZ71", "base_url": "https://candy.spacemarvel.ai"},
+    "prod": {"distribution_id": "E22IMBW0SWNZ71", "base_url": "https://candy.spacemarvel.ai"},  # dead app.candy.cx -> candy.spacemarvel.ai (NoSuchDistribution E2Q1JGL4YRTTQE; config matches deploy-prod.sh)
 }
 
 
