@@ -94,54 +94,15 @@ async function generateSsoToken(bearer: string, appUrl: string): Promise<string 
  * rejects it, so the caller can fall back to the SpaceMarvel login.
  */
 export async function redirectWithSso(appUrl: string): Promise<boolean> {
-  let bearer = (() => { try { return localStorage.getItem('dashboard_token'); } catch { return null; } })() || getToken();
+  const bearer = (() => { try { return localStorage.getItem('dashboard_token'); } catch { return null; } })() || getToken();
   if (!bearer) return false;
-  let token = await generateSsoToken(bearer, appUrl);
-
-  // Stored dashboard token missing/expired: Candy's own session (what `bearer` falls back to
-  // above) easily outlives the dashboard's much shorter-lived access token, so this is the
-  // common case, not the exceptional one. Ask Candy's backend to refresh it via the stored
-  // refresh token before giving up — only a dead/revoked refresh token (credentials actually
-  // exhausted) should still fall through to the full SpaceMarvel re-login below.
-  if (!token) {
-    const refreshed = await refreshDashboardToken();
-    if (refreshed) {
-      try { localStorage.setItem('dashboard_token', refreshed); } catch { /* best-effort */ }
-      bearer = refreshed;
-      token = await generateSsoToken(refreshed, appUrl);
-    }
-  }
-
+  const token = await generateSsoToken(bearer, appUrl);
   if (!token) return false;
   const target = new URL(appUrl);
   target.searchParams.set('sso_token', token);
   target.searchParams.set('access_token', bearer);
   window.location.href = target.toString();
   return true;
-}
-
-/** Ask Candy's backend for a currently-valid dashboard access token (it holds the refresh
- * token this browser never sees, and refreshes server-side if the stored access token has
- * expired). Null only when there's no usable Candy session, or the backend reports the
- * dashboard session itself is unrecoverable (refresh token dead/revoked).
- *
- * Backend contract: GET {API_BASE}/v1/auth/sso/oidc/dashboard-token, authenticated with
- * Candy's own bearer token, returning `{ dashboard_token: string }` on 200 or 401 otherwise.
- * NOT YET IMPLEMENTED SERVER-SIDE as of 2026-11-03 — tracked for the backend team.
- */
-async function refreshDashboardToken(): Promise<string | null> {
-  const candyToken = getToken();
-  if (!candyToken) return null;
-  try {
-    const res = await fetch(`${API_BASE}/v1/auth/sso/oidc/dashboard-token`, {
-      headers: { Authorization: `Bearer ${candyToken}` },
-    });
-    if (!res.ok) return null;
-    const data = await res.json().catch(() => ({}));
-    return data.dashboard_token || null;
-  } catch {
-    return null;
-  }
 }
 
 /** One-shot read of the saved route; only real app pages, never auth/callback screens. */
@@ -156,16 +117,10 @@ export function takeReturnRoute(): string | null {
 export function redirectToSSO(): void {
   // Always derive from the current origin — this was previously hardcoded to
   // app.candy.cx for every non-localhost host, which silently sent
+  // candy-staging.spacemarvel.ai logins back to production after SSO instead
+  // of back to staging (same bug already fixed in Finixy_workflow's sso.ts).
   const callbackUrl = encodeURIComponent(`${window.location.origin}/sso/callback`);
-  // Env-aware fallback (reconciliation 2026-11-15): each branch previously hardcoded its own
-  // default (dev -> dev.spacemarvel.ai, staging -> staging.spacemarvel.ai, prod -> spacemarvel.ai).
-  // VITE_SM_LOGIN_URL is the documented path (set in .env.development/.env.staging/.env.production);
-  // the fallback only exists for builds missing the env var, so derive it from the host.
-  const _host = window.location.hostname;
-  const fallbackLoginUrl = _host.includes('staging')
-    ? 'https://staging.spacemarvel.ai'
-    : (_host.includes('dev') ? 'https://dev.spacemarvel.ai' : 'https://spacemarvel.ai');
-  const loginUrl = import.meta.env.VITE_SM_LOGIN_URL || fallbackLoginUrl;
+  const loginUrl = import.meta.env.VITE_SM_LOGIN_URL || 'https://staging.spacemarvel.ai';
   window.location.href = `${loginUrl}/login?redirect_uri=${callbackUrl}`;
 }
 

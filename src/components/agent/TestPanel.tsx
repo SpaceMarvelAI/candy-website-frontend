@@ -536,18 +536,10 @@ export default function TestPanel({
   primaryLang = 'en',
   supportedLangs = [],
 }: Props) {
-  const { addToast, user } = useApp();
+  const { addToast } = useApp();
   // Flagged High in debug/AUDIT.md — agent-switch races (stale transcript,
   // duplicate session creation) and an unmount/MediaRecorder cleanup race.
   useDebugLifecycle('TestPanel', [agentId]);
-  // "Live actions": by default every tool the agent calls here is a canned mock (so testing can
-  // never create a real booking). An owner/admin can switch it on to run the REAL tools — real
-  // bookings that show up in the CRM. Never persisted: it is off again on reload / agent switch.
-  const canGoLive = user?.role === 'owner' || user?.role === 'admin';
-  const [liveActions, setLiveActions] = useState(false);
-  const liveActionsRef = useRef(false);
-  liveActionsRef.current = canGoLive && liveActions;
-  useEffect(() => { setLiveActions(false); }, [agentId]);
   const [listening, setListening] = useState(false);
   const [input, setInput] = useState('');
   const [transcript, setTranscript] = useState<Msg[]>([
@@ -561,33 +553,6 @@ export default function TestPanel({
     try { return localStorage.getItem('candy.tts') !== 'off'; } catch { return true; }
   });
   const [ttsPlaying, setTtsPlaying]   = useState(false);
-  // An utterance the server threw away (noise, low confidence, an STT outage) used to be
-  // invisible: the page just sat there and it looked like the mic or the transcript had died.
-  // Surface it briefly so a drop reads as "say that again". The STT socket handlers are attached
-  // once, so this goes through refs and stable setters, never render-scoped values.
-  const [sttNotice, setSttNotice] = useState('');
-  const sttNoticeTimerRef = useRef<number | null>(null);
-  const lastSttToastRef   = useRef(0);
-  const addToastRef       = useRef(addToast);
-  addToastRef.current     = addToast;
-  function showSttNotice(reason?: string) {
-    const r = String(reason || '');
-    if (r === 'too_short') return;                     // a click or a cough: nothing to say
-    const serviceFault = r === 'over_budget' || r.startsWith('stt_');
-    setSttNotice(serviceFault
-      ? 'Speech recognition is having trouble — try again or type below'
-      : "Didn't catch that — please say it again");
-    if (sttNoticeTimerRef.current) window.clearTimeout(sttNoticeTimerRef.current);
-    sttNoticeTimerRef.current = window.setTimeout(() => setSttNotice(''), 4000);
-    if (serviceFault && Date.now() - lastSttToastRef.current > 15000) {
-      lastSttToastRef.current = Date.now();
-      addToastRef.current(
-        r === 'over_budget'
-          ? 'Speech recognition budget is used up for this workspace.'
-          : 'Speech recognition is having trouble. You can type your message instead.',
-        'error', { skipCapture: true });
-    }
-  }
   // True between the Start-test click and the moment the session is actually
   // recording. getUserMedia can take a second and a half; without this the
   // button stays clickable and a second click builds a whole second pipeline.
@@ -960,7 +925,7 @@ export default function TestPanel({
         onError: (err) => {
           throw err;
         },
-      }, turnAbort.signal, currentLangCode, liveActionsRef.current);
+      }, turnAbort.signal, currentLangCode);
     } catch (e) {
       // Superseded by a newer turn (or torn down) — not an error to report.
       if (turnAbort.signal.aborted || (e as any)?.name === 'AbortError') return;
@@ -1066,7 +1031,6 @@ export default function TestPanel({
 
       if (evt.type === 'partial' || evt.type === 'final') {
         if (evt.transcript) {
-          setSttNotice('');          // we heard them — clear any "didn't catch that"
           if (evt.type === 'final') {
             currentFinal = (currentFinal + ' ' + evt.transcript).trim();
             setInput(currentFinal);
@@ -1152,11 +1116,8 @@ export default function TestPanel({
         }
 
         sendRef.current(dgText);
-      } else if (evt.type === 'dropped') {
-        showSttNotice(evt.reason);
       } else if (evt.type === 'error') {
         console.warn('[TestPanel] session STT WS error:', evt.message);
-        showSttNotice('stt_error');
       }
     };
 
@@ -1522,8 +1483,6 @@ export default function TestPanel({
       ? 'Your browser does not support audio recording — type below'
       : !testActive
         ? ''
-        : sttNotice
-          ? sttNotice
         : ttsPlaying
           ? 'Agent is speaking — talk over it to interrupt'
           : listening
@@ -1546,27 +1505,6 @@ export default function TestPanel({
           </h3>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {canGoLive && (
-            <button
-              type="button"
-              onClick={() => setLiveActions(v => !v)}
-              title={liveActions
-                ? 'Live actions ON — the agent runs its real tools: bookings are real and appear in the CRM. Click to go back to simulated results.'
-                : 'Simulated results (default) — nothing is booked. Click to let the agent run its real tools, e.g. create real appointments.'}
-              aria-pressed={liveActions}
-              style={{
-                fontSize: 11, fontWeight: 600,
-                padding: '4px 9px', borderRadius: 7,
-                background: liveActions ? 'var(--amber)' : 'var(--tint-1)',
-                border: `1px solid ${liveActions ? 'var(--amber)' : 'var(--border)'}`,
-                color: liveActions ? '#1a1a1a' : 'var(--text-3)',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              {liveActions ? 'Live actions: ON' : 'Live actions'}
-            </button>
-          )}
           <button
             type="button"
             onClick={() => setVoiceOut(v => !v)}

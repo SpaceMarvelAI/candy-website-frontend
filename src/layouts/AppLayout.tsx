@@ -21,9 +21,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-layout" style={{ flexDirection: 'column' }}>
-      <Topbar />
+      <Topbar onMenuOpen={() => setSidebarOpen(true)} />
       <div style={{ display: 'flex', flex: 1, minWidth: 0, background: 'var(--shell-page)' }}>
-      <AppRail mobileNavOpen={sidebarOpen} onToggleMobileNav={() => setSidebarOpen(o => !o)} />
+      <AppRail />
       <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, overflow: 'hidden', background: 'var(--shell-page)' }}>
         {fullBleed ? (
