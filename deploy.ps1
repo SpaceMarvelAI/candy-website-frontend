@@ -44,6 +44,6 @@ Write-Host "Cache invalidated." -ForegroundColor Green
 
 Write-Host ""
 Write-Host "Deployment complete!" -ForegroundColor Green
-Write-Host "URL: https://app.candy.cx" -ForegroundColor Cyan
+Write-Host "URL: https://candy.spacemarvel.ai" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Note: CloudFront cache invalidation takes 1-5 minutes to propagate." -ForegroundColor Gray
