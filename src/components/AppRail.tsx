@@ -303,7 +303,7 @@ const PRODUCTS: Product[] = [
   { id: 'metaspace', label: 'Home',   img: '/Metaspace.svg',
     ssoTarget: import.meta.env.VITE_META_APP_URL || 'https://spacemarvel.ai' },
   { id: 'finixy',    label: 'Finixy', img: '/FinixyLogo.svg',
-    ssoTarget: import.meta.env.VITE_FINIXY_APP_URL || 'https://finixy-dev.spacemarvel.ai' },
+    ssoTarget: import.meta.env.VITE_FINIXY_APP_URL || 'https://finixy.spacemarvel.ai' },
   { id: 'candy',     label: 'Candy',  img: '/Candy.svg', path: '/healthcare', current: true },
 ];
 
@@ -371,7 +371,7 @@ export default function AppRail({ mobileNavOpen = false, onToggleMobileNav }: Ap
     // No usable dashboard token: SpaceMarvel login, then AppContext finishes the trip to this app.
     setSsoIntent(item.ssoTarget);
     const candyCallback = window.location.origin + '/sso/callback';
-    window.location.href = `${import.meta.env.VITE_SM_LOGIN_URL || 'https://spacemarvel.com'}/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
+    window.location.href = `${import.meta.env.VITE_SM_LOGIN_URL || 'https://spacemarvel.ai'}/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
   }
 
   const userName      = profileOverride?.name || user?.full_name || user?.email?.split('@')[0] || 'User';

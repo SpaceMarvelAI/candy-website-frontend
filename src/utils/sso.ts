@@ -159,7 +159,7 @@ export function redirectToSSO(): void {
   // candy-dev.spacemarvel.ai logins back to production after SSO instead of
   // back to dev (same bug already fixed in Finixy_workflow's sso.ts).
   const callbackUrl = encodeURIComponent(`${window.location.origin}/sso/callback`);
-  const loginUrl = import.meta.env.VITE_SM_LOGIN_URL || 'https://dev.spacemarvel.ai';
+  const loginUrl = import.meta.env.VITE_SM_LOGIN_URL || 'https://spacemarvel.ai';
   window.location.href = `${loginUrl}/login?redirect_uri=${callbackUrl}`;
 }
 
