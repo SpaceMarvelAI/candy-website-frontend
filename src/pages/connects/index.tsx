@@ -1,9 +1,42 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import posthog from 'posthog-js';
 import { useApp } from '../../context/AppContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useTheme } from '../../hooks/useTheme';
 import Icon from '../../assets/icons';
+
+// Exact values from MetaSpace/Finixy's ConnectorPanel.tsx (components/chat/sidebar/
+// ConnectorPanel.tsx) — hardcoded rather than Candy's --surface/--border tokens because
+// those are translucent Apple-style tints and would render visibly different from
+// MetaSpace's flat zinc palette.
+function connectorTheme(dark: boolean) {
+  return {
+    cardBg:        dark ? '#18181b' : '#ffffff',
+    cardBorder:    dark ? '#27272a' : '#e4e4e7',
+    iconBg:        dark ? '#27272a' : '#f4f4f5',
+    title:         dark ? '#fafafa' : '#18181b',
+    muted:         dark ? '#a1a1aa' : '#71717a',
+    inputBg:       dark ? '#18181b' : '#ffffff',
+    inputBorder:   dark ? '#3f3f46' : '#d4d4d8',
+    inputText:     dark ? '#f4f4f5' : '#18181b',
+    placeholder:   dark ? '#71717a' : '#a1a1aa',
+    pillBg:        dark ? '#27272a' : '#f4f4f5',
+    pillBorder:    dark ? '#3f3f46' : '#e4e4e7',
+    pillText:      dark ? '#a1a1aa' : '#52525b',
+    greenBg:       dark ? 'rgba(34,197,94,0.1)' : '#f0fdf4',
+    greenBorder:   dark ? 'rgba(34,197,94,0.3)' : '#bbf7d0',
+    greenText:     dark ? '#4ade80' : '#16a34a',
+    greenSelected: '#22c55e',
+    connectBg:     dark ? '#27272a' : '#ffffff',
+    connectBorder: dark ? '#3f3f46' : '#d4d4d8',
+    connectText:   dark ? '#e4e4e7' : '#3f3f46',
+    connectedBg:     'rgba(34,197,94,0.1)',
+    connectedBorder: 'rgba(34,197,94,0.3)',
+    connectedText:   '#22c55e',
+  };
+}
 import {
   getComposioApps,
   getComposioConnections,
@@ -28,49 +61,48 @@ function colorFromName(name: string): string {
   return `hsl(${Math.abs(h) % 360}, 50%, 60%)`;
 }
 
-function AppIcon({ app, size = 36 }: { app: ComposioApp; size?: number }) {
+// Container w-11 h-11 (44px), icon itself w-9 h-9 (36px) — MetaSpace's "enlarged" sizing.
+function AppIcon({ app, iconBg }: { app: ComposioApp; iconBg: string }) {
   const [imgErr, setImgErr] = useState(false);
   const logo = appLogo(app);
   const name = app.name || '?';
-
-  if (logo && !imgErr) {
-    return (
-      <img
-        src={logo}
-        alt={name}
-        style={{ width: size, height: size, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }}
-        onError={() => setImgErr(true)}
-      />
-    );
-  }
+  const hasLogo = !!logo && !imgErr;
 
   return (
     <div
       style={{
-        width: size, height: size, borderRadius: 8,
-        background: colorFromName(name),
+        width: 44, height: 44, borderRadius: 6, flexShrink: 0, overflow: 'hidden',
         display: 'grid', placeItems: 'center',
-        fontWeight: 700, fontSize: Math.round(size * 0.42),
-        color: '#fff', flexShrink: 0,
-        letterSpacing: '-0.02em',
+        background: hasLogo ? iconBg : colorFromName(name),
       }}
     >
-      {name[0].toUpperCase()}
+      {hasLogo ? (
+        <img
+          src={logo}
+          alt={name}
+          style={{ width: 36, height: 36, objectFit: 'contain' }}
+          onError={() => setImgErr(true)}
+        />
+      ) : (
+        <span style={{ fontWeight: 700, fontSize: 16, color: '#fff', letterSpacing: '-0.02em' }}>
+          {name[0].toUpperCase()}
+        </span>
+      )}
     </div>
   );
 }
 
-function CardSkeleton() {
+function CardSkeleton({ c }: { c: ReturnType<typeof connectorTheme> }) {
   return (
     <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)', padding: '18px 16px',
-      display: 'flex', flexDirection: 'column', gap: 12,
+      background: c.cardBg, border: `1px solid ${c.cardBorder}`,
+      borderRadius: 8, padding: 20,
+      display: 'flex', flexDirection: 'column', gap: 10,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--tint-4)', flexShrink: 0 }} />
+        <div style={{ width: 44, height: 44, borderRadius: 6, background: 'var(--tint-4)', flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <div style={{ height: 13, borderRadius: 4, background: 'var(--tint-4)', marginBottom: 6, width: '60%' }} />
+          <div style={{ height: 14, borderRadius: 4, background: 'var(--tint-4)', marginBottom: 6, width: '60%' }} />
           <div style={{ height: 10, borderRadius: 4, background: 'var(--tint-2)', width: '40%' }} />
         </div>
       </div>
@@ -171,6 +203,9 @@ function CategoryDropdown({ options, value, onChange }: {
 
 export default function ConnectsPage() {
   const { addToast } = useApp();
+  const navigate = useNavigate();
+  const { theme } = useTheme();
+  const c = connectorTheme(theme === 'dark');
   const isMobile = useMediaQuery('(max-width: 640px)');
   const isTablet = useMediaQuery('(max-width: 1024px)');
 
@@ -345,48 +380,55 @@ export default function ConnectsPage() {
   });
 
   const visible = filtered.slice(0, visibleCount);
-  const cols    = isMobile ? 2 : isTablet ? 3 : 4;
+  // Capped at 2 columns at any width — grid-cols-1 sm:grid-cols-2, matches
+  // MetaSpace/Finixy's ConnectorPanel.tsx exactly (not a bug, their own explicit ask).
+  const cols    = isMobile ? 1 : 2;
 
   return (
     <div
       className="fade-up"
       style={{ padding: isMobile ? '20px 16px 48px' : isTablet ? '24px 24px 52px' : '32px 40px 60px' }}
     >
-      {/* ── Page header ── */}
+      {/* ── Page header — no breadcrumb: Back button + title block, matches MetaSpace ── */}
       <div style={{
         display: 'flex', alignItems: 'flex-start',
         justifyContent: 'space-between', gap: 16, marginBottom: 24, flexWrap: 'wrap',
       }}>
-        <div>
-          <div style={{
-            fontSize: 11, textTransform: 'uppercase',
-            letterSpacing: '0.2em', color: 'var(--blue)', marginBottom: 10,
-          }}>
-            Integrations · Connects
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <button
+            onClick={() => navigate(-1)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+              fontSize: 13.5, fontWeight: 500, color: c.muted, transition: 'color 0.15s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = c.title; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = c.muted; }}
+          >
+            <Icon name="chevronDown" size={16} style={{ transform: 'rotate(90deg)' }} />
+            Back
+          </button>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: c.title, margin: 0 }}>
+              Connect your apps
+            </h1>
+            <p style={{ color: c.muted, fontSize: 12, marginTop: 2, marginBottom: 0 }}>
+              {loading
+                ? 'Loading connections…'
+                : `${connIds.size} app${connIds.size === 1 ? '' : 's'} connected`}
+            </p>
           </div>
-          <h1 style={{
-            fontSize: isMobile ? 22 : 28, fontWeight: 700,
-            letterSpacing: '-0.025em', color: 'var(--text-1)', margin: 0,
-          }}>
-            Connect Apps
-          </h1>
-          <p style={{ color: 'var(--text-3)', fontSize: 15, marginTop: 8, marginBottom: 0 }}>
-            {loading
-              ? 'Loading…'
-              : `${connIds.size} app${connIds.size === 1 ? '' : 's'} connected`}
-          </p>
         </div>
         <button
           onClick={() => loadData().then(() => addToast('Refreshed', 'success'))}
+          aria-label="Refresh"
           style={{
-            padding: '8px 16px', borderRadius: 99,
-            background: 'var(--tint-2)', border: '1px solid var(--border)',
-            color: 'var(--text-2)', cursor: 'pointer', fontSize: 13,
-            display: 'inline-flex', alignItems: 'center', gap: 7,
-            transition: 'all 0.15s', flexShrink: 0,
+            width: 32, height: 32, display: 'grid', placeItems: 'center',
+            borderRadius: 8, background: c.pillBg, border: `1px solid ${c.pillBorder}`,
+            color: c.pillText, cursor: 'pointer', flexShrink: 0,
           }}
         >
-          <Icon name="refresh" size={13} /> Refresh
+          <Icon name="refresh" size={14} />
         </button>
       </div>
 
@@ -429,10 +471,10 @@ export default function ConnectsPage() {
         <>
           {/* ── Search + filters ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
-            <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: 340 }}>
+            <div style={{ position: 'relative', width: isMobile ? '100%' : 256, flexShrink: 0 }}>
               <div style={{
                 position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-                pointerEvents: 'none', color: 'var(--text-4)',
+                pointerEvents: 'none', color: c.placeholder,
               }}>
                 <Icon name="search" size={14} />
               </div>
@@ -442,50 +484,53 @@ export default function ConnectsPage() {
                 placeholder="Search apps…"
                 style={{
                   width: '100%', boxSizing: 'border-box',
-                  paddingLeft: 36, paddingRight: 14,
-                  paddingTop: 9, paddingBottom: 9,
-                  borderRadius: 10, fontSize: 14,
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-1)', outline: 'none',
+                  paddingLeft: 36, paddingRight: 12,
+                  paddingTop: 8, paddingBottom: 8,
+                  borderRadius: 8, fontSize: 14,
+                  background: c.inputBg, border: `1px solid ${c.inputBorder}`,
+                  color: c.inputText, outline: 'none',
                   transition: 'border-color 0.15s',
                 }}
               />
             </div>
 
-            {/* Quick filters stay as chips; the long category list lives in one dropdown. */}
-            {['All', 'Connected'].map(cat => (
-              <button
-                key={cat}
-                onClick={() => setCategory(cat)}
-                style={{
-                  padding: '6px 14px', borderRadius: 99, fontSize: 12.5,
-                  background: category === cat ? 'var(--tint-4)' : 'var(--tint-2)',
-                  border: category === cat ? '1px solid var(--border-strong)' : '1px solid var(--border)',
-                  color: category === cat ? 'var(--text-1)' : 'var(--text-2)',
-                  cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                }}
-              >
-                {cat}
-                {cat === 'Connected' && connIds.size > 0 && (
-                  <span style={{
-                    fontSize: 10, padding: '1px 6px', borderRadius: 99,
-                    background: 'rgba(0,113,227,0.15)', color: 'var(--blue)', fontWeight: 600,
-                  }}>
-                    {connIds.size}
-                  </span>
-                )}
-              </button>
-            ))}
+            {/* "All" — neutral pill; filled blue only while selected. */}
+            <button
+              onClick={() => setCategory('All')}
+              style={{
+                padding: '4px 12px', borderRadius: 99, fontSize: 12, fontWeight: 500,
+                background: category === 'All' ? '#3b82f6' : c.pillBg,
+                border: `1px solid ${category === 'All' ? '#3b82f6' : c.pillBorder}`,
+                color: category === 'All' ? '#fff' : c.pillText,
+                cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
+              }}
+            >
+              All
+            </button>
+
+            {/* "Connected" — green pill, filled solid green only while selected. */}
+            <button
+              onClick={() => setCategory('Connected')}
+              style={{
+                padding: '4px 12px', borderRadius: 99, fontSize: 12, fontWeight: 500,
+                background: category === 'Connected' ? c.greenSelected : c.greenBg,
+                border: `1px solid ${category === 'Connected' ? c.greenSelected : c.greenBorder}`,
+                color: category === 'Connected' ? '#fff' : c.greenText,
+                cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              Connected
+              {connIds.size > 0 && <span>({connIds.size})</span>}
+            </button>
 
             <CategoryDropdown options={categoryOptions} value={category} onChange={setCategory} />
           </div>
 
           {/* ── App grid ── */}
           {loading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 14 }}>
-              {Array.from({ length: 12 }, (_, i) => <CardSkeleton key={i} />)}
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
+              {Array.from({ length: 12 }, (_, i) => <CardSkeleton key={i} c={c} />)}
             </div>
           ) : filtered.length === 0 ? (
             <div style={{
@@ -496,7 +541,7 @@ export default function ConnectsPage() {
             </div>
           ) : (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
                 {visible.map(app => {
                   const id           = appId(app);
                   const isConnected  = connIds.has(id);
@@ -506,38 +551,28 @@ export default function ConnectsPage() {
                     <div
                       key={id}
                       style={{
-                        background: 'var(--surface)',
-                        border: `1px solid ${isConnected ? 'rgba(76,175,80,0.3)' : 'var(--border)'}`,
-                        borderRadius: 'var(--radius)',
-                        padding: '18px 16px',
-                        display: 'flex', flexDirection: 'column', gap: 12,
+                        background: c.cardBg, border: `1px solid ${c.cardBorder}`,
+                        borderRadius: 8, padding: 20,
+                        display: 'flex', flexDirection: 'column', gap: 10,
                         transition: 'border-color 0.15s',
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <AppIcon app={app} size={36} />
+                        <AppIcon app={app} iconBg={c.iconBg} />
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{
-                            fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)',
+                            fontSize: 16, fontWeight: 600, color: c.title, lineHeight: 1.25,
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                           }}>
                             {app.name}
                           </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2 }}>
+                          <div style={{ fontSize: 11, color: c.muted, marginTop: 2 }}>
                             {appCategory(app)}
                           </div>
                         </div>
-                        {/* Connected dot — top-right of card header */}
-                        {isConnected && (
-                          <span style={{
-                            fontSize: 9, fontWeight: 700, flexShrink: 0,
-                            color: 'var(--green)', background: 'rgba(76,175,80,0.14)',
-                            borderRadius: 4, padding: '2px 6px',
-                          }}>●</span>
-                        )}
                       </div>
 
-                      {/* Action button — only shown when not connected */}
+                      {/* Not connected — neutral pill, just "Connect". */}
                       {!isConnected && (
                         <button
                           onClick={() => !isConnecting && handleConnect(app)}
@@ -546,9 +581,9 @@ export default function ConnectsPage() {
                             width: '100%', padding: '7px 12px',
                             borderRadius: 8, fontSize: 12.5, fontWeight: 500,
                             cursor: isConnecting ? 'wait' : 'pointer',
-                            border: '1px solid var(--border)',
-                            background: isConnecting ? 'var(--tint-2)' : 'rgba(0,113,227,0.08)',
-                            color: isConnecting ? 'var(--text-4)' : 'var(--blue)',
+                            border: `1px solid ${c.connectBorder}`,
+                            background: isConnecting ? c.pillBg : c.connectBg,
+                            color: isConnecting ? c.muted : c.connectText,
                             transition: 'all 0.15s',
                             display: 'flex', alignItems: 'center',
                             justifyContent: 'center', gap: 6,
@@ -562,11 +597,16 @@ export default function ConnectsPage() {
                         </button>
                       )}
 
-                      {/* Connected state — just a status row, no button */}
+                      {/* Connected — green pill, check + "Connected". No disconnect:
+                          Candy's composio.ts has no disconnect endpoint yet. */}
                       {isConnected && (
                         <div style={{
-                          fontSize: 12, color: 'var(--green)',
-                          display: 'flex', alignItems: 'center', gap: 5,
+                          width: '100%', padding: '7px 12px', boxSizing: 'border-box',
+                          borderRadius: 8, fontSize: 12.5, fontWeight: 500,
+                          border: `1px solid ${c.connectedBorder}`,
+                          background: c.connectedBg, color: c.connectedText,
+                          display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', gap: 6,
                         }}>
                           <Icon name="check" size={12} /> Connected
                         </div>

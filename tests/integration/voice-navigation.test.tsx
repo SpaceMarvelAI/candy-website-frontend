@@ -67,7 +67,7 @@ function renderApp(initial = '/healthcare', extra: React.ReactNode = null) {
       <Routes>
         <Route path="/healthcare"     element={<h1>Healthcare</h1>} />
         <Route path="/analytics/:tab" element={<h1>Analytics</h1>} />
-        <Route path="/connects"       element={<h1>Connectors</h1>} />
+        <Route path="/connectors"     element={<h1>Connectors</h1>} />
         <Route path="/flows"          element={<h1>Flows</h1>} />
       </Routes>
       {extra}
@@ -199,7 +199,7 @@ describe('voice navigation, end to end', () => {
     renderApp('/healthcare');
     await speak('open the integrations tab');
 
-    await waitFor(() => expect(routeIs('/connects')).toBeInTheDocument());
+    await waitFor(() => expect(routeIs('/connectors')).toBeInTheDocument());
   });
 
   it('reaches a tab on another section', async () => {
@@ -421,7 +421,7 @@ describe('voice asks the server when the local grammar misses', () => {
     serverSays({ kind: 'navigate', targetId: 'nav.connectors' });
     await speak(A_MISS);
 
-    await waitFor(() => expect(routeIs('/connects')).toBeInTheDocument());
+    await waitFor(() => expect(routeIs('/connectors')).toBeInTheDocument());
   });
 
   it('sends the on-screen ids, and no paths, with the transcript', async () => {
@@ -467,7 +467,7 @@ describe('voice asks the server when the local grammar misses', () => {
     serverSays({ kind: 'navigate', targetId: 'nav.connectors', path: '/flows' });
     await speak(A_MISS);
 
-    await waitFor(() => expect(routeIs('/connects')).toBeInTheDocument());
+    await waitFor(() => expect(routeIs('/connectors')).toBeInTheDocument());
   });
 
   it('asks which one when the server comes back ambiguous', async () => {

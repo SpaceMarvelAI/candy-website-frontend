@@ -114,6 +114,18 @@ const iconPaths: Record<string, ReactNode> = {
       {[0, 9.3, 18.7].flatMap(y => [0, 9.3, 18.7].map(x => <rect key={`${x}-${y}`} x={x} y={y} width="5.3" height="5.3" rx="1.3" fill="currentColor"/>))}
     </>
   ),
+  // 2x2 two-tone glyph for the "Apps" tile in the More dropdown — matches
+  // MetaSpace/Finixy's tile exactly: #9B51E0 top-left/bottom-right, #56CCF2
+  // top-right/bottom-left. Fixed colors, not currentColor — it's brand-colored
+  // on both themes, unlike every other glyph in this file.
+  appsColor: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1.75" fill="#9B51E0"/>
+      <rect x="14" y="3" width="7" height="7" rx="1.75" fill="#56CCF2"/>
+      <rect x="3" y="14" width="7" height="7" rx="1.75" fill="#56CCF2"/>
+      <rect x="14" y="14" width="7" height="7" rx="1.75" fill="#9B51E0"/>
+    </>
+  ),
   crown: (
     <>
       <path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
