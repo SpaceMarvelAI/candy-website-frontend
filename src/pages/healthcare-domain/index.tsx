@@ -19,6 +19,7 @@ export function nextAvailableName(base: string, taken: { name: string }[]): stri
   return base;
 }
 import Icon from '../../assets/icons';
+import posthog from 'posthog-js';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useApp } from '../../context/AppContext';
 import {
@@ -164,6 +165,9 @@ function CreateModal({
     setBusy(true);
     try {
       const { agent, failed } = await createHealthcareAgent(uc, name);
+      posthog.capture('healthcare_agent_created', { use_case: uc.key,
+                                                    skills_attached: uc.skills.length - failed.length,
+                                                    skills_failed: failed.length });
       if (failed.length) {
         addToast(`Agent created; ${failed.length} skill(s) need attention in the builder`, 'info');
       } else {
