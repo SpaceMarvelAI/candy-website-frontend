@@ -83,6 +83,7 @@ img, video { max-width: 100%; height: auto; }
 :root {
   /* Canvas + backgrounds */
   --bg-0: #000000;                        /* pure black canvas */
+  --agent-shell-bg: #0f0f0f;              /* agent detail screen top bar + content (dark only) */
   --bg-1: #1d1d1f;                        /* section-alt / sidebar */
   --bg-2: #272729;                        /* card surface */
   --bg-3: #28282a;                        /* elevated card */
@@ -342,6 +343,7 @@ button, input, textarea { font-family: inherit; }
    ========================================================= */
 [data-theme="light"] {
   --bg-0: #ffffff;
+  --agent-shell-bg: #ffffff;
   --bg-1: #ffffff;
   --bg-2: #ffffff;
   --bg-3: #fafafc;
@@ -385,7 +387,7 @@ html.theme-transitioning *::after {
   --input-bg-strong: #0a0a0c;
   --surface-soft:    rgba(0, 0, 0, 0.22);
   --hero-bg:         #000000;
-  --card-bg:         #0a0a0c;
+  --card-bg:         #0f0f0f;
   --card-bg-strong:  #060608;
   --sidebar-bg:      #09090b;
   --shadow-deep:     0 20px 40px -10px rgba(0, 0, 0, 0.6);
@@ -575,8 +577,8 @@ html.theme-transitioning *::after {
 /* ── App shell (header + AppRail + Sidebar) ── */
 :root {
   --shell-bg:               #131313;
-  --shell-page:             #000000;
-  --shell-header-bg:        #000000;
+  --shell-page:             #0f0f0f;
+  --shell-header-bg:        #0f0f0f;
   --shell-border:           #27272a;
   --shell-text-1:           #ffffff;
   --shell-text-2:           #d4d4d8;
@@ -640,22 +642,11 @@ html.theme-transitioning *::after {
 
 .shell-profile-btn:hover { background: var(--shell-profile-hover); }
 
-/* Three-colour Metaspace orb behind the active app's rail icon */
-.ms-orb {
-  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
-  filter: blur(3px); background: #48A1BA;
-}
-.ms-orb-blob {
-  position: absolute; inset: 0; border-radius: 50%; filter: blur(4px);
-  background: radial-gradient(circle, var(--c) 0%, var(--c) 45%, transparent 72%);
-  animation: ms-orb-blob 12s ease-in-out infinite;
-}
-@keyframes ms-orb-blob {
-  0%, 100%            { transform: translate(0,0) scale(1.5); opacity: 1; }
-  16.67%, 50%, 83.33% { transform: translate(calc(var(--x)*0.3), calc(var(--y)*0.3)) scale(1); opacity: .7; }
-  33.33%, 66.67%      { transform: translate(var(--x), var(--y)) scale(.55); opacity: .9; }
-}
-@media (prefers-reduced-motion: reduce) { .ms-orb-blob { animation: none; } }
+/* Three-colour orb behind the active app's rail icon — exact gradient + spin
+   ported from Finixy's AppRail.tsx / finixy-ui.css (ORB_GRADIENT / .ms-orb-spin). */
+@keyframes ms-orb-spin { to { transform: rotate(360deg); } }
+.ms-orb-spin { animation: ms-orb-spin 14s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .ms-orb-spin { animation: none; } }
 
 .shell-upgrade-btn {
   display: flex; align-items: center; gap: 6px;

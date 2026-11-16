@@ -20,7 +20,7 @@ interface CompanyOut {
   plan_tier: string;
 }
 
-export default function CompanySwitcher({ style }: { style?: CSSProperties } = {}) {
+export default function CompanySwitcher({ style, iconOnly = false }: { style?: CSSProperties; iconOnly?: boolean } = {}) {
   const { user, signedIn } = useApp();
   const [open, setOpen] = useState(false);
   const [companies, setCompanies] = useState<CompanyOut[] | null>(null);
@@ -102,10 +102,15 @@ export default function CompanySwitcher({ style }: { style?: CSSProperties } = {
 
   return (
     <div ref={rootRef} style={{ position: 'relative', flexShrink: 0, ...style }}>
+      {/* Same pill at every breakpoint — mirrors Finixy's shell/CompanySwitcher.tsx: icon and
+          chevron always visible, only the name label (`hidden md:inline` there) drops away on
+          mobile, instead of swapping to a different compact control. */}
       <button
         onClick={toggle}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-label={iconOnly ? `Switch company${user.company_name ? ` (${user.company_name})` : ''}` : undefined}
+        title={iconOnly ? (user.company_name || 'Select company') : undefined}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -118,13 +123,23 @@ export default function CompanySwitcher({ style }: { style?: CSSProperties } = {
           fontSize: 13,
           fontWeight: 500,
           cursor: 'pointer',
-          maxWidth: 220,
+          maxWidth: iconOnly ? undefined : 220,
         }}
       >
-        <Icon name="box" size={14} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {user.company_name || 'Select company'}
-        </span>
+        {/* Same building-icon glyph Finixy's switcher uses */}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)', flexShrink: 0 }}>
+          <line x1="3" y1="22" x2="21" y2="22" />
+          <rect x="4" y="2" width="16" height="20" rx="1" />
+          <rect x="9" y="12" width="6" height="10" />
+          <rect x="7" y="6" width="3" height="3" />
+          <rect x="14" y="6" width="3" height="3" />
+        </svg>
+        {!iconOnly && (
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {user.company_name || 'Select company'}
+          </span>
+        )}
         <Icon name="chevronDown" size={12} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
       </button>
 
