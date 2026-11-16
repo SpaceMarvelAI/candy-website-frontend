@@ -195,7 +195,7 @@ function ProfileMenu({
 
         <div style={{ borderTop: '1px solid var(--shell-menu-border)', margin: '4px 0' }} />
 
-        {flagAppConnections !== false && menuItem('Connectors', () => { navigate('/connects'); onClose(); }, { icon: 'connectors' })}
+        {flagAppConnections !== false && menuItem('Connectors', () => { navigate('/connectors'); onClose(); }, { icon: 'connectors' })}
         {flagProfileSettings !== false && menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
         {flagProfileSettings !== false && menuItem('LinkedIn Connections', () => { onLinkedInConnections(); onClose(); }, { icon: 'team' })}
         {subBtn('Appearance', 'appearance', 'appearance')}
@@ -243,21 +243,32 @@ function ProfileMenu({
 }
 
 // ─── More popover ─────────────────────────────────────────────────────────────
+// "Apps" (not "Connectors") and /connectors (not /connects) — matches
+// MetaSpace/Finixy's tile in the same dropdown exactly.
 const MORE_ITEMS = [
-  { id: 'prompt-library', label: 'Prompt Library', icon: 'book', path: null },
-  { id: 'connectors',     label: 'Connectors',     icon: 'flow', path: '/connects' },
+  { id: 'connectors', label: 'Apps', icon: 'appsColor', path: '/connectors' },
 ];
 
-function MoreMenu({ anchorRect, onClose, onPick, railW }: {
+function MoreMenu({ anchorRect, onClose, onPick, railW, theme }: {
   anchorRect: DOMRect;
   onClose: () => void;
   onPick: (item: { label: string; path: string | null }) => void;
   railW: number;
+  theme: string;
 }) {
   const flagAppConnections = useFeatureFlagEnabled('app_connections');
   const visibleItems = MORE_ITEMS.filter(item =>
     !(item.id === 'connectors' && flagAppConnections === false),
   );
+
+  // Tile badge behind each glyph — matches MetaSpace/Finixy's dropdown tile exactly:
+  // 48x48, rounded 3.5px, border-[#313131]/bg-[#191919] dark, border-zinc-200/bg-zinc-100 light.
+  const badgeStyle: React.CSSProperties = {
+    width: 48, height: 48, borderRadius: 3.5, flexShrink: 0,
+    display: 'grid', placeItems: 'center',
+    border: theme === 'dark' ? '1px solid #313131' : '1px solid #e4e4e7',
+    background: theme === 'dark' ? '#191919' : '#f4f4f5',
+  };
 
   return createPortal(
     <>
@@ -279,7 +290,7 @@ function MoreMenu({ anchorRect, onClose, onPick, railW }: {
               textAlign: 'left', fontSize: 13, fontWeight: 500,
             }}
           >
-            <Icon name={item.icon} size={14} />
+            <span style={badgeStyle}><Icon name={item.icon} size={24} /></span>
             <span style={{ flex: 1 }}>{item.label}</span>
           </button>
         ))}
@@ -501,7 +512,7 @@ export default function AppRail({ mobileNavOpen = false, onToggleMobileNav }: Ap
       <div style={{ width: railW + SHELL_GAP, flexShrink: 0 }} />
 
       {moreAnchor && (
-        <MoreMenu anchorRect={moreAnchor} onClose={() => setMoreAnchor(null)} onPick={handleNav} railW={railW} />
+        <MoreMenu anchorRect={moreAnchor} onClose={() => setMoreAnchor(null)} onPick={handleNav} railW={railW} theme={theme} />
       )}
 
       {profileAnchor && (
