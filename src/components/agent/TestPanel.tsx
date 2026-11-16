@@ -1549,7 +1549,7 @@ export default function TestPanel({
           {canGoLive && (
             <button
               type="button"
-              onClick={() => setLiveActions(v => !v)}
+              onClick={() => { const next = !liveActions; posthog.capture('test_call_live_actions_toggled', { enabled: next, agent_id: agentId }); setLiveActions(next); }}
               title={liveActions
                 ? 'Live actions ON — the agent runs its real tools: bookings are real and appear in the CRM. Click to go back to simulated results.'
                 : 'Simulated results (default) — nothing is booked. Click to let the agent run its real tools, e.g. create real appointments.'}
