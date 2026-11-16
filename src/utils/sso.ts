@@ -64,10 +64,20 @@ async function generateSsoToken(bearer: string, appUrl: string): Promise<string 
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bearer}` },
       body: JSON.stringify({ app_url: appUrl }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Was a fully silent null before — "jump to another app" failing with zero visibility
+      // into whether it was a 401 (bad/expired bearer), a 4xx (app_url not allow-listed on
+      // the dashboard), or a 5xx, is exactly what made this bug take three rounds to pin down.
+      const body = await res.text().catch(() => '');
+      logger.warn('[sso] generateSsoToken rejected', { status: res.status, appUrl, body: body.slice(0, 300) });
+      return null;
+    }
     const data = await res.json().catch(() => ({}));
-    return data.sso_token || data.token || null;
-  } catch {
+    const token = data.sso_token || data.token || null;
+    if (!token) logger.warn('[sso] generateSsoToken: 200 OK but no sso_token/token in response', { appUrl, keys: Object.keys(data) });
+    return token;
+  } catch (err) {
+    logger.warn('[sso] generateSsoToken network error', { appUrl, err });
     return null;
   }
 }
@@ -94,8 +104,13 @@ async function generateSsoToken(bearer: string, appUrl: string): Promise<string 
  * rejects it, so the caller can fall back to the SpaceMarvel login.
  */
 export async function redirectWithSso(appUrl: string): Promise<boolean> {
-  let bearer = (() => { try { return localStorage.getItem('dashboard_token'); } catch { return null; } })() || getToken();
-  if (!bearer) return false;
+  const storedDashboardToken = (() => { try { return localStorage.getItem('dashboard_token'); } catch { return null; } })();
+  let bearer = storedDashboardToken || getToken();
+  if (!bearer) {
+    logger.warn('[sso] redirectWithSso: no bearer at all (no dashboard_token, no Candy session) — cannot even attempt', { appUrl });
+    return false;
+  }
+  logger.debug('[sso] redirectWithSso: attempting', { appUrl, usingDashboardToken: !!storedDashboardToken });
   let token = await generateSsoToken(bearer, appUrl);
 
   // Stored dashboard token missing/expired: Candy's own session (what `bearer` falls back to
@@ -104,15 +119,19 @@ export async function redirectWithSso(appUrl: string): Promise<boolean> {
   // refresh token before giving up — only a dead/revoked refresh token (credentials actually
   // exhausted) should still fall through to the full SpaceMarvel re-login below.
   if (!token) {
+    logger.debug('[sso] redirectWithSso: first generate failed — asking Candy backend to refresh the dashboard token', { appUrl });
     const refreshed = await refreshDashboardToken();
     if (refreshed) {
       try { localStorage.setItem('dashboard_token', refreshed); } catch { /* best-effort */ }
       bearer = refreshed;
       token = await generateSsoToken(refreshed, appUrl);
+    } else {
+      logger.warn('[sso] redirectWithSso: dashboard-token refresh returned nothing — falling back to full re-login', { appUrl });
     }
   }
 
   if (!token) return false;
+  logger.debug('[sso] redirectWithSso: got sso_token, navigating', { appUrl });
   const target = new URL(appUrl);
   target.searchParams.set('sso_token', token);
   target.searchParams.set('access_token', bearer);
@@ -127,19 +146,28 @@ export async function redirectWithSso(appUrl: string): Promise<boolean> {
  *
  * Backend contract: GET {API_BASE}/v1/auth/sso/oidc/dashboard-token, authenticated with
  * Candy's own bearer token, returning `{ dashboard_token: string }` on 200 or 401 otherwise.
- * NOT YET IMPLEMENTED SERVER-SIDE as of 2026-11-03 — tracked for the backend team.
+ * Implemented server-side (api/v1/sso_oidc.py get_fresh_dashboard_token) — confirmed 2026-11-16.
  */
 async function refreshDashboardToken(): Promise<string | null> {
   const candyToken = getToken();
-  if (!candyToken) return null;
+  if (!candyToken) {
+    logger.warn('[sso] refreshDashboardToken: no Candy session token — cannot even ask');
+    return null;
+  }
   try {
     const res = await fetch(`${API_BASE}/v1/auth/sso/oidc/dashboard-token`, {
       headers: { Authorization: `Bearer ${candyToken}` },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      logger.warn('[sso] refreshDashboardToken rejected', { status: res.status, body: body.slice(0, 300) });
+      return null;
+    }
     const data = await res.json().catch(() => ({}));
+    if (!data.dashboard_token) logger.warn('[sso] refreshDashboardToken: 200 OK but no dashboard_token in response', { keys: Object.keys(data) });
     return data.dashboard_token || null;
-  } catch {
+  } catch (err) {
+    logger.warn('[sso] refreshDashboardToken network error', { err });
     return null;
   }
 }
@@ -171,8 +199,13 @@ export function redirectToSSO(): void {
  * back to (must be allow-listed there) — this lets localhost dev complete the flow.
  * `?ticket=` is passed to the backend and stashed in a cookie so it survives the
  * OIDC round-trip (query strings don't).
+ *
+ * `ticketOverride` — for callers whose own ticket already came from a URL this
+ * function can no longer see (AppContext's SSO-exchange effect strips ?ticket=
+ * from the address bar before it can fail and fall back here). Takes priority
+ * over reading the current URL.
  */
-export function redirectToOIDC(): void {
+export function redirectToOIDC(ticketOverride?: string): void {
   // Flagged High in debug/AUDIT.md — this is the app's only unauthenticated
   // entry point (landing page mount + CTA, App.tsx's ProtectedRoute) and had no
   // error visibility if URL/storage construction throws (e.g. malformed
@@ -181,7 +214,7 @@ export function redirectToOIDC(): void {
   try {
     logger.debug('[redirectToOIDC] start', { origin: window.location.origin, search: window.location.search });
     const params = new URLSearchParams(window.location.search);
-    const ticket = params.get('ticket');
+    const ticket = ticketOverride ?? params.get('ticket');
 
     // Also stash in sessionStorage as a fallback (in case cookies fail).
     if (ticket) sessionStorage.setItem(PENDING_PROMPT_TICKET_KEY, ticket);

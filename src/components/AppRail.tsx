@@ -10,7 +10,8 @@ import type { AddToast } from '../hooks/useToast';
 import Icon from '../assets/icons';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
 import { getProfile } from '../api/profile';
-import { redirectWithSso, setSsoIntent } from '../utils/sso';
+import { redirectWithSso, setSsoIntent, redirectToOIDC } from '../utils/sso';
+import { logger } from '../utils/logger';
 
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
 const ReportIssuesModal = lazy(() => import('./ReportIssuesModal'));
@@ -379,10 +380,17 @@ export default function AppRail({ mobileNavOpen = false, onToggleMobileNav }: Ap
 
     if (await redirectWithSso(item.ssoTarget)) return;
 
-    // No usable dashboard token: SpaceMarvel login, then AppContext finishes the trip to this app.
+    logger.warn('[AppRail] redirectWithSso failed — falling back to Candy OIDC re-login', { product: item.id, ssoTarget: item.ssoTarget });
+
+    // No usable dashboard token: stash the intended target, then re-auth THROUGH CANDY'S
+    // OWN OIDC login (not a direct `${VITE_SM_LOGIN_URL}/login?redirect_uri=...` link — confirmed
+    // with the MetaSpace session that its /login only reads a dashboard-authorize `next` param,
+    // not `redirect_uri`, so that link silently dropped the user in MetaSpace's own /chat instead
+    // of back in Candy). redirectToOIDC() returns the browser to Candy's own origin on success,
+    // where AppContext's SSO-exchange effect calls takeSsoIntent() + redirectWithSso() below to
+    // finish the trip to this app.
     setSsoIntent(item.ssoTarget);
-    const candyCallback = window.location.origin + '/sso/callback';
-    window.location.href = `${import.meta.env.VITE_SM_LOGIN_URL || 'https://spacemarvel.ai'}/login?redirect_uri=${encodeURIComponent(candyCallback)}`;
+    redirectToOIDC();
   }
 
   const userName      = profileOverride?.name || user?.full_name || user?.email?.split('@')[0] || 'User';
