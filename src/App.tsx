@@ -170,7 +170,7 @@ function RootRedirect() {
     }}>
       <button
         type="button"
-        onClick={redirectToOIDC}
+        onClick={() => redirectToOIDC()}
         style={{
           padding: '13px 28px', background: 'var(--grad-brand)', color: '#fff',
           border: 'none', borderRadius: 'var(--radius)', fontSize: 15,

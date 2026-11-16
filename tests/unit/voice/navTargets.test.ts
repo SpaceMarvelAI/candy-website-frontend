@@ -165,7 +165,7 @@ describe('navTargets — aliases', () => {
 
   it('routes the word people actually say for integrations to Connectors', () => {
     const connectors = NAV_TARGETS.find(t => t.id === 'nav.connectors');
-    expect(connectors?.path).toBe('/connects');
+    expect(connectors?.path).toBe('/connectors');
     expect(connectors?.aliases).toContain('integrations');
   });
 
