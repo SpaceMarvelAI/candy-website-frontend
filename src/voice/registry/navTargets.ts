@@ -30,8 +30,8 @@ const SIDEBAR: VoiceTarget[] = [
     aliases: ['reports', 'stats', 'statistics', 'metrics'] },
   { id: 'nav.flows', kind: 'nav', label: 'Flows', scope: '*', path: '/flows',
     aliases: ['flow', 'workflows', 'workflow', 'canvas'] },
-  { id: 'nav.connectors', kind: 'nav', label: 'Connectors', scope: '*', path: '/connects',
-    // "Integrations" is the word people reach for; /connects is where it lives.
+  { id: 'nav.connectors', kind: 'nav', label: 'Connectors', scope: '*', path: '/connectors',
+    // "Integrations" is the word people reach for; /connectors is where it lives.
     aliases: ['connects', 'connect apps', 'integrations', 'integration', 'apps', 'app catalogue'] },
   { id: 'nav.webhooks', kind: 'nav', label: 'Webhooks', scope: '*', path: '/webhooks',
     aliases: ['webhook', 'web hooks'] },

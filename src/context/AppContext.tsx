@@ -4,12 +4,12 @@ import {
 } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import posthog from 'posthog-js';
-import { loadStoredUser, fullLogout, ssoCallback, exchangeDashboardToken, me, storeUser, type AuthUser } from '../api/auth';
+import { loadStoredUser, fullLogout, ssoCallback, me, storeUser, type AuthUser } from '../api/auth';
 import { getToken, setToken } from '../api/client';
 import { addToast, type AddToast } from '../hooks/useToast';
 import { logger } from '../utils/logger';
 import { errorMessage } from '../utils/apiError';
-import { PENDING_PROMPT_TICKET_KEY, takeSsoIntent, redirectWithSso, takeReturnRoute } from '../utils/sso';
+import { PENDING_PROMPT_TICKET_KEY, takeSsoIntent, redirectWithSso, takeReturnRoute, redirectToOIDC } from '../utils/sso';
 import { claimPromptTicket, type ClaimedPrompt } from '../api/prompts';
 import { decodeWorkspaceIdFromToken, decodeWorkspaceNameFromToken } from '../utils/jwt';
 
@@ -34,7 +34,7 @@ const VIEW_TO_PATH: Record<string, string> = {
   chatbot_bank:   '/chatbots/bank',
   chatbot_appt:   '/chatbots/appt',
   chatbot_hr:     '/chatbots/hr',
-  connects:       '/connects',
+  connects:       '/connectors',
 };
 
 const PATH_TO_VIEW: Record<string, string> = Object.fromEntries(
@@ -327,9 +327,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
      *
      * A plain cross-app hop (Metaspace/Finixy → Candy, no `via=oidc`) has no Candy token to
      * fall back to that way — its `access_token` is the ORIGIN app's dashboard OAuth token,
-     * not a Candy one. But that token is still live, so if the one-time `sso_token` above
-     * fails, exchange the dashboard token instead of just giving up and showing a login
-     * screen for a session the user was already in on the app they came from.
+     * not a Candy one. There's no backend endpoint that exchanges a raw dashboard access
+     * token for a Candy session (checked: no such route exists in Candy-Agents) — so instead
+     * of failing outright, send the browser through the normal OIDC login entry point. The
+     * user still has a live session cookie on the dashboard from the app they came from, so
+     * the IDP auto-approves and bounces back with a fresh code — same as a silent SSO refresh,
+     * no login form shown — instead of a login screen for a session they were already in.
      */
     const viaOidc = params.get('via') === 'oidc';
     const exchange = () => ssoCallback(token).catch(async (err) => {
@@ -348,13 +351,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      logger.warn('[AppContext] one-time SSO ticket failed — trying the dashboard access token', { err });
-      try {
-        return await exchangeDashboardToken(accessToken);
-      } catch {
-        setToken(priorToken);
-        throw err;
-      }
+      logger.warn('[AppContext] one-time SSO ticket failed — redirecting through OIDC login so the live dashboard session completes it silently', { err });
+      setToken(priorToken);
+      redirectToOIDC(ticketFromUrl || undefined);
+      // Browser is on its way to the IDP — never resolve, so the .catch()/.finally()
+      // below can't fire a "sign-in failed" toast (or clear ssoLoading) on the way out.
+      return new Promise<never>(() => {});
     });
 
     exchange()
