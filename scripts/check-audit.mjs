@@ -59,6 +59,14 @@ const ACCEPTED_ADVISORIES = new Set([
   'https://github.com/advisories/GHSA-55wc-3pg8-jfw6',
   'https://github.com/advisories/GHSA-qxg6-89mg-rqv8',
   'https://github.com/advisories/GHSA-xp26-3454-mjgp',
+  // 2026-11-18: picomatch ReDoS (single-branch repeated extglobs) — vulnerable
+  // range is "<=4.0.7", i.e. every published version including latest; no fix
+  // exists yet. devDependency-only (vite/vitest/tailwindcss/rollup-plugin-
+  // visualizer's transitive glob matching), confirmed via `npm ls picomatch
+  // --omit=dev` returning empty — never ships in dist/. ReDoS also requires
+  // attacker-controlled glob input, which never happens in an automated CI
+  // build. Accepted until upstream ships a patch.
+  'https://github.com/advisories/GHSA-fc5q-39xc-vjpf',
 ]);
 
 const levelArg = process.argv.find((a) => a.startsWith('--audit-level='));
