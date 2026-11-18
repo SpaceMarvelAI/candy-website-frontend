@@ -16,8 +16,10 @@ useDefault = true
   #      was a hardcoded, fake mockup value for an API-keys settings page UI demo.
   #    - PostHog project API key (`phc_...`): this key type is designed to be public —
   #      it's meant to be embedded client-side (PostHog's own docs call it safe to
-  #      expose). It was in .env.development, since removed (dev shouldn't send
-  #      analytics at all) — allowlisted here since it's still in that commit's history.
+  #      expose). Two values: the dev project key, which was in .env.development,
+  #      since removed (dev shouldn't send analytics at all) — allowlisted here since
+  #      it's still in that commit's history; and the prod project key (635154, US),
+  #      added to .env.production when it was switched from the dev project.
   regexes = [
     '''latency_p50_ms''',
     '''latency_p95_ms''',
@@ -25,4 +27,5 @@ useDefault = true
     '''YOUR_ADMIN_JWT''',
     '''sk-ms-4d8f2a1b9c7e3f5a6b2d8e4f1a9c7b3d5e2f8a4b6c1d9e3f''',
     '''phc_taobEqykUztJFQC6LLCjPs9LvSYbLZ7fiXFXdeXqMkMm''',
+    '''phc_wMUwnQbB4SE6ZHh77JKt9egzGVp7bKyBFKYYD88kU4G7''',
   ]
