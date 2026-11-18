@@ -71,10 +71,11 @@ test('sign-in, dashboard, sidebar navigation', async ({ page }) => {
 
   // Sidebar nav to a page with no live-backend dependency, and back.
   // (Nav items are <button>s, not <a> — no client-side link semantics here.)
-  // Connectors lives under the AppRail's "More" popover.
+  // Connectors lives under the AppRail's "More" popover, labeled "Apps" there
+  // (matches MetaSpace/Finixy's tile) and routes to /connectors.
   await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: 'Connectors' }).click();
-  await expect(page).toHaveURL(/\/connects/);
+  await page.getByRole('menuitem', { name: 'Apps' }).click();
+  await expect(page).toHaveURL(/\/connectors/);
 
   await page.goto('/dashboard');
   await expect(page.getByText('Healthcare Domain', { exact: false })).toBeVisible({ timeout: 15_000 });

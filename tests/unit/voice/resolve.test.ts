@@ -47,7 +47,7 @@ describe('resolveTarget — navigation', () => {
   });
 
   it('resolves through an alias', () => {
-    expect(expectOk(fromHealthcare('integrations')).path).toBe('/connects');
+    expect(expectOk(fromHealthcare('integrations')).path).toBe('/connectors');
   });
 
   it('reaches a tab on another route, because tabs are routes here', () => {
