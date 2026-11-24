@@ -147,7 +147,7 @@ describe('logger.performance — with meta object', () => {
 });
 
 // ── Hostname/kill-switch gating (the core of this session's ask: verbose on
-// localhost + dev.candy.cx even in a deployed build, quiet on app.candy.cx) ──
+// localhost + candy-dev.spacemarvel.ai even in a deployed build, quiet on app.candy.cx) ──
 // Vitest runs with DEV=true, so isVerbose() would be true regardless of
 // hostname via that branch alone — these tests stub `localStorage['debug']`
 // to force the OTHER branches (override on/off) so hostname/kill-switch logic
@@ -184,14 +184,15 @@ describe('logger.isVerbose — runtime kill switch', () => {
     expect(spy).toHaveBeenCalledOnce();
   });
 
-  // NOTE: the hostname branch itself (localhost/dev.candy.cx verbose, app.candy.cx
-  // quiet, when IS_DEV=false — i.e. a real deployed build) can't be exercised
-  // end-to-end here for the same reason IS_DEV can't be flipped per-test (see
-  // this file's header comment) — Vitest runs with DEV=true, which short-circuits
-  // isVerbose() to true before the hostname check is ever reached. This at least
-  // pins the exact allowlist so a future edit can't silently drop dev.candy.cx.
-  it('the verbose-hosts allowlist is exactly localhost, 127.0.0.1, and dev.candy.cx', () => {
-    expect(VERBOSE_HOSTS).toEqual(['localhost', '127.0.0.1', 'dev.candy.cx']);
+  // NOTE: the hostname branch itself (localhost/candy-dev.spacemarvel.ai verbose,
+  // app.candy.cx quiet, when IS_DEV=false — i.e. a real deployed build) can't be
+  // exercised end-to-end here for the same reason IS_DEV can't be flipped per-test
+  // (see this file's header comment) — Vitest runs with DEV=true, which
+  // short-circuits isVerbose() to true before the hostname check is ever reached.
+  // This at least pins the exact allowlist so a future edit can't silently drop
+  // candy-dev.spacemarvel.ai.
+  it('the verbose-hosts allowlist is exactly localhost, 127.0.0.1, and candy-dev.spacemarvel.ai', () => {
+    expect(VERBOSE_HOSTS).toEqual(['localhost', '127.0.0.1', 'candy-dev.spacemarvel.ai']);
   });
 
   it('a thrown localStorage access (private mode / sandboxed iframe) is caught and falls through', () => {
@@ -424,7 +425,7 @@ describe('logger.group', () => {
 // ── Redaction — the login password must never reach a log ─────────────────────
 // client.ts logs every request body via truncateForLog, and auth.ts posts
 // { email, password }. Before this, the plaintext password was printed whenever
-// isVerbose() was true — which is ALWAYS on dev.candy.cx, a deployed public site.
+// isVerbose() was true — which is ALWAYS on candy-dev.spacemarvel.ai, a deployed public site.
 
 describe('truncateForLog — secret redaction', () => {
   it('masks a login body but keeps the non-sensitive fields', () => {

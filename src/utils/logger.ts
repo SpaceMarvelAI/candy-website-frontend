@@ -10,7 +10,7 @@
  *                                              localStorage.setItem('debug','on')
  *   3. VITE_DEBUG === 'true' (build-time)   → force verbose.
  *   4. import.meta.env.DEV (vite dev server) → verbose.
- *   5. hostname is localhost/127.0.0.1/dev.candy.cx → verbose (covers the
+ *   5. hostname is localhost/127.0.0.1/candy-dev.spacemarvel.ai → verbose (covers the
  *      deployed dev site too — it's a `vite build`, so DEV is false there,
  *      which is why hostname is checked independently of DEV).
  *   6. Anything else (app.candy.cx, candy.cx, …) → warn/error only.
@@ -28,7 +28,7 @@
 const IS_DEV = import.meta.env.DEV === true;
 /** Exported so tests can assert the exact allowlist without needing to fake IS_DEV=false
  * (a module-level constant fixed at load time — see logger.test.ts for why). */
-export const VERBOSE_HOSTS = ['localhost', '127.0.0.1', 'dev.candy.cx'];
+export const VERBOSE_HOSTS = ['localhost', '127.0.0.1', 'candy-dev.spacemarvel.ai'];
 
 function isVerbose(): boolean {
   const onVerboseHost =
