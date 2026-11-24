@@ -33,7 +33,7 @@ export const MOBILE_SHELL_BP = '(max-width: 767px)';
 
 // Help → Onboarding is a testing shortcut: localhost + dev only, hidden on staging and prod.
 const SHOW_ONBOARDING_ITEM = typeof window !== 'undefined' &&
-  ['localhost', '127.0.0.1', 'dev.candy.cx'].includes(window.location.hostname);
+  ['localhost', '127.0.0.1', 'candy-dev.spacemarvel.ai'].includes(window.location.hostname);
 
 // ─── Profile popover ──────────────────────────────────────────────────────────
 function ProfileMenu({
