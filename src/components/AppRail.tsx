@@ -11,6 +11,7 @@ import Icon from '../assets/icons';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
 import { getProfile } from '../api/profile';
 import { redirectWithSso, setSsoIntent, redirectToOIDC } from '../utils/sso';
+import { isStandaloneMode } from '../api/standalone';
 import { logger } from '../utils/logger';
 
 // Lazy: pulls in @aws-sdk/client-s3 (large), only needed if the user actually opens this.
@@ -197,6 +198,8 @@ function ProfileMenu({
         <div style={{ borderTop: '1px solid var(--shell-menu-border)', margin: '4px 0' }} />
 
         {flagAppConnections !== false && menuItem('Connectors', () => { navigate('/connectors'); onClose(); }, { icon: 'connectors' })}
+        {/* Standalone install only: the workspace's people and their companies (no Dashboard to do it). */}
+        {isStandaloneMode() && menuItem('Team', () => { navigate('/team'); onClose(); }, { icon: 'team' })}
         {flagProfileSettings !== false && menuItem('Profile',    () => { onProfile(); onClose(); }, { icon: 'user' })}
         {flagProfileSettings !== false && menuItem('LinkedIn Connections', () => { onLinkedInConnections(); onClose(); }, { icon: 'team' })}
         {subBtn('Appearance', 'appearance', 'appearance')}

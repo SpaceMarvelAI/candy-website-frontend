@@ -11,6 +11,7 @@ import { logger } from './utils/logger'
 import { installDevAuth } from './utils/devAuth'
 import { scrubAnalyticsEvent } from './utils/analyticsScrub'
 import { purgeLegacyAuthStorage } from './api/client'
+import { loadAuthMode } from './api/standalone'
 
 // The session is sessionStorage-scoped (see client.ts). Drop any auth left in
 // localStorage by an earlier build or a sibling app FIRST — otherwise a stale
@@ -107,7 +108,10 @@ window.addEventListener('unhandledrejection', (event) => {
   });
 });
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+// Standalone vs ecosystem login (src/api/standalone.ts): known before the first render, so the
+// auth redirect (redirectToOIDC, synchronous) never sends a standalone install to a Dashboard it
+// doesn't have. Instant after the first load (cached); a failed check keeps the Dashboard login.
+loadAuthMode().finally(() => ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <GlobalErrorBoundary>
       <PostHogProvider client={posthog}>
@@ -119,4 +123,4 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       </PostHogProvider>
     </GlobalErrorBoundary>
   </React.StrictMode>,
-)
+))

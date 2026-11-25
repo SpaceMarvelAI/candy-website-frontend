@@ -1,5 +1,9 @@
 import { API_BASE, getToken } from '../api/client';
 import { logger } from './logger';
+import { isStandaloneMode } from '../api/standalone';
+
+/** Candy's own sign-in pages in standalone mode (src/pages/standalone). */
+const STANDALONE_AUTH_ROUTE = /^\/(login|signup|invite\/)/;
 
 // Prompt Library handoff ("Open in Candy"): a `?ticket=` may be present on the
 // URL when the user isn't signed in yet. The OIDC login redirect only round-trips
@@ -219,7 +223,16 @@ export function redirectToOIDC(ticketOverride?: string): void {
     // Also stash in sessionStorage as a fallback (in case cookies fail).
     if (ticket) sessionStorage.setItem(PENDING_PROMPT_TICKET_KEY, ticket);
     const route = window.location.hash.replace(/^#/, '');
-    if (route && route !== '/') sessionStorage.setItem(RETURN_ROUTE_KEY, route);
+    const onStandaloneAuthPage = STANDALONE_AUTH_ROUTE.test(route);
+    if (route && route !== '/' && !onStandaloneAuthPage) sessionStorage.setItem(RETURN_ROUTE_KEY, route);
+
+    // Standalone install (no Dashboard — the backend said so at boot, src/api/standalone.ts):
+    // Candy's own login page instead of the Dashboard. The return route stashed above is honoured
+    // there too (takeReturnRoute). Already on a standalone auth page → stay put.
+    if (isStandaloneMode()) {
+      if (!onStandaloneAuthPage) window.location.hash = '#/login';
+      return;
+    }
 
     const loginUrl = new URL(`${API_BASE}/v1/auth/sso/oidc/login`);
     loginUrl.searchParams.set('return_to', window.location.origin);

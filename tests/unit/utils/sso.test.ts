@@ -4,6 +4,7 @@ import {
   setSsoIntent, takeSsoIntent, SSO_INTENT_KEY,
   takeReturnRoute, RETURN_ROUTE_KEY,
 } from '../../../src/utils/sso';
+import { _resetAuthModeCache } from '../../../src/api/standalone';
 
 const originalLocation = window.location;
 
@@ -193,5 +194,32 @@ describe('redirectWithSso (rail Home/Finixy → other app, already signed in)', 
     expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer candy-jwt' });
     const url = new URL(loc.href);
     expect(url.searchParams.get('access_token')).toBe('candy-jwt');
+  });
+});
+
+describe('redirectToOIDC in standalone mode (no Dashboard)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    localStorage.setItem('candy.auth_mode', JSON.stringify({ mode: 'standalone' }));
+  });
+  afterEach(() => _resetAuthModeCache());
+
+  it("goes to Candy's own login page instead of the Dashboard, keeping where they were headed", () => {
+    const loc = stubLocation('candy.acmecorp.io');
+    loc.hash = '#/live/demo';
+    redirectToOIDC();
+    expect(loc.hash).toBe('#/login');
+    expect(loc.href).toBe('');
+    expect(sessionStorage.getItem(RETURN_ROUTE_KEY)).toBe('/live/demo');
+  });
+
+  it('stays on the sign-in pages and never saves them as the place to return to', () => {
+    for (const page of ['#/login', '#/signup', '#/invite/tok-1']) {
+      const loc = stubLocation('candy.acmecorp.io');
+      loc.hash = page;
+      redirectToOIDC();
+      expect(loc.hash).toBe(page);
+      expect(sessionStorage.getItem(RETURN_ROUTE_KEY)).toBeNull();
+    }
   });
 });

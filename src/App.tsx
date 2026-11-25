@@ -25,6 +25,12 @@ import {
 
 const SSOCallbackPage  = lazy(() => import('./pages/sso'));
 const OIDCCallbackPage = lazy(() => import('./pages/sso/oidc-callback'));
+// Standalone mode only (no Dashboard — src/api/standalone.ts); in ecosystem mode they hand over
+// to the Dashboard login.
+const StandaloneLoginPage   = lazy(() => import('./pages/standalone/StandaloneAuthPages').then(m => ({ default: m.StandaloneLoginPage })));
+const StandaloneSignupPage  = lazy(() => import('./pages/standalone/StandaloneAuthPages').then(m => ({ default: m.StandaloneSignupPage })));
+const AcceptInvitationPage  = lazy(() => import('./pages/standalone/StandaloneAuthPages').then(m => ({ default: m.AcceptInvitationPage })));
+const TeamPage              = lazy(() => import('./pages/standalone/TeamPage'));
 
 // App-layout pages
 const LiveCallsPage  = lazy(() => import('./pages/live'));
@@ -268,6 +274,11 @@ export default function App() {
           {/* OIDC callback — backend redirects here with the minted Candy token */}
           <Route path="/sso/oidc/callback" element={<OIDCCallbackPage />} />
 
+          {/* Standalone sign-in (no Dashboard) */}
+          <Route path="/login"         element={<StandaloneLoginPage />} />
+          <Route path="/signup"        element={<StandaloneSignupPage />} />
+          <Route path="/invite/:token" element={<AcceptInvitationPage />} />
+
           {/* Healthcare domain — the primary landing (15 use cases) */}
           <Route path="/healthcare"     element={<AppRoute skeleton={<DashboardSkeleton />}><HealthcareDomainPage /></AppRoute>} />
 
@@ -315,6 +326,7 @@ export default function App() {
           <Route path="/agents/hr"         element={<ProtectedRoute><RouteErrorBoundary><HRAgent /></RouteErrorBoundary></ProtectedRoute>} />
 
           <Route path="/connectors"        element={<AppRoute><ConnectsPage /></AppRoute>} />
+          <Route path="/team"              element={<AppRoute><TeamPage /></AppRoute>} />
           <Route path="/composio/callback" element={<Suspense fallback={null}><ComposioCallback /></Suspense>} />
 
           {/* Fallback — unknown paths go back to landing */}
