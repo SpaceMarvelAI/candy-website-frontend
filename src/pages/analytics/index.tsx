@@ -20,7 +20,15 @@ import {
   type LanguageStat,
   type AgentStat,
   type AnalyticsEvent,
+  type TrafficFilter,
+  DEFAULT_TRAFFIC,
 } from '../../api/analytics';
+import type { ReportFilters, TrendBucket } from '../../api/analyticsReports';
+import { VolumeSection, OutcomesSection } from './reports/VolumeOutcomes';
+import { AgentPerformanceSection } from './reports/AgentPerformance';
+import { ToolsSection, EscalationsSection } from './reports/ToolsEscalations';
+import { CallsSection } from './reports/Calls';
+import { KnowledgeSection } from './reports/Knowledge';
 
 // ── Error boundary — prevents a single tab crash from blanking the whole page ─
 class TabErrorBoundary extends Component<
@@ -72,16 +80,28 @@ class TabErrorBoundary extends Component<
   }
 }
 
-type Tab = 'summary' | 'sessions' | 'latency' | 'knowledge-gaps' | 'languages' | 'agents' | 'events';
+type Tab = 'summary' | 'sessions' | 'latency' | 'knowledge-gaps' | 'languages' | 'agents' | 'tools' | 'events';
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'summary',        label: 'Summary',        icon: 'chart'  },
   { key: 'sessions',       label: 'Sessions',       icon: 'chat'   },
-  { key: 'latency',        label: 'Latency',        icon: 'health' },
+  { key: 'latency',        label: 'Latency & Calls', icon: 'health' },
   { key: 'knowledge-gaps', label: 'Knowledge Gaps', icon: 'brain'  },
   { key: 'languages',      label: 'Languages',      icon: 'layers' },
   { key: 'agents',         label: 'Agents',         icon: 'team'   },
+  { key: 'tools',          label: 'Tools & Escalations', icon: 'layers' },
   { key: 'events',         label: 'Events',         icon: 'bell'   },
+];
+
+// Event categories the Events API accepts (`category`); empty = all.
+const EVENT_CATEGORIES = [
+  { value: '',           label: 'All events' },
+  { value: 'hc',         label: 'Healthcare (hc.*)' },
+  { value: 'session',    label: 'Session lifecycle' },
+  { value: 'turn',       label: 'Turns' },
+  { value: 'tool',       label: 'Tools' },
+  { value: 'escalation', label: 'Escalations' },
+  { value: 'call',       label: 'Calls' },
 ];
 
 function fmt(v: number | null | undefined, decimals = 0, suffix = ''): string {
@@ -202,7 +222,9 @@ const SUMMARY_SCALAR_FIELDS: {
   { key: 'completed',         label: 'Completed',          accent: 'var(--green)'                              },
   { key: 'abandoned',         label: 'Abandoned'                                                                },
   { key: 'escalated_proxy',   label: 'Escalated (Proxy)'                                                        },
-  { key: 'success_rate',      label: 'Success Rate',       format: v => fmtPct(v as number), accent: 'var(--green)'  },
+  // Completion, not success: nothing records whether a goal was met, so there is no success
+  // figure (the API's success_rate is always null). completed / (completed + abandoned).
+  { key: 'completion_rate',   label: 'Completion Rate',    format: v => fmtPct(v as number), accent: 'var(--green)'  },
   { key: 'escalation_rate',   label: 'Escalation Rate',    format: v => fmtPct(v as number), accent: 'var(--amber)'  },
   { key: 'avg_turns',         label: 'Avg Turns',          format: v => fmt(v as number, 1)                    },
   { key: 'avg_rating',        label: 'Avg Rating',         format: v => fmt(v as number, 2), accent: 'var(--blue)'   },
@@ -221,6 +243,33 @@ const COMPLEX_FIELDS = new Set(['sessions_by_day', 'top_failing_agents']);
 // Fields handled by stat cards or shown separately — excluded from the "extra" strip
 const STAT_FIELD_KEYS = new Set(SUMMARY_SCALAR_FIELDS.map(f => f.key as string));
 const META_FIELDS     = new Set(['period_start', 'period_end']);
+// Explained once, in plain words, by <TrafficNote/> instead of being dumped as raw fields
+// `success_rate` is deprecated and always null (nothing records whether a goal was met): it is
+// not shown as an empty metric — Completion Rate is the honest figure.
+const EXPLAINER_FIELDS = new Set(['traffic', 'traffic_breakdown', 'populations', 'definitions', 'success_rate']);
+
+// Which population the numbers describe, and what the Traffic filter left out — so nothing is
+// silently dropped. "Unclassified" = older sessions that cannot be reliably told apart.
+function TrafficNote({ data }: { data: AnalyticsSummary }) {
+  const t = data.traffic;
+  if (!t) return null;
+  const b = data.traffic_breakdown;
+  const left = b && t !== 'all'
+    ? (['production', 'demo', 'unclassified'] as const).filter(k => k !== t && b[k] > 0).map(k => `${b[k]} ${k}`)
+    : [];
+  return (
+    <div
+      title={Object.values(data.populations ?? {}).join('\n\n')}
+      style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}
+    >
+      Showing <strong style={{ color: 'var(--text-2)' }}>{t}</strong> traffic.
+      {left.length > 0 && <> Not included: {left.join(', ')} session(s).</>}
+      {b && t !== 'unclassified' && t !== 'all' && b.unclassified > 0 && (
+        <> Unclassified sessions are older ones that cannot be reliably told apart; choose Unclassified or All to see them.</>
+      )}
+    </div>
+  );
+}
 
 function renderScalar(v: unknown): string {
   if (v == null) return '—';
@@ -410,13 +459,14 @@ function SummaryView({ data, loading }: { data: AnalyticsSummary | null; loading
 
   // Extra primitive fields (not in stat cards, not complex, not meta)
   const extraPrimitives = Object.entries(data).filter(([k, v]) =>
-    !STAT_FIELD_KEYS.has(k) && !COMPLEX_FIELDS.has(k) && !META_FIELDS.has(k) &&
+    !STAT_FIELD_KEYS.has(k) && !COMPLEX_FIELDS.has(k) && !META_FIELDS.has(k) && !EXPLAINER_FIELDS.has(k) &&
     (v == null || typeof v !== 'object')
   );
 
   // Complex array/object fields
   const complexEntries = Object.entries(data).filter(([k, v]) =>
-    COMPLEX_FIELDS.has(k) || (typeof v === 'object' && v !== null && !META_FIELDS.has(k) && !STAT_FIELD_KEYS.has(k))
+    COMPLEX_FIELDS.has(k) ||
+    (typeof v === 'object' && v !== null && !META_FIELDS.has(k) && !STAT_FIELD_KEYS.has(k) && !EXPLAINER_FIELDS.has(k))
   );
 
   return (
@@ -424,6 +474,8 @@ function SummaryView({ data, loading }: { data: AnalyticsSummary | null; loading
       {period && (
         <div style={{ fontSize: 12, color: 'var(--text-4)' }}>Period: {period}</div>
       )}
+
+      <TrafficNote data={data} />
 
       {/* Primary stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 14 }}>
@@ -516,14 +568,14 @@ function SessionsView({ data, loading }: { data: AnalyticsSession[]; loading: bo
   return (
     <TableCard title={`${data.length} session${data.length === 1 ? '' : 's'}`}>
       {loading && data.length === 0 ? <LoadingRow /> : data.length === 0 ? (
-        <EmptyRow msg="No sessions recorded yet." />
+        <EmptyRow msg="No sessions match the selected period and traffic." />
       ) : (
         <>
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
             <thead>
               <tr>
-                {['Agent', 'Type', 'Turns', 'Status', 'Rating', 'Started', 'Ended'].map(h => (
+                {['Agent', 'Traffic', 'Turns', 'Status', 'Rating', 'Started', 'Ended'].map(h => (
                   <th key={h} style={TH_STYLE}>{h}</th>
                 ))}
               </tr>
@@ -535,9 +587,20 @@ function SessionsView({ data, loading }: { data: AnalyticsSession[]; loading: bo
                     <div className="ph-mask" style={{ fontWeight: 500, color: 'var(--text-1)' }}>{s.agent_name || '—'}</div>
                   </td>
                   <td style={TD_STYLE}>
-                    {s.session_type ? (
-                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(117,91,227,0.12)', color: 'var(--purple-hi)', fontWeight: 600 }}>
-                        {s.session_type}
+                    {/* The real classification (production / demo / unclassified). session_type is
+                        only a tooltip: the embedded chatbot is stored as 'text_demo' too. */}
+                    {s.traffic ? (
+                      <span
+                        title={s.session_type ? `session type: ${s.session_type}` : undefined}
+                        style={{
+                          fontSize: 11, padding: '2px 8px', borderRadius: 99, fontWeight: 600,
+                          background: s.traffic === 'production' ? 'rgba(46,160,67,0.14)'
+                                    : s.traffic === 'demo' ? 'rgba(117,91,227,0.12)' : 'rgba(128,128,128,0.16)',
+                          color: s.traffic === 'production' ? 'var(--green)'
+                               : s.traffic === 'demo' ? 'var(--purple-hi)' : 'var(--text-3)',
+                        }}
+                      >
+                        {s.traffic}
                       </span>
                     ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
                   </td>
@@ -973,11 +1036,34 @@ function EventTypePill({ type }: { type: string }) {
   );
 }
 
+// Lifecycle event payloads start with contract boilerplate (schema, category, source, ...). Show the fields
+// that distinguish the event (tool name, duration, failure category, ...) as "key=value" instead of a raw
+// JSON prefix that would be cut off before reaching them. Non-object payloads (hc.* events) are shown as before.
+const PAYLOAD_NOISE = new Set(['schema', 'category', 'source', 'trace_id']);
+function summarizePayload(payload: unknown): string {
+  if (payload == null) return '—';
+  let value = payload;
+  if (typeof value === 'string') { const raw = value; try { value = JSON.parse(raw); } catch { return raw.slice(0, 80); } }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return JSON.stringify(value).slice(0, 80);
+  const parts = Object.entries(value as Record<string, unknown>)
+    .filter(([k]) => !PAYLOAD_NOISE.has(k))
+    .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : String(v)}`);
+  return (parts.join(' ') || '—').slice(0, 120);
+}
+
 function EventsView({ data, loading }: { data: AnalyticsEvent[]; loading: boolean }) {
   return (
     <TableCard title={`${data.length} event${data.length === 1 ? '' : 's'}`}>
+      {/* What this stream contains and what it cannot tell you — kept next to the data it describes. */}
+      <div role="note" style={{ padding: '12px 22px', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--text-3)', lineHeight: 1.55 }}>
+        A raw event stream: healthcare <code>hc.*</code> events plus lifecycle events (<code>session.*</code>,
+        {' '}<code>turn.*</code>, <code>tool.*</code>, <code>escalation.*</code>, <code>call.*</code>). Lifecycle events
+        are recorded only from the Phase 3 release onward — earlier sessions and calls have none — and turn and tool
+        events are best-effort, so counts here can be lower than the reports. Events carry counts, timings and
+        predefined categories, never message text. The listing shows the most recent events up to the API limit.
+      </div>
       {loading && data.length === 0 ? <LoadingRow /> : data.length === 0 ? (
-        <EmptyRow msg="No events recorded." />
+        <EmptyRow msg="No events in this period. Lifecycle events exist only from the Phase 3 release onward, so older periods are empty by design." />
       ) : (
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 500 }}>
@@ -997,7 +1083,7 @@ function EventsView({ data, loading }: { data: AnalyticsEvent[]; loading: boolea
                   {e.agent_id ? `${e.agent_id.slice(0, 8)}…` : '—'}
                 </td>
                 <td className="ph-mask" style={{ ...TD_STYLE, color: 'var(--text-3)', maxWidth: 360, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: "'Zalando Sans'", fontSize: 11.5 }}>
-                  {e.payload != null ? JSON.stringify(e.payload).slice(0, 80) : '—'}
+                  {summarizePayload(e.payload)}
                 </td>
               </tr>
             ))}
@@ -1029,6 +1115,24 @@ function toArray(v: unknown): unknown[] {
   return [];
 }
 
+// ── Filter bar ────────────────────────────────────────────────────────────────
+const FILTER_LABEL: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-2)',
+};
+const FILTER_SELECT: React.CSSProperties = {
+  padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)',
+  background: 'var(--card-bg)', color: 'var(--text-1)', fontSize: 12.5, cursor: 'pointer',
+};
+// What the filters mean on tabs whose data does not follow them in the obvious way.
+const FILTER_NOTES: Partial<Record<Tab, string>> = {
+  latency:   'From real calls, which are production traffic — empty for Demo and Unclassified.',
+  languages: 'From real calls, which are production traffic — empty for Demo and Unclassified. The Agent filter does not apply to this list.',
+  events:    'Events have no traffic marker, so only the period applies (and the Agent and Category filters).',
+  'knowledge-gaps': 'The Agent filter applies to the effectiveness report, not to the list of gap questions.',
+  agents:    'The Agent filter applies to the performance report, not to the legacy agent list.',
+  tools:     'Tool and escalation figures come from Phase 3 events; they exist only from that release onward.',
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const { addToast } = useApp();
@@ -1050,21 +1154,47 @@ export default function AnalyticsPage() {
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState<string | null>(null);
 
-  const initRef = useRef(false);
+  // Filters. Both are sent to every tab that supports them, so the tabs always describe the
+  // same window and traffic. Events has no traffic marker (healthcare domain events), so it
+  // only receives the window — see FILTER_NOTES for what each tab says about it.
+  const [days,    setDays]    = useState<number>(7);
+  const [traffic, setTraffic] = useState<TrafficFilter>(DEFAULT_TRAFFIC);
+  // Phase 5 filters. Agent narrows the endpoints that accept `agent_id` (summary, sessions, latency, events
+  // and the seven reports); it is only sent when chosen, and never to endpoints that do not support it
+  // (knowledge-gaps, languages, agents). Compare / Trend apply only to the reports.
+  const [agentId,  setAgentId]  = useState<string>('');
+  const [compare,  setCompare]  = useState(false);
+  const [bucket,   setBucket]   = useState<TrendBucket>('day');
+  const [eventCategory, setEventCategory] = useState<string>('');
+  // Bumped by Refresh so the report sections (which load themselves) reload too.
+  const [nonce, setNonce] = useState(0);
+
+  const reportFilters: ReportFilters = { days, traffic, agentId: agentId || null, compare, bucket };
+
+  // A newer request supersedes an older one: a slow response for a previous filter must not
+  // overwrite the data of the filter the user has since chosen.
+  const requestRef = useRef(0);
 
   async function refresh() {
+    const request = ++requestRef.current;
     setLoading(true);
     setError(null);
+    const p = { days: String(days), traffic };
+    const withAgent = agentId ? { ...p, agent_id: agentId } : p;       // summary / sessions / latency accept agent_id
+    const evtParams: Record<string, string> = { days: String(days) };   // events: no traffic marker
+    if (agentId) evtParams.agent_id = agentId;
+    if (eventCategory) evtParams.category = eventCategory;
     try {
       const [sum, sess, lat, kgaps, langs, ags, evts] = await Promise.all([
-        getAnalyticsSummary().catch(() => null),
-        getAnalyticsSessions().catch(() => null),
-        getAnalyticsLatency().catch(() => null),
-        getAnalyticsKnowledgeGaps().catch(() => null),
-        getAnalyticsLanguages().catch(() => null),
-        getAnalyticsAgents().catch(() => null),
-        getAnalyticsEvents().catch(() => null),
+        getAnalyticsSummary(withAgent).catch(() => null),
+        getAnalyticsSessions(withAgent).catch(() => null),
+        getAnalyticsLatency(withAgent).catch(() => null),
+        getAnalyticsKnowledgeGaps(p).catch(() => null),
+        getAnalyticsLanguages(p).catch(() => null),
+        getAnalyticsAgents(p).catch(() => null),
+        getAnalyticsEvents(evtParams).catch(() => null),
       ]);
+      if (request !== requestRef.current) return;
       setSummary(sum);
       setSessions(toArray(sess) as AnalyticsSession[]);
       setLatency(lat);
@@ -1073,18 +1203,25 @@ export default function AnalyticsPage() {
       setAgents(toArray(ags) as AgentStat[]);
       setEvents(toArray(evts) as AnalyticsEvent[]);
     } catch (e) {
+      if (request !== requestRef.current) return;
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
       setError(msg);
     } finally {
-      setLoading(false);
+      if (request === requestRef.current) setLoading(false);
     }
   }
 
+  // Load on mount and again whenever a filter changes. Keyed on the filter values so React
+  // StrictMode's dev-only second run of the mount effect does not fetch everything twice (the
+  // page guarded this before with an init flag); a changed filter always has a new key.
+  const loadedKey = useRef<string | null>(null);
   useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
+    const key = `${days}|${traffic}|${agentId}|${eventCategory}`;
+    if (loadedKey.current === key) return;
+    loadedKey.current = key;
     refresh();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days, traffic, agentId, eventCategory]);
 
   return (
     <div className="fade-up" style={{ padding: isMobile ? '20px 16px 48px' : isTablet ? '24px 24px 52px' : '32px 40px 60px' }}>
@@ -1138,7 +1275,7 @@ export default function AnalyticsPage() {
           ))}
           {!isMobile && <div style={{ flex: 1 }} />}
           <button
-            onClick={() => { refresh().then(() => addToast('Analytics refreshed', 'success')); }}
+            onClick={() => { setNonce(n => n + 1); refresh().then(() => addToast('Analytics refreshed', 'success')); }}
             style={{
               padding: '7px 12px', borderRadius: 99,
               background: 'var(--card-bg)',
@@ -1154,14 +1291,103 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* ── Filters — sent to every tab that supports them; each tab says what applies to it ── */}
+      <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginBottom: 20 }}>
+        <label style={FILTER_LABEL}>
+          Period
+          <select
+            value={days}
+            onChange={e => setDays(Number(e.target.value))}
+            style={FILTER_SELECT}
+            aria-label="Period"
+          >
+            {[7, 14, 30, 90].map(d => <option key={d} value={d}>Last {d} days</option>)}
+          </select>
+        </label>
+        <label style={FILTER_LABEL}>
+          Traffic
+          <select
+            value={traffic}
+            onChange={e => setTraffic(e.target.value as TrafficFilter)}
+            style={FILTER_SELECT}
+            aria-label="Traffic"
+          >
+            <option value="production">Production</option>
+            <option value="demo">Demo</option>
+            <option value="unclassified">Unclassified (older)</option>
+            <option value="all">All</option>
+          </select>
+        </label>
+        <label style={FILTER_LABEL}>
+          Agent
+          <select
+            value={agentId}
+            onChange={e => setAgentId(e.target.value)}
+            style={{ ...FILTER_SELECT, maxWidth: 200 }}
+            aria-label="Agent"
+          >
+            <option value="">All agents</option>
+            {agents.map(a => <option key={a.agent_id} value={a.agent_id}>{a.name || a.agent_id.slice(0, 8)}</option>)}
+          </select>
+        </label>
+        {tab === 'events' && (
+          <label style={FILTER_LABEL}>
+            Category
+            <select
+              value={eventCategory}
+              onChange={e => setEventCategory(e.target.value)}
+              style={FILTER_SELECT}
+              aria-label="Event category"
+            >
+              {EVENT_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+          </label>
+        )}
+        {tab !== 'sessions' && tab !== 'events' && tab !== 'languages' && (
+          <>
+            <label style={{ ...FILTER_LABEL, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={compare}
+                onChange={e => setCompare(e.target.checked)}
+                aria-label="Compare with previous period"
+              />
+              Compare with previous period
+            </label>
+            <label style={FILTER_LABEL}>
+              Trend
+              <select
+                value={bucket}
+                onChange={e => setBucket(e.target.value as TrendBucket)}
+                style={FILTER_SELECT}
+                aria-label="Trend granularity"
+              >
+                <option value="day">Daily</option>
+                <option value="week">Weekly</option>
+              </select>
+            </label>
+          </>
+        )}
+        {FILTER_NOTES[tab] && (
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{FILTER_NOTES[tab]}</span>
+        )}
+      </div>
+
       {/* ── Active tab view — wrapped in error boundary so one bad row can't blank the page ── */}
       <TabErrorBoundary key={tab}>
         {tab === 'summary'        && <SummaryView       data={summary}   loading={loading} />}
+        {tab === 'summary'        && <VolumeSection     filters={reportFilters} nonce={nonce} />}
+        {tab === 'summary'        && <OutcomesSection   filters={reportFilters} nonce={nonce} />}
         {tab === 'sessions'       && <SessionsView      data={sessions}  loading={loading} />}
         {tab === 'latency'        && <LatencyView       data={latency}   loading={loading} />}
+        {tab === 'latency'        && <CallsSection      filters={reportFilters} nonce={nonce} />}
         {tab === 'knowledge-gaps' && <KnowledgeGapsView data={gaps}      loading={loading} />}
+        {tab === 'knowledge-gaps' && <KnowledgeSection  filters={reportFilters} nonce={nonce} />}
         {tab === 'languages'      && <LanguagesView     data={languages} loading={loading} />}
         {tab === 'agents'         && <AgentsView        data={agents}    loading={loading} />}
+        {tab === 'agents'         && <AgentPerformanceSection filters={reportFilters} nonce={nonce} />}
+        {tab === 'tools'          && <ToolsSection       filters={reportFilters} nonce={nonce} />}
+        {tab === 'tools'          && <EscalationsSection filters={reportFilters} nonce={nonce} />}
         {tab === 'events'         && <EventsView        data={events}    loading={loading} />}
       </TabErrorBoundary>
     </div>

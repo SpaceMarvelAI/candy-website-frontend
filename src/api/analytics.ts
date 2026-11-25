@@ -1,9 +1,25 @@
 import { api } from './client';
 
+// ── Filters (accepted by every tab except Events, which has no traffic marker) ─
+// production (default) | demo | unclassified | all. Classification rules live in the
+// backend (services/analytics_scope.py); `unclassified` is older sessions that cannot be
+// told apart reliably, never guessed.
+export type TrafficFilter = 'production' | 'demo' | 'unclassified' | 'all';
+export const DEFAULT_TRAFFIC: TrafficFilter = 'production';
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 export interface AnalyticsSummary {
+  // Which population these figures describe, and what the filter left out
+  traffic?: TrafficFilter | null;
+  traffic_breakdown?: { production: number; demo: number; unclassified: number } | null;
+  populations?: Record<string, string> | null;
+  definitions?: Record<string, string> | null;
   // Core counts
   total_sessions?: number | null;
+  ended_sessions?: number | null;
+  in_progress_sessions?: number | null;
+  // completed / (completed + abandoned). Not "success": nothing records whether a goal was met.
+  completion_rate?: number | null;
   total_messages?: number | null;
   total_agents?: number | null;
   completed?: number | null;
@@ -41,6 +57,9 @@ export interface AnalyticsSession {
   id: string;
   status: string | null;
   session_type: string | null;
+  // production | demo | unclassified — the real classification; session_type says nothing
+  // (the embedded chatbot is stored as 'text_demo' too).
+  traffic?: Exclude<TrafficFilter, 'all'> | null;
   feedback_rating: number | null;
   feedback_notes: string | null;
   turn_count: number | null;
