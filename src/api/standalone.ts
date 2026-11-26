@@ -101,6 +101,8 @@ export type CompanyAccess = 'all' | 'selected';
 export interface TeamMember {
   user_id: string; email: string; full_name: string | null; role: string;
   company_access: CompanyAccess; company_ids: string[];
+  /** The selected companies with names — every member sees everyone's access by name. */
+  companies?: { id: string; name: string }[];
 }
 export interface TeamInvitation {
   id: string; email: string; role: string; company_access: CompanyAccess; company_ids: string[];
@@ -130,6 +132,8 @@ export const teamApi = {
   cancelInvitation: (id: string) => api(`/v1/team/invitations/${id}`, { method: 'DELETE' }),
   setMemberCompanies: (userId: string, companyIds: string[] | null) =>
     api(`/v1/team/members/${userId}/companies`, { method: 'PUT', body: { company_ids: idsOrAll(companyIds) } }),
+  setMemberRole: (userId: string, role: string) =>
+    api(`/v1/team/members/${userId}/role`, { method: 'PUT', body: { role } }),
   removeMember: (userId: string) => api(`/v1/team/members/${userId}`, { method: 'DELETE' }),
   domains:      () => data(api<Wrapped<TeamDomain[]>>('/v1/team/domains')),
   addDomain:    (domain: string) => data(api<Wrapped<TeamDomain>>('/v1/team/domains', { method: 'POST', body: { domain } })),

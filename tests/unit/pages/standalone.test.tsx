@@ -164,6 +164,40 @@ describe('team', () => {
     expect(screen.queryByText('Invite someone')).toBeNull();
   });
 
+  it('only the Owner/Admin get a role picker (for people below them); everyone else just sees roles', async () => {
+    app.user = { user_id: 'u-1', role: 'owner' };
+    teamServer();
+    let body: any = null;
+    server.use(http.put(`${BASE}/v1/team/members/u-2/role`, async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json({ status: 'success', role: 'builder' });
+    }));
+    const { unmount } = at('/team');
+    const picker = await screen.findByLabelText('Role of Bo');
+    expect(screen.queryByLabelText('Role of Ada')).toBeNull();                   // not themselves / the Owner
+    expect([...picker.querySelectorAll('option')].map(o => o.value)).toEqual(['viewer', 'builder', 'admin']);
+    fireEvent.change(picker, { target: { value: 'builder' } });
+    await waitFor(() => expect(body).toEqual({ role: 'builder' }));
+    unmount();
+
+    app.user = { user_id: 'u-2', role: 'viewer' };
+    at('/team');
+    expect(await screen.findByText('Members (2)')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Role of/)).toBeNull();
+  });
+
+  it('shows member company names sent with the member, even ones the viewer cannot use', async () => {
+    app.user = { user_id: 'u-2', role: 'viewer' };
+    server.use(
+      http.get(`${BASE}/v1/team/members`, () => HttpResponse.json({ status: 'success', data: [
+        ...members, { user_id: 'u-3', email: 'cy@acmecorp.io', full_name: 'Cy', role: 'viewer', company_access: 'selected',
+                      company_ids: ['c-9'], companies: [{ id: 'c-9', name: 'Secret Co' }] }] })),
+      http.get(`${BASE}/v1/team/companies`, () => HttpResponse.json({ status: 'success', data: [{ id: 'c-2', name: 'Branch' }] })),
+    );
+    at('/team');
+    expect(await screen.findByText('Secret Co')).toBeInTheDocument();
+  });
+
   it('sends the chosen companies when changing a member', async () => {
     app.user = { user_id: 'u-1', role: 'owner' };
     teamServer();

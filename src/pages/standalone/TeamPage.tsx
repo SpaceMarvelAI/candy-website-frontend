@@ -28,10 +28,12 @@ function message(e: unknown, fallback: string): string {
   return (e as { message?: string })?.message || fallback;
 }
 
-function accessLabel(m: { company_access: string; company_ids: string[] }, names: Map<string, string>) {
+function accessLabel(m: { company_access: string; company_ids: string[]; companies?: { id: string; name: string }[] },
+                     names: Map<string, string>) {
   if (m.company_access === 'all') return 'All companies';
-  if (!m.company_ids.length) return 'No companies';
-  return m.company_ids.map(id => names.get(id) ?? 'Removed company').join(', ');
+  // A member row carries its companies' names (any viewer sees them); an invitation falls back to the list.
+  const shown = m.companies ? m.companies.map(c => c.name) : m.company_ids.map(id => names.get(id)).filter(Boolean);
+  return shown.length ? shown.join(', ') : 'No companies';
 }
 
 const cell = { padding: '10px 8px', borderTop: '1px solid var(--border)', fontSize: 13, color: 'var(--text-1)', verticalAlign: 'top' as const };
@@ -132,6 +134,16 @@ function MembersCard({
     } finally { setBusy(false); }
   };
 
+  const changeRole = async (m: TeamMember, role: string) => {
+    try {
+      await teamApi.setMemberRole(m.user_id, role);
+      addToast(`${m.full_name || m.email} is now ${role}`, 'success');
+      onChanged();
+    } catch (e) {
+      addToast(message(e, 'Could not change the role.'), 'error');
+    }
+  };
+
   const remove = async (m: TeamMember) => {
     const ok = await confirm({
       title: `Remove ${m.full_name || m.email}?`,
@@ -166,7 +178,18 @@ function MembersCard({
                   <div style={{ fontWeight: 600 }}>{m.full_name || m.email}</div>
                   <div style={{ color: 'var(--text-3)', fontSize: 12 }}>{m.email}</div>
                 </td>
-                <td style={{ ...cell, textTransform: 'capitalize' }}>{m.role}</td>
+                <td style={{ ...cell, textTransform: 'capitalize' }}>
+                  {/* Only the Owner/Admin, for people below them, to a role below their own; everyone else just sees it. */}
+                  {canManage(m) ? (
+                    <select aria-label={`Role of ${m.full_name || m.email}`} value={m.role.toLowerCase()}
+                            onChange={e => changeRole(m, e.target.value)}
+                            style={{ ...inputStyle, width: 'auto', padding: '4px 8px', textTransform: 'capitalize' }}>
+                      {INVITE_ROLES.filter(r => RANK[r.value] < myRank).map(r => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                  ) : m.role}
+                </td>
                 <td style={cell}>
                   {editing === m.user_id ? (
                     <div style={{ display: 'grid', gap: 10 }}>
