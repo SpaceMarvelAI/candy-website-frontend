@@ -23,6 +23,8 @@ const INVITE_ROLES = [
   { value: 'admin', label: 'Admin' },
 ];
 type Company = { id: string; name: string };
+/** The picker's value for a stored role: a Dashboard "Member" is Candy's builder. */
+const pickerRole = (role: string) => (role.toLowerCase() === 'member' ? 'builder' : role.toLowerCase());
 
 function message(e: unknown, fallback: string): string {
   return (e as { message?: string })?.message || fallback;
@@ -181,7 +183,7 @@ function MembersCard({
                 <td style={{ ...cell, textTransform: 'capitalize' }}>
                   {/* Only the Owner/Admin, for people below them, to a role below their own; everyone else just sees it. */}
                   {canManage(m) ? (
-                    <select aria-label={`Role of ${m.full_name || m.email}`} value={m.role.toLowerCase()}
+                    <select aria-label={`Role of ${m.full_name || m.email}`} value={pickerRole(m.role)}
                             onChange={e => changeRole(m, e.target.value)}
                             style={{ ...inputStyle, width: 'auto', padding: '4px 8px', textTransform: 'capitalize' }}>
                       {INVITE_ROLES.filter(r => RANK[r.value] < myRank).map(r => (
@@ -410,6 +412,12 @@ function DomainsCard({
       {settings && (
         <div style={{ display: 'grid', gap: 10, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>What people who auto-join get</span>
+          {settings.email_configured === false && (
+            <p role="note" style={{ margin: 0, fontSize: 12, color: 'var(--text-2)' }}>
+              Auto-join needs an email server (SMTP) to send sign-in codes — until one is set up, people on
+              these domains need an invitation.
+            </p>
+          )}
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: 'var(--text-1)' }}>
             <input type="radio" checked={access === 'off'} onChange={() => setAccess('off')} />
             Off (invitation only)

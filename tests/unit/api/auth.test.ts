@@ -216,6 +216,37 @@ describe('fullLogout()', () => {
     expect(localStorage.getItem('candy.tts')).toBeNull();
   });
 
+  it('standalone install: goes to #/login, never a Dashboard URL, and keeps the stored mode', async () => {
+    setToken('live-token');
+    localStorage.setItem('candy.auth_mode', JSON.stringify({ mode: 'standalone' }));
+    localStorage.setItem('candy.tts', 'x');
+    server.use(
+      http.post('http://localhost:8002/v1/auth/sso/oidc/logout-everywhere', () =>
+        HttpResponse.json({ success: true, mode: 'standalone', login_url: 'https://dashboard.example/login' })
+      )
+    );
+    const loc = stubLocationForLogout();
+    Object.assign(loc, { pathname: '/' });
+
+    await expect(fullLogout()).resolves.toEqual({ navigated: true });
+
+    expect(loc.href).toBe('https://app.candy.cx/#/login');
+    expect(localStorage.getItem('candy.tts')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('candy.auth_mode')!)).toEqual({ mode: 'standalone' });
+  });
+
+  it('standalone install: #/login even when logout-everywhere fails', async () => {
+    setToken('live-token');
+    localStorage.setItem('candy.auth_mode', JSON.stringify({ mode: 'standalone' }));
+    server.use(
+      http.post('http://localhost:8002/v1/auth/sso/oidc/logout-everywhere', () => HttpResponse.json({}, { status: 500 }))
+    );
+    const loc = stubLocationForLogout();
+    Object.assign(loc, { pathname: '/' });
+    await expect(fullLogout()).resolves.toEqual({ navigated: true });
+    expect(loc.href).toBe('https://app.candy.cx/#/login');
+  });
+
   it('does not navigate, but still wipes state, when there is no token to call logout-everywhere with', async () => {
     setToken(null);
     const loc = stubLocationForLogout();

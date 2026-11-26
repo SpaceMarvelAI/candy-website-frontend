@@ -1,5 +1,6 @@
 import { api, setToken, setSessionToken, getToken, API_BASE } from './client';
 import { logger } from '../utils/logger';
+import { clearLocalStorageKeepingAuthMode, storedAuthModeName } from './authModeStorage';
 
 export interface AuthUser {
   user_id: string;
@@ -153,6 +154,8 @@ export async function fullLogout(): Promise<{ navigated: boolean }> {
   // 1. Capture the token + origin BEFORE wiping anything (the backend call needs the token).
   const token = getToken();
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  // Standalone install (no Dashboard): sign-out ends on Candy's own #/login, never a Dashboard URL.
+  let standalone = storedAuthModeName() === 'standalone';
 
   // 2. Call logout-everywhere (6s timeout). Capture the end-session target, if any.
   let endSessionUrl: string | null = null;
@@ -168,15 +171,18 @@ export async function fullLogout(): Promise<{ navigated: boolean }> {
       clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json().catch(() => ({} as any));
-        endSessionUrl = data.end_session_url ?? data.login_url ?? null;
+        if (data.mode === 'standalone') standalone = true;
+        endSessionUrl = standalone ? null : (data.end_session_url ?? data.login_url ?? null);
       }
     } catch (err) {
       logger.warn('[auth] logout-everywhere failed (clearing local state anyway)', { error: err });
     }
   }
 
-  // 3. Wipe EVERYTHING in local/session storage — not a curated list of "known" keys.
-  try { localStorage.clear(); } catch {}
+  // 3. Wipe EVERYTHING in local/session storage — not a curated list of "known" keys. The one
+  //    exception is the install's sign-in mode (install config, not auth data): without it the next
+  //    load can't tell which login to show (src/api/authModeStorage.ts).
+  clearLocalStorageKeepingAuthMode();
   try { sessionStorage.clear(); } catch {}
   // Tell devAuth (localhost-only auto-login) to skip its next reseed — otherwise a dev
   // machine with VITE_DEV_TOKEN set silently logs the user back in on the next page load.
@@ -195,6 +201,10 @@ export async function fullLogout(): Promise<{ navigated: boolean }> {
   //    We report whether we navigated so the caller does NOT fire a second, competing
   //    navigation: two concurrent location changes on one click is what made sign-out
   //    need multiple clicks.
+  if (standalone && typeof window !== 'undefined') {
+    window.location.replace(`${window.location.origin}${window.location.pathname}#/login`);
+    return { navigated: true };
+  }
   if (endSessionUrl && typeof window !== 'undefined') {
     window.location.replace(endSessionUrl);
     return { navigated: true };

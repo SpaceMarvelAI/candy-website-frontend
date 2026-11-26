@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import posthog from 'posthog-js';
 import { ssoCallback } from '../../api/auth';
+import { clearLocalStorageKeepingAuthMode } from '../../api/authModeStorage';
 import { useApp } from '../../context/AppContext';
 import Icon from '../../assets/icons';
 import { decodeWorkspaceIdFromToken, decodeWorkspaceNameFromToken } from '../../utils/jwt';
@@ -40,8 +41,9 @@ export default function SSOCallbackPage() {
         // during validation — capture them before the wipe so they can be restored.
         const candyToken = localStorage.getItem('candy.token');
 
-        // Token is valid — wipe ALL previous session data now.
-        localStorage.clear();
+        // Token is valid — wipe ALL previous session data now (but the install's sign-in mode,
+        // which is install config — src/api/authModeStorage.ts).
+        clearLocalStorageKeepingAuthMode();
         sessionStorage.clear();
 
         // Restore the newly validated candy session and the new SpaceMarvel bearer.

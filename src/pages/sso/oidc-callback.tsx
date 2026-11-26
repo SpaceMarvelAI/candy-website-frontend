@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import posthog from 'posthog-js';
 import { setToken } from '../../api/client';
+import { clearLocalStorageKeepingAuthMode } from '../../api/authModeStorage';
 import { storeUser, type AuthUser } from '../../api/auth';
 import { useApp } from '../../context/AppContext';
 import { decodeWorkspaceIdFromToken, decodeWorkspaceNameFromToken } from '../../utils/jwt';
@@ -48,7 +49,9 @@ export default function OIDCCallbackPage() {
       full_name:    searchParams.get('name') || null,
     };
 
-    try { localStorage.clear(); sessionStorage.clear(); } catch {}
+    // Everything but the install's sign-in mode (install config — src/api/authModeStorage.ts).
+    clearLocalStorageKeepingAuthMode();
+    try { sessionStorage.clear(); } catch {}
 
     setToken(accessToken);
     storeUser(user);

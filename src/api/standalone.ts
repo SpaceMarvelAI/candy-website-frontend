@@ -7,11 +7,18 @@
  *   "standalone" → Candy's own pages: #/login, #/signup (first person only), #/invite/:token
  *
  * The answer is per install and never changes while it runs, so it is cached in localStorage
- * (install config, not auth data) and refreshed in the background on every load. Only the very
- * first load waits for it (loadAuthMode() in main.tsx) — so redirectToOIDC() can stay synchronous.
+ * (install config, not auth data — kept across sign-out's storage wipe, src/api/authModeStorage.ts)
+ * and refreshed on every load (loadAuthMode() in main.tsx, before the first render, so
+ * redirectToOIDC() can stay synchronous):
+ *   * stored "standalone" → used at once, refreshed in the background;
+ *   * stored "ecosystem"  → waits up to 1.5 s for the fresh answer before the first OIDC redirect;
+ *   * nothing stored      → waits up to 3 s; still unknown (slow / failed) → the app shows
+ *     "Checking sign-in… / Retry" (AuthModeGate) — never a guess. A standalone install has no
+ *     Dashboard login to fall back on.
  */
 import { api, setToken } from './client';
 import { storeUser, type AuthUser, type TokenResponse } from './auth';
+import { AUTH_MODE_KEY } from './authModeStorage';
 
 export type AuthModeName = 'ecosystem' | 'standalone';
 export interface AuthMode {
@@ -20,7 +27,7 @@ export interface AuthMode {
   workspace_name?: string | null;
 }
 
-const MODE_KEY = 'candy.auth_mode';
+const MODE_KEY = AUTH_MODE_KEY;
 const ECOSYSTEM: AuthMode = { mode: 'ecosystem', signup_open: false };
 
 let cached: AuthMode | null = null;
@@ -33,31 +40,47 @@ function readStored(): AuthMode | null {
   } catch { return null; }
 }
 
-/** Ask the backend (fresh). On any failure: the pre-standalone behaviour (Dashboard login). */
-export async function fetchAuthMode(): Promise<AuthMode> {
+/** Ask the backend (fresh). On failure: what is already known (cached or stored), else null —
+ *  unknown, never a guess. */
+export async function fetchAuthMode(): Promise<AuthMode | null> {
   try {
     const m = await api<AuthMode>('/v1/auth/mode', { auth: false });
     cached = m.mode === 'standalone' ? m : { ...ECOSYSTEM };
     try { localStorage.setItem(MODE_KEY, JSON.stringify({ mode: cached.mode })); } catch { /* blocked */ }
   } catch {
-    cached = cached ?? readStored() ?? { ...ECOSYSTEM };
+    cached = cached ?? readStored();
   }
   return cached;
 }
 
-/** Boot: resolve the mode before the app renders. Instant when a previous load stored it (then
- *  refreshed in the background); the first load ever waits up to `timeoutMs`. */
-export async function loadAuthMode(timeoutMs = 3000): Promise<void> {
+const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+/** Boot: resolve the mode before the app renders (see the header for the three cases). */
+export async function loadAuthMode(firstLoadTimeoutMs = 3000, ecosystemWaitMs = 1500): Promise<void> {
   const stored = readStored();
-  if (stored) {
+  if (stored?.mode === 'standalone') {
     cached = cached ?? stored;
     void fetchAuthMode();
     return;
   }
-  await Promise.race([fetchAuthMode(), new Promise(r => setTimeout(r, timeoutMs))]);
+  const fresh = fetchAuthMode();
+  if (stored) {
+    // Stored "ecosystem": the next step may be a full-page redirect to the Dashboard, so give the
+    // fresh answer a moment first (the install may have changed mode since it was stored).
+    await Promise.race([fresh, wait(ecosystemWaitMs)]);
+    cached = cached ?? stored;
+    return;
+  }
+  await Promise.race([fresh, wait(firstLoadTimeoutMs)]);
 }
 
-/** Synchronous — what redirectToOIDC() and the menu read. Unknown = ecosystem (as before). */
+/** False only while nothing is known yet (first load, the check slow or failed). */
+export function authModeKnown(): boolean {
+  return (cached ?? readStored()) !== null;
+}
+
+/** Synchronous — what redirectToOIDC() and the menu read. (Unknown never reaches redirectToOIDC:
+ *  AuthModeGate holds the app until the mode is known.) */
 export function isStandaloneMode(): boolean {
   return (cached ?? readStored())?.mode === 'standalone';
 }
@@ -80,13 +103,23 @@ export function storeStandaloneSession(tok: TokenResponse & { refresh_token?: st
   return user;
 }
 
+export interface VerificationRequired { status: 'verification_required'; email: string; message: string }
+
+export function isVerificationRequired(r: unknown): r is VerificationRequired {
+  return (r as { status?: string } | null)?.status === 'verification_required';
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────────────────────
 
 export const standaloneAuth = {
   login: (email: string, password: string) =>
     api<TokenResponse>('/v1/auth/login', { method: 'POST', auth: false, body: { email, password } }),
+  /** A token pair — or, for an email on a verified domain, 202 verification_required: a 6-digit code
+   *  was emailed and verifySignup() finishes the sign-up. */
   signup: (body: { company_name: string; email: string; password: string; full_name?: string }) =>
-    api<TokenResponse>('/v1/auth/signup', { method: 'POST', auth: false, body }),
+    api<TokenResponse | VerificationRequired>('/v1/auth/signup', { method: 'POST', auth: false, body }),
+  verifySignup: (email: string, code: string) =>
+    api<TokenResponse>('/v1/auth/signup/verify', { method: 'POST', auth: false, body: { email, code } }),
   validateInvitation: (token: string) =>
     api<{ email: string; role: string; workspace_name: string; expires_at: string }>(
       `/v1/team/invitations/validate/${encodeURIComponent(token)}`, { auth: false }),
@@ -115,7 +148,11 @@ export interface TeamDomain {
   id: string; domain: string; state: 'pending' | 'verified'; verified_at: string | null;
   txt_record?: { type: string; host: string; value: string };
 }
-export interface DomainJoinSettings { domain_join_access: 'off' | CompanyAccess; company_ids: string[] }
+export interface DomainJoinSettings {
+  domain_join_access: 'off' | CompanyAccess; company_ids: string[];
+  /** False = no email server: auto-join can't send its sign-in codes, so it works as "off". */
+  email_configured?: boolean;
+}
 
 type Wrapped<T> = { status: string; data: T };
 const data = <T,>(p: Promise<Wrapped<T>>) => p.then(r => r.data);

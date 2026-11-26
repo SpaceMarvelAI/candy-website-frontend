@@ -482,7 +482,8 @@ export default function AppRail({ mobileNavOpen = false, onToggleMobileNav }: Ap
             </svg>
           </button>
         )}
-        {PRODUCTS.map(p => railBtn(
+        {/* Standalone install (no Dashboard): the other products aren't part of it — only Candy's own tile. */}
+        {(isStandaloneMode() ? PRODUCTS.filter(p => p.current) : PRODUCTS).map(p => railBtn(
           p.id, p.label,
           p.img
             ? <img src={p.img} alt="" style={{ width: logoSz, height: logoSz, objectFit: 'contain', filter: 'var(--shell-app-logo-filter)' }} />

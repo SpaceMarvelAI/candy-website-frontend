@@ -2,14 +2,17 @@
  * Standalone mode (no Dashboard): Candy's own sign-in pages.
  *   #/login          email + password
  *   #/signup         the first person creates the install's workspace and becomes its Owner;
- *                    after that only people on a domain the Owner verified can join here
+ *                    after that only people on a domain the Owner verified can join here — they
+ *                    get a 6-digit code by email and enter it here to finish (proves the mailbox)
  *   #/invite/:token  accept an invitation (sets name + password)
  * In ecosystem mode these routes just go to the Dashboard login (redirectToOIDC).
  */
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { fetchAuthMode, isStandaloneMode, standaloneAuth, storeStandaloneSession, type AuthMode } from '../../api/standalone';
+import {
+  fetchAuthMode, isStandaloneMode, isVerificationRequired, standaloneAuth, storeStandaloneSession, type AuthMode,
+} from '../../api/standalone';
 import type { TokenResponse } from '../../api/auth';
 import { redirectToOIDC, takeReturnRoute } from '../../utils/sso';
 import { AuthShell, Button, ErrorText, Field, inputStyle } from './ui';
@@ -98,6 +101,10 @@ export function StandaloneSignupPage() {
   const [form, setForm] = useState({ company_name: '', full_name: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Verified-domain sign-up: the backend emailed a code (202 verification_required) → enter it here.
+  const [codeFor, setCodeFor] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [notice, setNotice] = useState('');
 
   if (!isStandaloneMode()) return <EcosystemGuard />;
   if (user) return <Navigate to={HOME} replace />;
@@ -108,20 +115,62 @@ export function StandaloneSignupPage() {
   const first = mode.signup_open;
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true); setError('');
+  const signUp = async () => {
+    setBusy(true); setError(''); setNotice('');
     try {
-      finish(await standaloneAuth.signup({
+      const res = await standaloneAuth.signup({
         company_name: first ? form.company_name.trim() : (mode.workspace_name || 'Workspace'),
         full_name: form.full_name.trim() || undefined,
         email: form.email.trim(),
         password: form.password,
-      }));
+      });
+      if (isVerificationRequired(res)) {
+        if (codeFor) setNotice('We sent a new code.');
+        setCodeFor(res.email);
+        setCode('');
+      } else {
+        finish(res);
+      }
     } catch (err) {
       setError(message(err, 'Could not create the account. Please try again.'));
     } finally { setBusy(false); }
   };
+  const submit = (e: FormEvent) => { e.preventDefault(); void signUp(); };
+
+  const verify = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!codeFor) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      finish(await standaloneAuth.verifySignup(codeFor, code));
+    } catch (err) {
+      setError(message(err, 'Could not check the code. Please try again.'));
+    } finally { setBusy(false); }
+  };
+
+  if (codeFor) {
+    return (
+      <AuthShell title="Check your email" subtitle={`Enter the 6-digit code we sent to ${codeFor}`}>
+        <form onSubmit={verify} style={{ display: 'grid', gap: 14 }}>
+          <Field label="Code">
+            <input style={inputStyle} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}"
+                   maxLength={6} required value={code}
+                   onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+          </Field>
+          <ErrorText>{error}</ErrorText>
+          {notice && <p role="status" style={{ margin: 0, fontSize: 13, color: 'var(--text-2)' }}>{notice}</p>}
+          <Button type="submit" disabled={busy || code.length !== 6}>{busy ? 'Checking…' : 'Verify'}</Button>
+        </form>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)' }}>
+          No code?{' '}
+          <button type="button" disabled={busy} onClick={() => { void signUp(); }}
+                  style={{ background: 'none', border: 'none', padding: 0, color: 'var(--purple-hi)', cursor: 'pointer', font: 'inherit' }}>
+            Send a new code
+          </button>
+        </p>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell

@@ -5,8 +5,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../mocks/server';
 import {
-  _resetAuthModeCache, fetchAuthMode, isStandaloneMode, loadAuthMode, storeStandaloneSession, teamApi,
+  _resetAuthModeCache, authModeKnown, fetchAuthMode, isStandaloneMode, loadAuthMode, storeStandaloneSession, teamApi,
 } from '../../../src/api/standalone';
+import { clearLocalStorageKeepingAuthMode } from '../../../src/api/authModeStorage';
+import { delay } from 'msw';
 import { loadStoredUser } from '../../../src/api/auth';
 
 const BASE = 'http://localhost:8002';
@@ -34,10 +36,44 @@ describe('auth mode', () => {
     expect(JSON.parse(localStorage.getItem('candy.auth_mode')!)).toEqual({ mode: 'standalone' });
   });
 
-  it('keeps the Dashboard login when the question fails', async () => {
+  it('a failed question with nothing stored is unknown — never a guess (fix spec 2026-11-26)', async () => {
     answerMode({ detail: 'boom' }, 500);
-    await expect(fetchAuthMode()).resolves.toEqual({ mode: 'ecosystem', signup_open: false });
+    await expect(fetchAuthMode()).resolves.toBeNull();
+    expect(authModeKnown()).toBe(false);
+    await loadAuthMode(50);
+    expect(authModeKnown()).toBe(false);            // AuthModeGate shows "Checking sign-in… / Retry"
+  });
+
+  it('a failed question keeps what was stored', async () => {
+    localStorage.setItem('candy.auth_mode', JSON.stringify({ mode: 'standalone' }));
+    answerMode({ detail: 'boom' }, 500);
+    await fetchAuthMode();
+    expect(isStandaloneMode()).toBe(true);
+  });
+
+  it('a stored ecosystem answer waits briefly for the fresh one before the first redirect', async () => {
+    localStorage.setItem('candy.auth_mode', JSON.stringify({ mode: 'ecosystem' }));
+    answerMode({ mode: 'standalone', signup_open: false });
+    await loadAuthMode(3000, 1500);
+    expect(isStandaloneMode()).toBe(true);
+  });
+
+  it('…but not longer than the wait', async () => {
+    localStorage.setItem('candy.auth_mode', JSON.stringify({ mode: 'ecosystem' }));
+    server.use(http.get(`${BASE}/v1/auth/mode`, async () => { await delay(400); return HttpResponse.json({ mode: 'ecosystem' }); }));
+    const started = Date.now();
+    await loadAuthMode(3000, 50);
+    expect(Date.now() - started).toBeLessThan(350);
+    expect(authModeKnown()).toBe(true);
     expect(isStandaloneMode()).toBe(false);
+  });
+
+  it('the stored mode survives the sign-out / OIDC-callback storage wipe', () => {
+    localStorage.setItem('candy.auth_mode', JSON.stringify({ mode: 'standalone' }));
+    localStorage.setItem('other', 'x');
+    clearLocalStorageKeepingAuthMode();
+    expect(localStorage.getItem('other')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('candy.auth_mode')!)).toEqual({ mode: 'standalone' });
   });
 
   it('boot waits for the first answer, then uses the stored one and refreshes in the background', async () => {

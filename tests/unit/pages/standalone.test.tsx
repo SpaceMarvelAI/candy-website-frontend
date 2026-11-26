@@ -104,6 +104,61 @@ describe('sign up', () => {
   });
 });
 
+describe('sign up with a verified-domain email: the emailed code', () => {
+  function joinForm() {
+    fireEvent.change(screen.getByLabelText('Work email'), { target: { value: 'Bo@Joiners.io' } });
+    fireEvent.change(screen.getByLabelText(/Password/), { target: { value: 'Passw0rd!x' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }));
+  }
+  const pending = { status: 'verification_required', email: 'bo@joiners.io',
+                    message: 'We sent a 6-digit code to bo@joiners.io. Enter it to finish joining.' };
+
+  it('asks for the code, then signs them in like a normal sign-up', async () => {
+    mode({ mode: 'standalone', signup_open: false, workspace_name: 'Acme' });
+    let verified: any = null;
+    server.use(
+      http.post(`${BASE}/v1/auth/signup`, () => HttpResponse.json(pending, { status: 202 })),
+      http.post(`${BASE}/v1/auth/signup/verify`, async ({ request }) => {
+        verified = await request.json();
+        return HttpResponse.json({ ...TOKEN, role: 'builder' }, { status: 201 });
+      }),
+    );
+    at('/signup');
+    await screen.findByText('Join Acme');
+    joinForm();
+    expect(await screen.findByText('Enter the 6-digit code we sent to bo@joiners.io')).toBeInTheDocument();
+    const input = screen.getByLabelText('Code');
+    expect(input).toHaveAttribute('inputmode', 'numeric');
+    fireEvent.change(input, { target: { value: '12a34567' } });
+    expect(input).toHaveValue('123456');                                   // digits only, six of them
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/healthcare'));
+    expect(verified).toEqual({ email: 'bo@joiners.io', code: '123456' });
+    expect(app.signedIn).toHaveBeenCalledWith(expect.objectContaining({ role: 'builder' }));
+    expect(sessionStorage.getItem('access_token')).toBe('tok');
+  });
+
+  it("shows the backend's message for a wrong code, and 'Send a new code' signs up again", async () => {
+    mode({ mode: 'standalone', signup_open: false, workspace_name: 'Acme' });
+    let signups = 0;
+    server.use(
+      http.post(`${BASE}/v1/auth/signup`, () => { signups += 1; return HttpResponse.json(pending, { status: 202 }); }),
+      http.post(`${BASE}/v1/auth/signup/verify`, () => HttpResponse.json(
+        { detail: { error: 'invalid_code', message: "That code isn't right. Check the email and try again." } }, { status: 400 })),
+    );
+    at('/signup');
+    await screen.findByText('Join Acme');
+    joinForm();
+    fireEvent.change(await screen.findByLabelText('Code'), { target: { value: '000000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("That code isn't right.");
+    expect(app.signedIn).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Send a new code' }));
+    expect(await screen.findByText('We sent a new code.')).toBeInTheDocument();
+    expect(signups).toBe(2);
+  });
+});
+
 describe('accept an invitation', () => {
   it('shows who invited them as what, then signs them in', async () => {
     server.use(
@@ -184,6 +239,25 @@ describe('team', () => {
     at('/team');
     expect(await screen.findByText('Members (2)')).toBeInTheDocument();
     expect(screen.queryByLabelText(/^Role of/)).toBeNull();
+  });
+
+  it('a Dashboard "Member" shows as Builder in the role picker', async () => {
+    app.user = { user_id: 'u-1', role: 'owner' };
+    teamServer();
+    server.use(http.get(`${BASE}/v1/team/members`, () => HttpResponse.json({ status: 'success', data: [
+      members[0], { ...members[1], role: 'member' }] })));
+    at('/team');
+    expect(await screen.findByLabelText('Role of Bo')).toHaveValue('builder');
+  });
+
+  it('says auto-join needs an email server when none is set up (the Owner can still save)', async () => {
+    app.user = { user_id: 'u-1', role: 'owner' };
+    teamServer();
+    server.use(http.get(`${BASE}/v1/team/domains/settings`, () => HttpResponse.json({ status: 'success',
+      data: { domain_join_access: 'all', company_ids: [], email_configured: false } })));
+    at('/team');
+    expect(await screen.findByText(/Auto-join needs an email server \(SMTP\) to send sign-in codes/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
   it('shows member company names sent with the member, even ones the viewer cannot use', async () => {
