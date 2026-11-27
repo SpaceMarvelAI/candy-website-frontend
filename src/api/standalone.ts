@@ -118,8 +118,10 @@ export const standaloneAuth = {
    *  was emailed and verifySignup() finishes the sign-up. */
   signup: (body: { company_name: string; email: string; password: string; full_name?: string }) =>
     api<TokenResponse | VerificationRequired>('/v1/auth/signup', { method: 'POST', auth: false, body }),
-  verifySignup: (email: string, code: string) =>
-    api<TokenResponse>('/v1/auth/signup/verify', { method: 'POST', auth: false, body: { email, code } }),
+  /** The password is the one typed on the sign-up form — the backend checks it against the pending
+   *  sign-up too, so nobody else's later sign-up can set it (fix spec 2026-11-28 A1). */
+  verifySignup: (email: string, code: string, password: string) =>
+    api<TokenResponse>('/v1/auth/signup/verify', { method: 'POST', auth: false, body: { email, code, password } }),
   validateInvitation: (token: string) =>
     api<{ email: string; role: string; workspace_name: string; expires_at: string }>(
       `/v1/team/invitations/validate/${encodeURIComponent(token)}`, { auth: false }),

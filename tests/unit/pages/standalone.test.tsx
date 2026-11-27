@@ -133,7 +133,7 @@ describe('sign up with a verified-domain email: the emailed code', () => {
     expect(input).toHaveValue('123456');                                   // digits only, six of them
     fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
     await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/healthcare'));
-    expect(verified).toEqual({ email: 'bo@joiners.io', code: '123456' });
+    expect(verified).toEqual({ email: 'bo@joiners.io', code: '123456', password: 'Passw0rd!x' });   // the password typed at sign-up
     expect(app.signedIn).toHaveBeenCalledWith(expect.objectContaining({ role: 'builder' }));
     expect(sessionStorage.getItem('access_token')).toBe('tok');
   });
@@ -144,18 +144,43 @@ describe('sign up with a verified-domain email: the emailed code', () => {
     server.use(
       http.post(`${BASE}/v1/auth/signup`, () => { signups += 1; return HttpResponse.json(pending, { status: 202 }); }),
       http.post(`${BASE}/v1/auth/signup/verify`, () => HttpResponse.json(
-        { detail: { error: 'invalid_code', message: "That code isn't right. Check the email and try again." } }, { status: 400 })),
+        { detail: { error: 'invalid_code', message: "That code or password isn't right." } }, { status: 400 })),
     );
     at('/signup');
     await screen.findByText('Join Acme');
     joinForm();
     fireEvent.change(await screen.findByLabelText('Code'), { target: { value: '000000' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent("That code isn't right.");
+    expect(await screen.findByRole('alert')).toHaveTextContent("That code or password isn't right.");
     expect(app.signedIn).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Send a new code' }));
     expect(await screen.findByText('We sent a new code.')).toBeInTheDocument();
     expect(signups).toBe(2);
+  });
+  it("'Use a different email' goes back to the form with what was typed", async () => {
+    mode({ mode: 'standalone', signup_open: false, workspace_name: 'Acme' });
+    server.use(http.post(`${BASE}/v1/auth/signup`, () => HttpResponse.json(pending, { status: 202 })));
+    at('/signup');
+    await screen.findByText('Join Acme');
+    fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Bo' } });
+    joinForm();
+    fireEvent.click(await screen.findByRole('button', { name: 'Use a different email' }));
+    expect(await screen.findByText('Join Acme')).toBeInTheDocument();
+    expect(screen.getByLabelText('Work email')).toHaveValue('Bo@Joiners.io');
+    expect(screen.getByLabelText('Your name')).toHaveValue('Bo');
+    expect(screen.getByLabelText(/Password/)).toHaveValue('Passw0rd!x');
+    expect(screen.queryByLabelText('Code')).toBeNull();
+  });
+
+  it("a code email that couldn't be sent (503) shows the server's message", async () => {
+    mode({ mode: 'standalone', signup_open: false, workspace_name: 'Acme' });
+    server.use(http.post(`${BASE}/v1/auth/signup`, () => HttpResponse.json(
+      { detail: { error: 'email_not_sent', message: "We couldn't send the code right now. Try again in a few minutes." } },
+      { status: 503 })));
+    at('/signup');
+    await screen.findByText('Join Acme');
+    joinForm();
+    expect(await screen.findByRole('alert')).toHaveTextContent("We couldn't send the code right now. Try again in a few minutes.");
   });
 });
 

@@ -19,6 +19,10 @@ import { AuthShell, Button, ErrorText, Field, inputStyle } from './ui';
 
 const HOME = '/healthcare';
 
+const linkButton: React.CSSProperties = {
+  background: 'none', border: 'none', padding: 0, color: 'var(--purple-hi)', cursor: 'pointer', font: 'inherit',
+};
+
 function message(e: unknown, fallback: string): string {
   return (e as { message?: string })?.message || fallback;
 }
@@ -142,11 +146,14 @@ export function StandaloneSignupPage() {
     if (!codeFor) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      finish(await standaloneAuth.verifySignup(codeFor, code));
+      finish(await standaloneAuth.verifySignup(codeFor, code, form.password));
     } catch (err) {
       setError(message(err, 'Could not check the code. Please try again.'));
     } finally { setBusy(false); }
   };
+
+  // Back to the sign-up form, keeping what was typed (fix spec 2026-11-28 B7).
+  const backToForm = () => { setCodeFor(null); setCode(''); setError(''); setNotice(''); };
 
   if (codeFor) {
     return (
@@ -163,9 +170,12 @@ export function StandaloneSignupPage() {
         </form>
         <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)' }}>
           No code?{' '}
-          <button type="button" disabled={busy} onClick={() => { void signUp(); }}
-                  style={{ background: 'none', border: 'none', padding: 0, color: 'var(--purple-hi)', cursor: 'pointer', font: 'inherit' }}>
+          <button type="button" disabled={busy} onClick={() => { void signUp(); }} style={linkButton}>
             Send a new code
+          </button>
+          {' · '}
+          <button type="button" disabled={busy} onClick={backToForm} style={linkButton}>
+            Use a different email
           </button>
         </p>
       </AuthShell>
