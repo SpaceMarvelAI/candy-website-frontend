@@ -138,6 +138,21 @@ describe('api() — HTTP error responses', () => {
     }
   });
 
+  it("shows the server's message for 503 email_not_sent only — other 5xx text stays hidden", async () => {
+    const msg = "We couldn't send the code right now. Try again in a few minutes.";
+    server.use(
+      http.post(`${API_BASE}/v1/auth/signup`, () =>
+        HttpResponse.json({ detail: { error: 'email_not_sent', message: msg } }, { status: 503 })),
+      http.get(`${API_BASE}/v1/other-503`, () =>
+        HttpResponse.json({ detail: { error: 'db_down', message: 'asyncpg: connection refused' } }, { status: 503 })),
+      http.get(`${API_BASE}/v1/other-500`, () =>
+        HttpResponse.json({ detail: { error: 'email_not_sent', message: 'Traceback …' } }, { status: 500 })),
+    );
+    await expect(api('/v1/auth/signup', { method: 'POST', auth: false, body: {} })).rejects.toMatchObject({ status: 503, message: msg });
+    await expect(api('/v1/other-503')).rejects.toMatchObject({ message: 'Something went wrong on our end. Please try again.' });
+    await expect(api('/v1/other-500')).rejects.toMatchObject({ message: 'Something went wrong on our end. Please try again.' });
+  });
+
   it('falls back to "HTTP <status>" when a JSON error body has no detail field', async () => {
     server.use(
       http.get(`${API_BASE}/v1/no-detail-field`, () => HttpResponse.json({ message: 'oops' }, { status: 400 }))

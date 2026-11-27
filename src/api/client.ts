@@ -70,9 +70,12 @@ function apiErrorMessage(status: number, body: any): string {
   // message; the real body stays on `.detail`/`.payload` for logging and for
   // gateInfo(), which keys off status/code rather than message. 4xx is different:
   // those messages ARE actionable ("email already in use"), so they pass through.
+  // One exception: 503 email_not_sent (sign-up code email failed) carries a fixed, user-facing message
+  // written for this case ("We couldn't send the code…") — fix spec 2026-11-28 B6.
+  const d = body?.detail;
+  if (status === 503 && d?.error === 'email_not_sent' && typeof d.message === 'string' && d.message) return d.message;
   if (status >= 500) return 'Something went wrong on our end. Please try again.';
   if (typeof body === 'string' && body) return body;
-  const d = body?.detail;
   if (typeof d === 'string' && d) return d;
   const m = Array.isArray(d) ? d[0]?.msg : (d?.message ?? d?.msg);
   if (typeof m === 'string' && m) return m;
